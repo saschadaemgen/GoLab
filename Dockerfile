@@ -3,8 +3,9 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
 # Pre-fetch deps in a cached layer when only source changes.
+# Tolerate transient "can't reach proxy" errors; tidy below will reconcile.
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download || true
 
 # Now bring in the full source.
 COPY . .
