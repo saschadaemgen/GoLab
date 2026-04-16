@@ -1,0 +1,65 @@
+{{ define "content" }}
+<div class="fade-in">
+  <header class="explore-header">
+    <h1>Explore channels</h1>
+    <p>Discover communities. Join the ones that resonate.</p>
+  </header>
+
+  {{ with .Content }}
+  {{ if .Channels }}
+  <div class="explore-grid">
+    {{ range .Channels }}
+      {{ template "channel-card.html" . }}
+    {{ end }}
+  </div>
+  {{ else }}
+  <div class="explore-grid">
+    <div class="empty-state" style="grid-column: 1 / -1;">
+      <h3>No channels yet</h3>
+      <p>Be the first to create one.</p>
+    </div>
+  </div>
+  {{ end }}
+  {{ end }}
+
+  {{ if .User }}
+  <section class="home-section" id="create" style="max-width:640px;margin:3rem auto 4rem;">
+    <h2 class="home-section-title">Create a channel</h2>
+    <div class="card">
+      <form id="create-channel-form" autocomplete="off">
+        <div class="form-group">
+          <label class="form-label" for="ch-slug">Slug</label>
+          <input class="form-input" type="text" id="ch-slug" name="slug"
+                 required minlength="3" maxlength="64"
+                 pattern="[a-z0-9][a-z0-9\-]+[a-z0-9]"
+                 placeholder="e.g. gochat-dev">
+          <div class="form-hint">Lowercase letters, numbers and hyphens. This becomes the URL (/c/slug).</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ch-name">Name</label>
+          <input class="form-input" type="text" id="ch-name" name="name"
+                 required minlength="1" maxlength="128"
+                 placeholder="GoChat Development">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ch-desc">Description</label>
+          <textarea class="form-input form-textarea" id="ch-desc" name="description"
+                    maxlength="1000"
+                    placeholder="What is this channel about?"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ch-type">Type</label>
+          <select class="form-input" id="ch-type" name="channel_type">
+            <option value="public">Public - anyone can view and join</option>
+            <option value="project">Project - public, themed around a project</option>
+            <option value="announce">Announce - read only for most members</option>
+          </select>
+        </div>
+        <div class="form-error" role="alert"></div>
+        <button type="submit" class="btn btn-primary">Create channel</button>
+      </form>
+    </div>
+  </section>
+  {{ end }}
+</div>
+{{ end }}

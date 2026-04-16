@@ -1,0 +1,53 @@
+{{ define "navbar.html" }}
+<nav id="navbar">
+  <div class="nav-inner">
+    <a href="/" class="nav-brand" hx-boost="true">
+      <span>Go</span><span class="brand-go">Lab</span><span class="brand-dot"></span>
+    </a>
+
+    <div class="nav-links" id="nav-links">
+      {{ if .User }}
+      <a href="/feed" class="{{ isActive .CurrentPath "/feed" }}">Feed</a>
+      <a href="/explore" class="{{ isActive .CurrentPath "/explore" }}">Explore</a>
+      {{ else }}
+      <a href="/explore" class="{{ isActive .CurrentPath "/explore" }}">Explore</a>
+      <a href="/#about">About</a>
+      {{ end }}
+    </div>
+
+    <div class="nav-right">
+      {{ if .User }}
+      <div class="dropdown" x-data="{ open: false }">
+        <button @click="open = !open" class="nav-user" aria-haspopup="true" :aria-expanded="open">
+          <span class="nav-avatar">{{ initial .User.Username }}</span>
+          <span>{{ .User.Username }}</span>
+        </button>
+        <div x-show="open"
+             x-transition:enter="dropdown-enter"
+             x-transition:enter-start="dropdown-enter"
+             x-transition:enter-end="dropdown-enter-active"
+             x-transition:leave="dropdown-leave"
+             x-transition:leave-start="dropdown-leave"
+             x-transition:leave-end="dropdown-leave-active"
+             @click.outside="open = false"
+             x-cloak
+             class="dropdown-menu">
+          <div class="menu-header">Signed in as {{ .User.Username }}</div>
+          <a href="/u/{{ .User.Username }}" hx-boost="true">My profile</a>
+          <a href="/settings" hx-boost="true">Settings</a>
+          <div class="menu-divider"></div>
+          <button type="button" data-action="logout">Log out</button>
+        </div>
+      </div>
+      {{ else }}
+      <a href="/login" class="btn btn-outline btn-sm" hx-boost="true">Login</a>
+      <a href="/register" class="btn btn-primary btn-sm" hx-boost="true">Join</a>
+      {{ end }}
+
+      <button id="nav-toggle" class="nav-toggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</nav>
+{{ end }}

@@ -54,6 +54,26 @@ func (s *ChannelStore) Create(ctx context.Context, slug, name, description, chan
 	return ch, nil
 }
 
+func (s *ChannelStore) FindByID(ctx context.Context, id int64) (*Channel, error) {
+	ch := &Channel{}
+	err := s.DB.QueryRow(ctx,
+		`SELECT id, slug, name, description, channel_type, creator_id, power_required,
+		        member_count, created_at, updated_at
+		 FROM channels WHERE id = $1`,
+		id,
+	).Scan(
+		&ch.ID, &ch.Slug, &ch.Name, &ch.Description, &ch.ChannelType,
+		&ch.CreatorID, &ch.PowerRequired, &ch.MemberCount, &ch.CreatedAt, &ch.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("finding channel by id: %w", err)
+	}
+	return ch, nil
+}
+
 func (s *ChannelStore) FindBySlug(ctx context.Context, slug string) (*Channel, error) {
 	ch := &Channel{}
 	err := s.DB.QueryRow(ctx,
@@ -96,6 +116,37 @@ func (s *ChannelStore) ListPublic(ctx context.Context, limit, offset int) ([]Cha
 			&ch.CreatorID, &ch.PowerRequired, &ch.MemberCount, &ch.CreatedAt, &ch.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning channel: %w", err)
+		}
+		channels = append(channels, ch)
+	}
+	return channels, nil
+}
+
+// ListForUser returns channels the user is a member of, newest joined first.
+func (s *ChannelStore) ListForUser(ctx context.Context, userID int64, limit int) ([]Channel, error) {
+	rows, err := s.DB.Query(ctx,
+		`SELECT c.id, c.slug, c.name, c.description, c.channel_type, c.creator_id,
+		        c.power_required, c.member_count, c.created_at, c.updated_at
+		 FROM channels c
+		 JOIN channel_members m ON m.channel_id = c.id
+		 WHERE m.user_id = $1
+		 ORDER BY m.joined_at DESC
+		 LIMIT $2`,
+		userID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing user channels: %w", err)
+	}
+	defer rows.Close()
+
+	var channels []Channel
+	for rows.Next() {
+		var ch Channel
+		if err := rows.Scan(
+			&ch.ID, &ch.Slug, &ch.Name, &ch.Description, &ch.ChannelType,
+			&ch.CreatorID, &ch.PowerRequired, &ch.MemberCount, &ch.CreatedAt, &ch.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning user channel: %w", err)
 		}
 		channels = append(channels, ch)
 	}

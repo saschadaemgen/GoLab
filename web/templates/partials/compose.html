@@ -1,0 +1,37 @@
+{{ define "compose.html" }}
+{{ $channels := .Channels }}
+{{ $selected := .SelectedChannelID }}
+<form id="compose-form" class="compose-box"
+      x-data="{ content: '', max: 5000, open: false }">
+  <textarea
+    class="compose-textarea"
+    :class="{ 'compose-expanded': open }"
+    name="content"
+    x-model="content"
+    @focus="open = true"
+    maxlength="5000"
+    placeholder="What's on your mind?"></textarea>
+
+  <div class="compose-footer" x-show="open || content.length > 0" x-cloak>
+    <span class="compose-count" :class="{ over: content.length > max }">
+      <span x-text="content.length">0</span> / 5000
+    </span>
+
+    {{ if $channels }}
+    <select class="compose-select" name="channel_id">
+      <option value="">Your timeline</option>
+      {{ range $channels }}
+      <option value="{{ .ID }}"{{ if eq .ID $selected }} selected{{ end }}>#{{ .Slug }}</option>
+      {{ end }}
+    </select>
+    {{ else if $selected }}
+    <input type="hidden" name="channel_id" value="{{ $selected }}">
+    {{ end }}
+
+    <button type="submit" class="btn btn-primary btn-sm"
+            :disabled="content.trim().length < 1 || content.length > max">
+      Post
+    </button>
+  </div>
+</form>
+{{ end }}

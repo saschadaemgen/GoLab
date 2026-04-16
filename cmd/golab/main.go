@@ -18,6 +18,7 @@ import (
 	"github.com/saschadaemgen/GoLab/internal/database"
 	"github.com/saschadaemgen/GoLab/internal/handler"
 	"github.com/saschadaemgen/GoLab/internal/model"
+	"github.com/saschadaemgen/GoLab/internal/render"
 )
 
 func main() {
@@ -48,8 +49,20 @@ func run() error {
 	}
 	defer pool.Close()
 
+	// Template engine
+	tmpls, err := render.New("web/templates")
+	if err != nil {
+		return fmt.Errorf("templates: %w", err)
+	}
+
+	// WebSocket hub
+	hub := handler.NewHub(tmpls)
+	hubCtx, hubCancel := context.WithCancel(ctx)
+	defer hubCancel()
+	go hub.Run(hubCtx)
+
 	// Build router
-	r := newRouter(cfg, pool)
+	r := newRouter(cfg, pool, tmpls, hub)
 
 	// Start server
 	srv := &http.Server{
@@ -81,10 +94,10 @@ func run() error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-func newRouter(cfg *config.Config, pool *pgxpool.Pool) *chi.Mux {
+func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, hub *handler.Hub) *chi.Mux {
 	r := chi.NewRouter()
 
-	// Middleware
+	// Global middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
@@ -101,31 +114,55 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool) *chi.Mux {
 
 	// Auth middleware
 	requireAuth := auth.RequireAuth(sessions, users)
+	optionalAuth := auth.OptionalAuth(sessions, users)
+	requireAuthRedirect := auth.RequireAuthRedirect(sessions, users)
 
-	// Handlers
+	// API handlers
 	home := &handler.HomeHandler{DB: pool}
 	authH := &handler.AuthHandler{
 		Users:    users,
 		Sessions: sessions,
 		Secure:   !cfg.IsDev(),
 	}
-	channelH := &handler.ChannelHandler{
-		Channels: channels,
-		Users:    users,
-	}
-	postH := &handler.PostHandler{
-		Posts:     posts,
+	channelH := &handler.ChannelHandler{Channels: channels, Users: users}
+	postH := &handler.PostHandler{Posts: posts, Channels: channels, Reactions: reactions, Hub: hub}
+	feedH := &handler.FeedHandler{Posts: posts}
+	profileH := &handler.ProfileHandler{Users: users, Posts: posts, Follows: follows}
+
+	// Page handlers
+	pageH := &handler.PageHandler{
+		Render:    tmpls,
+		Users:     users,
 		Channels:  channels,
+		Posts:     posts,
+		Follows:   follows,
 		Reactions: reactions,
+		SiteName:  cfg.SiteName,
 	}
-	feedH := &handler.FeedHandler{
-		Posts: posts,
-	}
-	profileH := &handler.ProfileHandler{
-		Users:   users,
-		Posts:   posts,
-		Follows: follows,
-	}
+
+	// Static files
+	fileServer := http.FileServer(http.Dir("web/static"))
+	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
+
+	// WebSocket endpoint
+	r.Get("/ws", hub.HandleWS(sessions, users))
+
+	// HTML page routes
+	r.Group(func(r chi.Router) {
+		r.Use(optionalAuth)
+		r.Get("/", pageH.Home)
+		r.Get("/register", pageH.RegisterPage)
+		r.Get("/login", pageH.LoginPage)
+		r.Get("/explore", pageH.ExplorePage)
+		r.Get("/c/{slug}", pageH.ChannelPage)
+		r.Get("/u/{username}", pageH.ProfilePage)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(requireAuthRedirect)
+		r.Get("/feed", pageH.FeedPage)
+		r.Get("/settings", pageH.SettingsPage)
+	})
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {

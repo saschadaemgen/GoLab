@@ -1,0 +1,34 @@
+{{ define "content" }}
+<div class="auth-container fade-in">
+  <div class="auth-card">
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-subtitle">Sign in to continue to GoLab.</p>
+
+    <form id="login-form" autocomplete="on" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="login-email">Email</label>
+        <input class="form-input" type="email" id="login-email" name="email"
+               required autocomplete="email" autofocus
+               placeholder="you@example.com">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="login-password">Password</label>
+        <input class="form-input" type="password" id="login-password" name="password"
+               required autocomplete="current-password"
+               placeholder="Your password">
+      </div>
+
+      <div class="form-error" role="alert"></div>
+
+      <div class="auth-submit-row">
+        <button type="submit" class="btn btn-primary btn-lg">Log in</button>
+      </div>
+    </form>
+
+    <div class="auth-footer">
+      New to GoLab? <a href="/register" hx-boost="true">Create an account</a>
+    </div>
+  </div>
+</div>
+{{ end }}

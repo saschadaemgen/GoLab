@@ -1,0 +1,43 @@
+{{ define "content" }}
+<div class="auth-container fade-in" style="max-width:560px;">
+  <div class="auth-card">
+    <h1 class="auth-title">Settings</h1>
+    <p class="auth-subtitle">Update your profile.</p>
+
+    {{ with .User }}
+    <form id="settings-form" autocomplete="off">
+      <div class="form-group">
+        <label class="form-label" for="st-username">Username</label>
+        <input class="form-input" type="text" id="st-username" value="{{ .Username }}" disabled>
+        <div class="form-hint">Username cannot be changed.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="st-display">Display name</label>
+        <input class="form-input" type="text" id="st-display" name="display_name"
+               value="{{ .DisplayName }}" maxlength="64" placeholder="How you appear on posts">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="st-bio">Bio</label>
+        <textarea class="form-input form-textarea" id="st-bio" name="bio"
+                  maxlength="500" placeholder="Tell others what you are about">{{ .Bio }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="st-avatar">Avatar URL</label>
+        <input class="form-input" type="url" id="st-avatar" name="avatar_url"
+               value="{{ .AvatarURL }}" maxlength="512" placeholder="https://...">
+        <div class="form-hint">Phase 2 will support uploads. For now, paste a URL.</div>
+      </div>
+
+      <div class="form-error" role="alert"></div>
+
+      <div class="auth-submit-row">
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+    {{ end }}
+  </div>
+</div>
+{{ end }}

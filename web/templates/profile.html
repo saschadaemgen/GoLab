@@ -1,0 +1,62 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $p := .Profile }}
+<div class="fade-in">
+  <header class="profile-header">
+    <div class="profile-avatar">{{ initial $p.Username }}</div>
+    <h1 class="profile-name">{{ if $p.DisplayName }}{{ $p.DisplayName }}{{ else }}{{ $p.Username }}{{ end }}</h1>
+    <div class="profile-username">@{{ $p.Username }}</div>
+    {{ if $p.Bio }}<p class="profile-bio">{{ $p.Bio }}</p>{{ end }}
+
+    <div class="profile-stats">
+      <div class="profile-stat">
+        <span class="profile-stat-value">{{ len .RecentPosts }}</span>
+        <span class="profile-stat-label">Posts</span>
+      </div>
+      <div class="profile-stat">
+        <span class="profile-stat-value">{{ .FollowerCount }}</span>
+        <span class="profile-stat-label">Followers</span>
+      </div>
+      <div class="profile-stat">
+        <span class="profile-stat-value">{{ .FollowingCount }}</span>
+        <span class="profile-stat-label">Following</span>
+      </div>
+    </div>
+
+    <div class="profile-actions">
+      {{ if .IsSelf }}
+      <a href="/settings" class="btn btn-outline" hx-boost="true">Edit profile</a>
+      {{ else if $.User }}
+        {{ if .IsFollowing }}
+        <button class="btn btn-outline active" data-action="follow" data-username="{{ $p.Username }}">Following</button>
+        {{ else }}
+        <button class="btn btn-primary" data-action="follow" data-username="{{ $p.Username }}">Follow</button>
+        {{ end }}
+      {{ else }}
+      <a class="btn btn-primary" href="/login" hx-boost="true">Log in to follow</a>
+      {{ end }}
+    </div>
+  </header>
+
+  <div class="profile-body">
+    <h2 class="home-section-title">Recent posts</h2>
+    <div id="feed-posts">
+      {{ if .RecentPosts }}
+        {{ range .RecentPosts }}
+          {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+        {{ end }}
+      {{ else }}
+        <div class="empty-state">
+          <h3>No posts yet</h3>
+          {{ if .IsSelf }}
+          <p>Share something from your <a href="/feed" hx-boost="true">feed</a>.</p>
+          {{ else }}
+          <p>{{ $p.Username }} hasn't posted yet.</p>
+          {{ end }}
+        </div>
+      {{ end }}
+    </div>
+  </div>
+</div>
+{{ end }}
+{{ end }}

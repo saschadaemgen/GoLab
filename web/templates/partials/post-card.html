@@ -1,0 +1,62 @@
+{{ define "post-card.html" }}
+{{ $post := .Post }}
+{{ $currentUser := .User }}
+<article class="post-card" id="post-{{ $post.ID }}"
+         x-data="{ liked: false, count: {{ $post.ReactionCount }} }">
+  <header class="post-header">
+    <a href="/u/{{ $post.AuthorUsername }}" hx-boost="true">
+      <div class="post-avatar" aria-hidden="true">{{ initial $post.AuthorUsername }}</div>
+    </a>
+    <div class="post-meta">
+      <a href="/u/{{ $post.AuthorUsername }}" class="post-author" hx-boost="true">
+        {{ if $post.AuthorDisplayName }}{{ $post.AuthorDisplayName }}{{ else }}{{ $post.AuthorUsername }}{{ end }}
+      </a>
+      <span class="post-handle">@{{ $post.AuthorUsername }}</span>
+      <span class="post-time">{{ timeAgo $post.CreatedAt }}</span>
+    </div>
+    {{ if and $currentUser (eq $currentUser.ID $post.AuthorID) }}
+    <div class="dropdown" x-data="{ open: false }" style="margin-left:auto;">
+      <button @click="open = !open" class="btn btn-ghost btn-sm" aria-label="Post actions">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
+      </button>
+      <div x-show="open" @click.outside="open = false" x-cloak
+           x-transition:enter="dropdown-enter"
+           x-transition:enter-start="dropdown-enter"
+           x-transition:enter-end="dropdown-enter-active"
+           x-transition:leave="dropdown-leave"
+           x-transition:leave-start="dropdown-leave"
+           x-transition:leave-end="dropdown-leave-active"
+           class="dropdown-menu">
+        <button type="button" data-action="delete-post" data-post-id="{{ $post.ID }}">Delete</button>
+      </div>
+    </div>
+    {{ end }}
+  </header>
+
+  <div class="post-content">{{ $post.Content }}</div>
+
+  <footer class="post-actions">
+    <button class="post-action" data-action="react" data-post-id="{{ $post.ID }}"
+            @click="$el.classList.toggle('active'); $el.querySelector('svg').classList.add('heart-pop'); setTimeout(()=>$el.querySelector('svg').classList.remove('heart-pop'),400)">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+      </svg>
+      <span id="react-count-{{ $post.ID }}">{{ $post.ReactionCount }}</span>
+    </button>
+
+    <button class="post-action" data-action="repost" data-post-id="{{ $post.ID }}">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+      </svg>
+      <span>{{ $post.RepostCount }}</span>
+    </button>
+
+    <button class="post-action">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span>{{ $post.ReplyCount }}</span>
+    </button>
+  </footer>
+</article>
+{{ end }}

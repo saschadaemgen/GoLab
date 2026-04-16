@@ -15,6 +15,7 @@ type PostHandler struct {
 	Posts     *model.PostStore
 	Channels  *model.ChannelStore
 	Reactions *model.ReactionStore
+	Hub       *Hub // optional; when present, new posts get broadcast
 }
 
 type createPostRequest struct {
@@ -76,7 +77,24 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Populate author fields for fragment rendering
+	post.AuthorUsername = user.Username
+	post.AuthorDisplayName = user.DisplayName
+	post.AuthorAvatarURL = user.AvatarURL
+
 	slog.Info("post created", "id", post.ID, "author", user.Username)
+
+	// Broadcast to WebSocket subscribers
+	if h.Hub != nil {
+		var slug string
+		if req.ChannelID != nil {
+			if ch, err := h.Channels.FindByID(r.Context(), *req.ChannelID); err == nil && ch != nil {
+				slug = ch.Slug
+			}
+		}
+		h.Hub.PublishNewPost(post, slug)
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]any{"post": post})
 }
 

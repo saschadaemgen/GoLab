@@ -9,7 +9,16 @@
       "mcp__Claude_in_Chrome__tabs_context_mcp",
       "WebFetch(domain:simplego.dev)",
       "Bash(curl -sL https://simplego.dev)",
-      "Bash(curl -sL https://simplego.dev/assets/css/main.css)"
+      "Bash(curl -sL https://simplego.dev/assets/css/main.css)",
+      "Bash(curl -sL https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js -o web/static/js/htmx.min.js)",
+      "Bash(curl -sL https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js -o web/static/js/alpine.min.js)",
+      "Bash(go get *)",
+      "Bash(go vet *)",
+      "Bash(go run *)",
+      "Bash(go test *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git reset *)"
     ]
   }
 }

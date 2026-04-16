@@ -1,0 +1,16 @@
+{{ define "channel-card.html" }}
+{{ $ch := . }}
+<a href="/c/{{ $ch.Slug }}" class="channel-card" hx-boost="true">
+  <div class="channel-header">
+    <div>
+      <div class="channel-name">{{ $ch.Name }}</div>
+      <div class="channel-slug">#{{ $ch.Slug }}</div>
+    </div>
+    <span class="channel-type-badge">{{ $ch.ChannelType }}</span>
+  </div>
+  {{ if $ch.Description }}<p class="channel-desc">{{ truncate $ch.Description 140 }}</p>{{ end }}
+  <div class="channel-meta">
+    <span>{{ $ch.MemberCount }} {{ pluralize $ch.MemberCount "member" "members" }}</span>
+  </div>
+</a>
+{{ end }}

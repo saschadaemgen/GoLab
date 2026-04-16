@@ -1,0 +1,5 @@
+{{ define "feed-posts.html" }}
+{{ range .Posts }}
+  {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+{{ end }}
+{{ end }}
