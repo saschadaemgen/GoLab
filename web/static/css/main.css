@@ -107,6 +107,12 @@
 
 html { scroll-behavior: smooth; }
 
+:root {
+  --util-bar-height: 38px;
+  --navbar-height: 64px;
+  --header-total: 102px;
+}
+
 body {
   font-family: 'Source Sans 3', 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg-deep);
@@ -114,9 +120,19 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  padding-top: 38px;
+  /* Reserve space for both fixed bars so page content never hides under them. */
+  padding-top: var(--header-total);
   min-height: 100vh;
   transition: background var(--transition), color var(--transition);
+}
+
+/* The hero landing is designed to flow behind the transparent navbar.
+   Opt out of body top padding on those pages. */
+body.hero-page {
+  padding-top: var(--util-bar-height);
+}
+body.hero-page #main {
+  padding-top: var(--navbar-height);
 }
 
 a { color: var(--accent); text-decoration: none; transition: color var(--transition); }

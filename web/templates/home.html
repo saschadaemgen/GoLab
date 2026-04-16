@@ -17,11 +17,11 @@
 
 {{ with .Content }}
 {{ if .TrendingChannels }}
-<section class="home-section">
+<section class="home-section scroll-reveal">
   <h2 class="home-section-title">Trending channels</h2>
-  <div class="explore-grid" style="padding:0;margin:0;">
+  <div class="explore-grid stagger-in" style="padding:0;margin:0;">
     {{ range .TrendingChannels }}
-    <a href="/c/{{ .Slug }}" class="channel-card" hx-boost="true">
+    <a href="/c/{{ .Slug }}" class="channel-card hover-lift" hx-boost="true">
       <div class="channel-header">
         <div>
           <div class="channel-name">{{ .Name }}</div>
@@ -40,18 +40,18 @@
 {{ end }}
 {{ end }}
 
-<section class="home-section" id="about">
+<section class="home-section scroll-reveal" id="about">
   <h2 class="home-section-title">Why GoLab</h2>
-  <div class="explore-grid" style="padding:0;margin:0;">
-    <div class="card">
+  <div class="explore-grid stagger-in" style="padding:0;margin:0;">
+    <div class="card hover-lift">
       <h3 style="margin-bottom:0.5rem;">No algorithm</h3>
       <p class="muted">Chronological feed. You see what you follow. No ranking, no boosted posts, no dark patterns.</p>
     </div>
-    <div class="card">
+    <div class="card hover-lift">
       <h3 style="margin-bottom:0.5rem;">Signed by design</h3>
       <p class="muted">Every post carries a cryptographic signature. Phase 2 adds hardware-backed identity via GoKey.</p>
     </div>
-    <div class="card">
+    <div class="card hover-lift">
       <h3 style="margin-bottom:0.5rem;">Yours to host</h3>
       <p class="muted">AGPL-3.0 source. Run your own instance, federate later via SMP and ActivityStreams.</p>
     </div>

@@ -10,4 +10,7 @@ CREATE TABLE channel_members (
 CREATE INDEX idx_channel_members_user ON channel_members(user_id);
 
 -- +goose Down
-DROP TABLE IF EXISTS channel_members;
+-- Intentionally disabled in production. GoLab is live with real user data.
+-- If a rollback is truly required, do it manually with a reviewed plan.
+-- Never auto-drop in live systems.
+SELECT 1;

@@ -40,7 +40,7 @@
       {{ template "compose.html" (dict "Channels" nil "SelectedChannelID" $ch.ID) }}
     {{ end }}
 
-    <div id="feed-posts">
+    <div id="feed-posts" class="stagger-in">
       {{ if .Posts }}
         {{ range .Posts }}
           {{ template "post-card.html" (dict "Post" . "User" $.User) }}

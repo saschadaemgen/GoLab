@@ -21,6 +21,7 @@ type User struct {
 	DIDKey           *string   `json:"did_key,omitempty"`
 	CertFingerprint  *string   `json:"cert_fingerprint,omitempty"`
 	HardwareVerified bool      `json:"hardware_verified"`
+	Banned           bool      `json:"-"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
@@ -51,13 +52,13 @@ func (s *UserStore) FindByEmail(ctx context.Context, email string) (*User, error
 	u := &User{}
 	err := s.DB.QueryRow(ctx,
 		`SELECT id, username, email, password_hash, display_name, bio, avatar_url,
-		        power_level, did_key, cert_fingerprint, hardware_verified, created_at, updated_at
+		        power_level, did_key, cert_fingerprint, hardware_verified, banned, created_at, updated_at
 		 FROM users WHERE email = $1`,
 		email,
 	).Scan(
 		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName,
 		&u.Bio, &u.AvatarURL, &u.PowerLevel, &u.DIDKey, &u.CertFingerprint,
-		&u.HardwareVerified, &u.CreatedAt, &u.UpdatedAt,
+		&u.HardwareVerified, &u.Banned, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -72,13 +73,13 @@ func (s *UserStore) FindByUsername(ctx context.Context, username string) (*User,
 	u := &User{}
 	err := s.DB.QueryRow(ctx,
 		`SELECT id, username, email, password_hash, display_name, bio, avatar_url,
-		        power_level, did_key, cert_fingerprint, hardware_verified, created_at, updated_at
+		        power_level, did_key, cert_fingerprint, hardware_verified, banned, created_at, updated_at
 		 FROM users WHERE username = $1`,
 		username,
 	).Scan(
 		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName,
 		&u.Bio, &u.AvatarURL, &u.PowerLevel, &u.DIDKey, &u.CertFingerprint,
-		&u.HardwareVerified, &u.CreatedAt, &u.UpdatedAt,
+		&u.HardwareVerified, &u.Banned, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -93,13 +94,13 @@ func (s *UserStore) FindByID(ctx context.Context, id int64) (*User, error) {
 	u := &User{}
 	err := s.DB.QueryRow(ctx,
 		`SELECT id, username, email, password_hash, display_name, bio, avatar_url,
-		        power_level, did_key, cert_fingerprint, hardware_verified, created_at, updated_at
+		        power_level, did_key, cert_fingerprint, hardware_verified, banned, created_at, updated_at
 		 FROM users WHERE id = $1`,
 		id,
 	).Scan(
 		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName,
 		&u.Bio, &u.AvatarURL, &u.PowerLevel, &u.DIDKey, &u.CertFingerprint,
-		&u.HardwareVerified, &u.CreatedAt, &u.UpdatedAt,
+		&u.HardwareVerified, &u.Banned, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil

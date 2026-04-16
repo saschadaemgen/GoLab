@@ -16,4 +16,7 @@ CREATE INDEX idx_channels_slug ON channels(slug);
 CREATE INDEX idx_channels_type ON channels(channel_type);
 
 -- +goose Down
-DROP TABLE IF EXISTS channels;
+-- Intentionally disabled in production. GoLab is live with real user data.
+-- If a rollback is truly required, do it manually with a reviewed plan.
+-- Never auto-drop in live systems.
+SELECT 1;

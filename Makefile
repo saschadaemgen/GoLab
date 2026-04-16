@@ -1,4 +1,4 @@
-.PHONY: build run test lint migrate migrate-down web web-dev dev docker docker-down clean
+.PHONY: build run test lint migrate web web-dev dev docker docker-down clean
 
 # Go backend
 build:
@@ -14,11 +14,15 @@ lint:
 	golangci-lint run
 
 # Database
+#
+# `migrate` runs all UP migrations forward. There is no `migrate-down` target.
+# GoLab is live with real user data - auto-rollbacks are forbidden.
+# If a rollback is truly needed, do it manually with a reviewed plan:
+#   1. Snapshot the DB first.
+#   2. Write an explicit, reviewed SQL patch.
+#   3. Apply it under supervision.
 migrate:
 	goose -dir internal/database/migrations postgres "$(GOLAB_DB_URL)" up
-
-migrate-down:
-	goose -dir internal/database/migrations postgres "$(GOLAB_DB_URL)" down
 
 # Frontend
 web:

@@ -28,7 +28,7 @@
     })();
   </script>
 </head>
-<body hx-boost="true" hx-ext="">
+<body hx-boost="true" hx-ext=""{{ if eq .CurrentPath "/" }} class="hero-page"{{ end }}>
   <canvas id="sg-bg-canvas" aria-hidden="true"></canvas>
 
   {{ template "util-bar.html" . }}

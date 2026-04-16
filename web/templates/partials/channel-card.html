@@ -1,6 +1,6 @@
 {{ define "channel-card.html" }}
 {{ $ch := . }}
-<a href="/c/{{ $ch.Slug }}" class="channel-card" hx-boost="true">
+<a href="/c/{{ $ch.Slug }}" class="channel-card hover-lift" hx-boost="true">
   <div class="channel-header">
     <div>
       <div class="channel-name">{{ $ch.Name }}</div>

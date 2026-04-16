@@ -33,7 +33,13 @@
     {{ end }}
   </header>
 
-  <div class="post-content">{{ $post.Content }}</div>
+  <div class="post-content">
+    {{- if $post.ContentHTML -}}
+      {{ safeHTML $post.ContentHTML }}
+    {{- else -}}
+      {{ $post.Content }}
+    {{- end -}}
+  </div>
 
   <footer class="post-actions">
     <button class="post-action" data-action="react" data-post-id="{{ $post.ID }}"
@@ -51,12 +57,12 @@
       <span>{{ $post.RepostCount }}</span>
     </button>
 
-    <button class="post-action">
+    <a class="post-action" href="/p/{{ $post.ID }}" hx-boost="true" data-tooltip="Reply">
       <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
       <span>{{ $post.ReplyCount }}</span>
-    </button>
+    </a>
   </footer>
 </article>
 {{ end }}

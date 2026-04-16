@@ -40,7 +40,7 @@
 
   <div class="profile-body">
     <h2 class="home-section-title">Recent posts</h2>
-    <div id="feed-posts">
+    <div id="feed-posts" class="stagger-in">
       {{ if .RecentPosts }}
         {{ range .RecentPosts }}
           {{ template "post-card.html" (dict "Post" . "User" $.User) }}

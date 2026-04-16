@@ -10,4 +10,7 @@ CREATE TABLE reactions (
 CREATE INDEX idx_reactions_post ON reactions(post_id);
 
 -- +goose Down
-DROP TABLE IF EXISTS reactions;
+-- Intentionally disabled in production. GoLab is live with real user data.
+-- If a rollback is truly required, do it manually with a reviewed plan.
+-- Never auto-drop in live systems.
+SELECT 1;

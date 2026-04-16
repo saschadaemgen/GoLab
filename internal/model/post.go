@@ -17,6 +17,7 @@ type Post struct {
 	ParentID      *int64    `json:"parent_id,omitempty"`
 	RepostOfID    *int64    `json:"repost_of_id,omitempty"`
 	Content       string    `json:"content"`
+	ContentHTML   string    `json:"content_html"`
 	ReactionCount int       `json:"reaction_count"`
 	ReplyCount    int       `json:"reply_count"`
 	RepostCount   int       `json:"repost_count"`
@@ -33,17 +34,17 @@ type PostStore struct {
 	DB *pgxpool.Pool
 }
 
-func (s *PostStore) Create(ctx context.Context, asType string, authorID int64, channelID, parentID *int64, content string) (*Post, error) {
+func (s *PostStore) Create(ctx context.Context, asType string, authorID int64, channelID, parentID *int64, content, contentHTML string) (*Post, error) {
 	p := &Post{}
 	err := s.DB.QueryRow(ctx,
-		`INSERT INTO posts (as_type, author_id, channel_id, parent_id, content)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, as_type, author_id, channel_id, parent_id, repost_of_id, content,
+		`INSERT INTO posts (as_type, author_id, channel_id, parent_id, content, content_html)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 RETURNING id, as_type, author_id, channel_id, parent_id, repost_of_id, content, content_html,
 		           reaction_count, reply_count, repost_count, created_at, updated_at`,
-		asType, authorID, channelID, parentID, content,
+		asType, authorID, channelID, parentID, content, contentHTML,
 	).Scan(
 		&p.ID, &p.ASType, &p.AuthorID, &p.ChannelID, &p.ParentID, &p.RepostOfID,
-		&p.Content, &p.ReactionCount, &p.ReplyCount, &p.RepostCount,
+		&p.Content, &p.ContentHTML, &p.ReactionCount, &p.ReplyCount, &p.RepostCount,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -69,12 +70,12 @@ func (s *PostStore) CreateRepost(ctx context.Context, authorID int64, channelID 
 	err := s.DB.QueryRow(ctx,
 		`INSERT INTO posts (as_type, author_id, channel_id, repost_of_id, content)
 		 VALUES ('Announce', $1, $2, $3, '')
-		 RETURNING id, as_type, author_id, channel_id, parent_id, repost_of_id, content,
+		 RETURNING id, as_type, author_id, channel_id, parent_id, repost_of_id, content, content_html,
 		           reaction_count, reply_count, repost_count, created_at, updated_at`,
 		authorID, channelID, repostOfID,
 	).Scan(
 		&p.ID, &p.ASType, &p.AuthorID, &p.ChannelID, &p.ParentID, &p.RepostOfID,
-		&p.Content, &p.ReactionCount, &p.ReplyCount, &p.RepostCount,
+		&p.Content, &p.ContentHTML, &p.ReactionCount, &p.ReplyCount, &p.RepostCount,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -97,7 +98,7 @@ func (s *PostStore) FindByID(ctx context.Context, id int64) (*Post, error) {
 	p := &Post{}
 	err := s.DB.QueryRow(ctx,
 		`SELECT p.id, p.as_type, p.author_id, p.channel_id, p.parent_id, p.repost_of_id,
-		        p.content, p.reaction_count, p.reply_count, p.repost_count,
+		        p.content, p.content_html, p.reaction_count, p.reply_count, p.repost_count,
 		        p.created_at, p.updated_at,
 		        u.username, u.display_name, u.avatar_url
 		 FROM posts p JOIN users u ON p.author_id = u.id
@@ -105,7 +106,7 @@ func (s *PostStore) FindByID(ctx context.Context, id int64) (*Post, error) {
 		id,
 	).Scan(
 		&p.ID, &p.ASType, &p.AuthorID, &p.ChannelID, &p.ParentID, &p.RepostOfID,
-		&p.Content, &p.ReactionCount, &p.ReplyCount, &p.RepostCount,
+		&p.Content, &p.ContentHTML, &p.ReactionCount, &p.ReplyCount, &p.RepostCount,
 		&p.CreatedAt, &p.UpdatedAt,
 		&p.AuthorUsername, &p.AuthorDisplayName, &p.AuthorAvatarURL,
 	)
@@ -120,7 +121,7 @@ func (s *PostStore) FindByID(ctx context.Context, id int64) (*Post, error) {
 
 func (s *PostStore) ListByChannel(ctx context.Context, channelID int64, limit int, before *time.Time) ([]Post, error) {
 	query := `SELECT p.id, p.as_type, p.author_id, p.channel_id, p.parent_id, p.repost_of_id,
-	                  p.content, p.reaction_count, p.reply_count, p.repost_count,
+	                  p.content, p.content_html, p.reaction_count, p.reply_count, p.repost_count,
 	                  p.created_at, p.updated_at,
 	                  u.username, u.display_name, u.avatar_url
 	           FROM posts p JOIN users u ON p.author_id = u.id
@@ -147,7 +148,7 @@ func (s *PostStore) ListByChannel(ctx context.Context, channelID int64, limit in
 
 func (s *PostStore) ListByAuthor(ctx context.Context, authorID int64, limit int, before *time.Time) ([]Post, error) {
 	query := `SELECT p.id, p.as_type, p.author_id, p.channel_id, p.parent_id, p.repost_of_id,
-	                  p.content, p.reaction_count, p.reply_count, p.repost_count,
+	                  p.content, p.content_html, p.reaction_count, p.reply_count, p.repost_count,
 	                  p.created_at, p.updated_at,
 	                  u.username, u.display_name, u.avatar_url
 	           FROM posts p JOIN users u ON p.author_id = u.id
@@ -205,6 +206,28 @@ func (s *PostStore) Feed(ctx context.Context, userID int64, limit int, before *t
 	return scanPosts(rows)
 }
 
+// ListReplies returns a flat list of replies to a post, sorted by created_at ASC.
+// For Phase 1 we keep replies flat (depth=1) to avoid recursive queries; the
+// schema supports arbitrary depth and we can upgrade to recursive CTEs later.
+func (s *PostStore) ListReplies(ctx context.Context, parentID int64, limit int) ([]Post, error) {
+	rows, err := s.DB.Query(ctx,
+		`SELECT p.id, p.as_type, p.author_id, p.channel_id, p.parent_id, p.repost_of_id,
+		        p.content, p.content_html, p.reaction_count, p.reply_count, p.repost_count,
+		        p.created_at, p.updated_at,
+		        u.username, u.display_name, u.avatar_url
+		 FROM posts p JOIN users u ON p.author_id = u.id
+		 WHERE p.parent_id = $1
+		 ORDER BY p.created_at ASC
+		 LIMIT $2`,
+		parentID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing replies: %w", err)
+	}
+	defer rows.Close()
+	return scanPosts(rows)
+}
+
 func (s *PostStore) Delete(ctx context.Context, id, authorID int64) error {
 	result, err := s.DB.Exec(ctx,
 		`DELETE FROM posts WHERE id = $1 AND author_id = $2`,
@@ -225,7 +248,7 @@ func scanPosts(rows pgx.Rows) ([]Post, error) {
 		var p Post
 		if err := rows.Scan(
 			&p.ID, &p.ASType, &p.AuthorID, &p.ChannelID, &p.ParentID, &p.RepostOfID,
-			&p.Content, &p.ReactionCount, &p.ReplyCount, &p.RepostCount,
+			&p.Content, &p.ContentHTML, &p.ReactionCount, &p.ReplyCount, &p.RepostCount,
 			&p.CreatedAt, &p.UpdatedAt,
 			&p.AuthorUsername, &p.AuthorDisplayName, &p.AuthorAvatarURL,
 		); err != nil {

@@ -3,6 +3,7 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/saschadaemgen/GoLab/internal/auth"
@@ -214,6 +215,55 @@ func (h *PageHandler) ExplorePage(w http.ResponseWriter, r *http.Request) {
 	data.Content = exploreContent{Channels: channels}
 	if err := h.Render.Render(w, "explore", data); err != nil {
 		slog.Error("render explore", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}
+}
+
+// ---------- Thread (single post + replies) ----------
+
+type threadContent struct {
+	Post    *model.Post
+	Replies []model.Post
+	Channel *model.Channel
+}
+
+func (h *PageHandler) ThreadPage(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	post, err := h.Posts.FindByID(r.Context(), id)
+	if err != nil {
+		slog.Error("thread: find post", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if post == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	replies, err := h.Posts.ListReplies(r.Context(), id, 200)
+	if err != nil {
+		slog.Error("thread: list replies", "error", err)
+		replies = nil
+	}
+	if replies == nil {
+		replies = []model.Post{}
+	}
+
+	var ch *model.Channel
+	if post.ChannelID != nil {
+		ch, _ = h.Channels.FindByID(r.Context(), *post.ChannelID)
+	}
+
+	data := h.newPageData(r, "Thread - GoLab")
+	data.Content = threadContent{Post: post, Replies: replies, Channel: ch}
+	if err := h.Render.Render(w, "thread", data); err != nil {
+		slog.Error("render thread", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
 }

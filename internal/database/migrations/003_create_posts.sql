@@ -23,4 +23,7 @@ CREATE INDEX idx_posts_created ON posts(created_at DESC);
 CREATE INDEX idx_posts_channel_created ON posts(channel_id, created_at DESC);
 
 -- +goose Down
-DROP TABLE IF EXISTS posts;
+-- Intentionally disabled in production. GoLab is live with real user data.
+-- If a rollback is truly required, do it manually with a reviewed plan.
+-- Never auto-drop in live systems.
+SELECT 1;

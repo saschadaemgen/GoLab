@@ -7,7 +7,7 @@
 
   {{ with .Content }}
   {{ if .Channels }}
-  <div class="explore-grid">
+  <div class="explore-grid stagger-in">
     {{ range .Channels }}
       {{ template "channel-card.html" . }}
     {{ end }}

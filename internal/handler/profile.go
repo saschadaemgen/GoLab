@@ -14,6 +14,7 @@ type ProfileHandler struct {
 	Users   *model.UserStore
 	Posts   *model.PostStore
 	Follows *model.FollowStore
+	Notifs  *NotifDispatch
 }
 
 type updateProfileRequest struct {
@@ -118,6 +119,10 @@ func (h *ProfileHandler) Follow(w http.ResponseWriter, r *http.Request) {
 		slog.Error("follow", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	if h.Notifs != nil {
+		h.Notifs.Notify(r.Context(), target.ID, currentUser.ID, model.NotifFollow, nil)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "following"})

@@ -143,6 +143,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if user.Banned {
+		writeError(w, http.StatusForbidden, "this account has been banned")
+		return
+	}
+
 	sessionID, err := h.Sessions.Create(r.Context(), user.ID)
 	if err != nil {
 		slog.Error("login: create session", "error", err)

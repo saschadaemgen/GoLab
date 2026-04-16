@@ -9,13 +9,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/saschadaemgen/GoLab/internal/auth"
 	"github.com/saschadaemgen/GoLab/internal/model"
+	"github.com/saschadaemgen/GoLab/internal/render"
 )
 
 type PostHandler struct {
 	Posts     *model.PostStore
 	Channels  *model.ChannelStore
 	Reactions *model.ReactionStore
-	Hub       *Hub // optional; when present, new posts get broadcast
+	Markdown  *render.Markdown
+	Hub       *Hub           // optional; when present, new posts get broadcast
+	Notifs    *NotifDispatch // optional; used to create notifications on react/reply
 }
 
 type createPostRequest struct {
@@ -26,6 +29,29 @@ type createPostRequest struct {
 
 type reactRequest struct {
 	ReactionType string `json:"reaction_type"`
+}
+
+type previewRequest struct {
+	Content string `json:"content"`
+}
+
+// Preview renders Markdown without saving. Used by the compose box
+// Preview tab. Rate-limited by the auth middleware.
+func (h *PostHandler) Preview(w http.ResponseWriter, r *http.Request) {
+	var req previewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.Content) > 5000 {
+		writeError(w, http.StatusBadRequest, "content too long")
+		return
+	}
+	var html string
+	if h.Markdown != nil {
+		html, _ = h.Markdown.Render(req.Content)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"html": html})
 }
 
 func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +96,15 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	post, err := h.Posts.Create(r.Context(), "Note", user.ID, req.ChannelID, req.ParentID, req.Content)
+	// Render Markdown to HTML (XSS-safe: goldmark escapes raw HTML).
+	var contentHTML string
+	if h.Markdown != nil {
+		if rendered, err := h.Markdown.Render(req.Content); err == nil {
+			contentHTML = rendered
+		}
+	}
+
+	post, err := h.Posts.Create(r.Context(), "Note", user.ID, req.ChannelID, req.ParentID, req.Content, contentHTML)
 	if err != nil {
 		slog.Error("create post", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -83,6 +117,14 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	post.AuthorAvatarURL = user.AvatarURL
 
 	slog.Info("post created", "id", post.ID, "author", user.Username)
+
+	// Notify the parent post author if this is a reply
+	if req.ParentID != nil && h.Notifs != nil {
+		if parent, err := h.Posts.FindByID(r.Context(), *req.ParentID); err == nil && parent != nil {
+			pid := post.ID
+			h.Notifs.Notify(r.Context(), parent.AuthorID, user.ID, model.NotifReply, &pid)
+		}
+	}
 
 	// Broadcast to WebSocket subscribers
 	if h.Hub != nil {
@@ -165,6 +207,13 @@ func (h *PostHandler) React(w http.ResponseWriter, r *http.Request) {
 		slog.Error("react", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	// Notify the post author (unless the user is reacting to their own post).
+	if h.Notifs != nil {
+		if post, err := h.Posts.FindByID(r.Context(), id); err == nil && post != nil {
+			h.Notifs.Notify(r.Context(), post.AuthorID, user.ID, model.NotifReaction, &id)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "reacted"})

@@ -4,7 +4,7 @@
   <div class="feed-main">
     {{ template "compose.html" (dict "Channels" .JoinedChannels "SelectedChannelID" 0) }}
 
-    <div id="feed-posts">
+    <div id="feed-posts" class="stagger-in">
       {{ if .Posts }}
         {{ range .Posts }}
           {{ template "post-card.html" (dict "Post" . "User" $.User) }}

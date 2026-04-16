@@ -9,4 +9,7 @@ CREATE TABLE follows (
 CREATE INDEX idx_follows_following ON follows(following_id);
 
 -- +goose Down
-DROP TABLE IF EXISTS follows;
+-- Intentionally disabled in production. GoLab is live with real user data.
+-- If a rollback is truly required, do it manually with a reviewed plan.
+-- Never auto-drop in live systems.
+SELECT 1;

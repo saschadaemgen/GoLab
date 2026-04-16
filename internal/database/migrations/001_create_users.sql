@@ -20,4 +20,7 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_did_key ON users(did_key) WHERE did_key IS NOT NULL;
 
 -- +goose Down
-DROP TABLE IF EXISTS users;
+-- Intentionally disabled in production. GoLab is live with real user data.
+-- If a rollback is truly required, do it manually with a reviewed plan.
+-- Never auto-drop in live systems.
+SELECT 1;

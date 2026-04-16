@@ -80,6 +80,26 @@ func main() {
 				"IsMember": true,
 			},
 		},
+		"thread": map[string]any{
+			"Title": "Thread", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/p/1",
+			"Content": map[string]any{
+				"Post":    &dummyPost,
+				"Replies": []model.Post{dummyPost},
+				"Channel": &model.Channel{ID: 1, Slug: "general", Name: "General"},
+			},
+		},
+		"admin": map[string]any{
+			"Title": "Admin", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/admin",
+			"Content": map[string]any{
+				"Stats": map[string]any{"Users": 42, "Posts": 187, "Channels": 8, "Banned": 0},
+				"Users": []map[string]any{
+					{"ID": int64(1), "Username": "prinz", "DisplayName": "Der Prinz", "PowerLevel": 100, "PostCount": 3, "Banned": false, "CreatedAt": time.Now().Add(-2 * time.Hour)},
+				},
+				"Channels": []map[string]any{
+					{"ID": int64(1), "Slug": "general", "Name": "General", "ChannelType": "public", "MemberCount": 42, "PostCount": 12, "CreatedAt": time.Now().Add(-3 * 24 * time.Hour)},
+				},
+			},
+		},
 	}
 
 	for name, data := range pages {

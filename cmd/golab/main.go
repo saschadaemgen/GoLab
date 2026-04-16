@@ -55,6 +55,9 @@ func run() error {
 		return fmt.Errorf("templates: %w", err)
 	}
 
+	// Markdown renderer
+	md := render.NewMarkdown()
+
 	// WebSocket hub
 	hub := handler.NewHub(tmpls)
 	hubCtx, hubCancel := context.WithCancel(ctx)
@@ -62,7 +65,7 @@ func run() error {
 	go hub.Run(hubCtx)
 
 	// Build router
-	r := newRouter(cfg, pool, tmpls, hub)
+	r := newRouter(cfg, pool, tmpls, md, hub)
 
 	// Start server
 	srv := &http.Server{
@@ -94,7 +97,7 @@ func run() error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, hub *handler.Hub) *chi.Mux {
+func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md *render.Markdown, hub *handler.Hub) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -110,7 +113,11 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, hub
 	posts := &model.PostStore{DB: pool}
 	follows := &model.FollowStore{DB: pool}
 	reactions := &model.ReactionStore{DB: pool}
+	notifs := &model.NotificationStore{DB: pool}
 	sessions := &auth.SessionStore{DB: pool}
+
+	// Notification dispatcher (used by post + profile handlers to fan events).
+	notifDispatch := &handler.NotifDispatch{Store: notifs, Hub: hub}
 
 	// Auth middleware
 	requireAuth := auth.RequireAuth(sessions, users)
@@ -125,9 +132,16 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, hub
 		Secure:   !cfg.IsDev(),
 	}
 	channelH := &handler.ChannelHandler{Channels: channels, Users: users}
-	postH := &handler.PostHandler{Posts: posts, Channels: channels, Reactions: reactions, Hub: hub}
+	postH := &handler.PostHandler{
+		Posts: posts, Channels: channels, Reactions: reactions,
+		Markdown: md, Hub: hub, Notifs: notifDispatch,
+	}
 	feedH := &handler.FeedHandler{Posts: posts}
-	profileH := &handler.ProfileHandler{Users: users, Posts: posts, Follows: follows}
+	profileH := &handler.ProfileHandler{Users: users, Posts: posts, Follows: follows, Notifs: notifDispatch}
+	notifH := &handler.NotifHandler{Store: notifs}
+	avatarH := &handler.AvatarHandler{Users: users, RootDir: "web/static"}
+	searchH := &handler.SearchHandler{DB: pool}
+	adminH := &handler.AdminHandler{DB: pool, Render: tmpls, Users: users}
 
 	// Page handlers
 	pageH := &handler.PageHandler{
@@ -156,12 +170,20 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, hub
 		r.Get("/explore", pageH.ExplorePage)
 		r.Get("/c/{slug}", pageH.ChannelPage)
 		r.Get("/u/{username}", pageH.ProfilePage)
+		r.Get("/p/{id}", pageH.ThreadPage)
 	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(requireAuthRedirect)
 		r.Get("/feed", pageH.FeedPage)
 		r.Get("/settings", pageH.SettingsPage)
+	})
+
+	// Admin page (HTML)
+	r.Group(func(r chi.Router) {
+		r.Use(requireAuthRedirect)
+		r.Use(handler.RequireAdmin)
+		r.Get("/admin", adminH.Page)
 	})
 
 	// API routes
@@ -177,6 +199,12 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, hub
 			r.Use(requireAuth)
 			r.Post("/logout", authH.Logout)
 			r.Get("/me", authH.Me)
+		})
+
+		// Preview (Markdown render, public so the landing could use it too)
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Post("/preview", postH.Preview)
 		})
 
 		// Channels
@@ -211,8 +239,36 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, hub
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
 			r.Put("/users/me", profileH.UpdateMe)
+			r.Post("/users/me/avatar", avatarH.Upload)
+			r.Delete("/users/me/avatar", avatarH.Remove)
 			r.Post("/users/{username}/follow", profileH.Follow)
 			r.Delete("/users/{username}/follow", profileH.Unfollow)
+		})
+
+		// Notifications (protected)
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Get("/notifications", notifH.List)
+			r.Get("/notifications/count", notifH.Count)
+			r.Post("/notifications/read-all", notifH.MarkAllRead)
+			r.Post("/notifications/{id}/read", notifH.MarkRead)
+		})
+
+		// Search (protected - only logged-in users can search)
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Get("/search", searchH.Search)
+		})
+
+		// Admin (power_level >= 100)
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Use(handler.RequireAdmin)
+			r.Get("/admin/stats", adminH.Stats)
+			r.Get("/admin/users", adminH.ListUsers)
+			r.Post("/admin/users/{id}/ban", adminH.Ban)
+			r.Post("/admin/users/{id}/unban", adminH.Unban)
+			r.Put("/admin/users/{id}/power", adminH.SetPower)
 		})
 	})
 

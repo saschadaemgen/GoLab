@@ -110,6 +110,12 @@ func (h *Hub) Run(ctx context.Context) {
 	}
 }
 
+// PublishToUser fans msg out to every WebSocket a specific user has open.
+// Clients auto-subscribe to "user:N" on connect.
+func (h *Hub) PublishToUser(userID int64, msg Message) {
+	h.Publish(fmt.Sprintf("user:%d", userID), msg)
+}
+
 // Publish encodes msg as JSON and sends it to all subscribers of topic.
 func (h *Hub) Publish(topic string, msg Message) {
 	msg.Topic = topic
