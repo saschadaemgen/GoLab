@@ -1,0 +1,20 @@
+{{ define "toasts.html" }}
+<div class="toast-container"
+     x-data="toastHost()"
+     @notify.window="push($event.detail)"
+     x-cloak>
+  <template x-for="t in items" :key="t.id">
+    <div class="toast"
+         :class="t.type || 'info'"
+         x-show="t.visible"
+         x-transition:enter="toast-enter"
+         x-transition:enter-start="toast-enter"
+         x-transition:enter-end="toast-enter-active"
+         x-transition:leave="toast-leave"
+         x-transition:leave-start="toast-leave"
+         x-transition:leave-end="toast-leave-active">
+      <span x-text="t.message"></span>
+    </div>
+  </template>
+</div>
+{{ end }}

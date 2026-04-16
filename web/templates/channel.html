@@ -1,0 +1,64 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $ch := .Channel }}
+<div class="fade-in">
+  <header class="channel-page-header">
+    <div class="channel-page-title">
+      <h1>{{ $ch.Name }}</h1>
+      <span class="slug">#{{ $ch.Slug }}</span>
+    </div>
+    {{ if $ch.Description }}
+    <p class="channel-page-desc">{{ $ch.Description }}</p>
+    {{ end }}
+    <div class="channel-page-actions">
+      <span class="channel-page-stat">{{ $ch.MemberCount }} {{ pluralize $ch.MemberCount "member" "members" }}</span>
+      <span class="channel-page-stat">Created {{ timeAgo $ch.CreatedAt }}</span>
+      {{ if $.User }}
+        {{ if .IsMember }}
+        <button class="btn btn-outline btn-sm btn-join joined"
+                data-action="channel-toggle"
+                data-slug="{{ $ch.Slug }}"
+                data-mode="leave">
+          Joined
+        </button>
+        {{ else }}
+        <button class="btn btn-primary btn-sm btn-join"
+                data-action="channel-toggle"
+                data-slug="{{ $ch.Slug }}"
+                data-mode="join">
+          Join
+        </button>
+        {{ end }}
+      {{ else }}
+        <a class="btn btn-primary btn-sm" href="/login" hx-boost="true">Log in to join</a>
+      {{ end }}
+    </div>
+  </header>
+
+  <div class="channel-page-body">
+    {{ if and $.User .IsMember }}
+      {{ template "compose.html" (dict "Channels" nil "SelectedChannelID" $ch.ID) }}
+    {{ end }}
+
+    <div id="feed-posts" class="stagger-in">
+      {{ if .Posts }}
+        {{ range .Posts }}
+          {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+        {{ end }}
+      {{ else }}
+        <div class="empty-state">
+          <h3>No posts yet</h3>
+          {{ if and $.User .IsMember }}
+            <p>Be the first to post in #{{ $ch.Slug }}.</p>
+          {{ else if $.User }}
+            <p>Join this channel to post.</p>
+          {{ else }}
+            <p>Log in to join and post.</p>
+          {{ end }}
+        </div>
+      {{ end }}
+    </div>
+  </div>
+</div>
+{{ end }}
+{{ end }}

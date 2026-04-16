@@ -1,0 +1,111 @@
+{{ define "content" }}
+<div class="admin-page fade-in">
+  <header class="admin-header">
+    <h1>Admin Dashboard</h1>
+    <p>Platform snapshot and moderation tools. Use with care.</p>
+  </header>
+
+  {{ with .Content }}
+  {{ with .Stats }}
+  <div class="admin-stats stagger-in">
+    <div class="admin-stat-card hover-lift">
+      <div class="stat-counter" data-counter="{{ .Users }}">0</div>
+      <div class="stat-label">Users</div>
+    </div>
+    <div class="admin-stat-card hover-lift">
+      <div class="stat-counter" data-counter="{{ .Posts }}">0</div>
+      <div class="stat-label">Posts</div>
+    </div>
+    <div class="admin-stat-card hover-lift">
+      <div class="stat-counter" data-counter="{{ .Channels }}">0</div>
+      <div class="stat-label">Channels</div>
+    </div>
+    <div class="admin-stat-card hover-lift">
+      <div class="stat-counter" data-counter="{{ .Banned }}">0</div>
+      <div class="stat-label">Banned</div>
+    </div>
+  </div>
+  {{ end }}
+
+  <section class="admin-section">
+    <h2>Users</h2>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Role</th>
+            <th>Posts</th>
+            <th>Joined</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ range .Users }}
+          <tr>
+            <td>
+              <a href="/u/{{ .Username }}" hx-boost="true" style="color:var(--text-bright);font-weight:600;">
+                {{ if .DisplayName }}{{ .DisplayName }}{{ else }}{{ .Username }}{{ end }}
+              </a>
+              <span class="muted" style="margin-left:0.4rem;">@{{ .Username }}</span>
+            </td>
+            <td>
+              {{ if .Banned }}
+                <span class="admin-pill admin-pill-banned">Banned</span>
+              {{ else if ge .PowerLevel 100 }}
+                <span class="admin-pill admin-pill-admin">Admin</span>
+              {{ else }}
+                <span class="admin-pill admin-pill-user">L{{ .PowerLevel }}</span>
+              {{ end }}
+            </td>
+            <td class="mono">{{ .PostCount }}</td>
+            <td class="mono muted">{{ timeAgo .CreatedAt }}</td>
+            <td>
+              {{ if .Banned }}
+                <button class="btn btn-outline btn-sm press-effect" data-action="admin-unban" data-user-id="{{ .ID }}">Unban</button>
+              {{ else if lt .PowerLevel 100 }}
+                <button class="btn btn-danger btn-sm press-effect" data-action="admin-ban" data-user-id="{{ .ID }}">Ban</button>
+              {{ else }}
+                <span class="muted mono" style="font-size:0.75rem;">-</span>
+              {{ end }}
+            </td>
+          </tr>
+          {{ end }}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="admin-section">
+    <h2>Channels</h2>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Channel</th>
+            <th>Type</th>
+            <th>Members</th>
+            <th>Posts</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ range .Channels }}
+          <tr>
+            <td>
+              <a href="/c/{{ .Slug }}" hx-boost="true" style="color:var(--text-bright);font-weight:600;">{{ .Name }}</a>
+              <span class="muted mono" style="margin-left:0.4rem;">#{{ .Slug }}</span>
+            </td>
+            <td><span class="admin-pill admin-pill-user">{{ .ChannelType }}</span></td>
+            <td class="mono">{{ .MemberCount }}</td>
+            <td class="mono">{{ .PostCount }}</td>
+            <td class="mono muted">{{ timeAgo .CreatedAt }}</td>
+          </tr>
+          {{ end }}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {{ end }}
+</div>
+{{ end }}

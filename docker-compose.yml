@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  golab:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - GOLAB_DB_HOST=db
+      - GOLAB_DB_PORT=5432
+      - GOLAB_DB_NAME=golab
+      - GOLAB_DB_USER=golab
+      - GOLAB_DB_PASSWORD=golab-dev
+      - GOLAB_DB_SSLMODE=disable
+      - GOLAB_SECRET=dev-secret-change-in-production
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=golab
+      - POSTGRES_USER=golab
+      - POSTGRES_PASSWORD=golab-dev
+    volumes:
+      - golab-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+volumes:
+  golab-data:

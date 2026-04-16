@@ -1,5 +1,16 @@
+# Binary
+/golab
+golab.exe
+
+# Environment
+.env
+
 # Internal documentation
 docs/internal/
+
+# 11ty output
+web/_site/
+web/node_modules/
 
 # OS files
 .DS_Store
@@ -9,3 +20,6 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+
+# Go
+vendor/

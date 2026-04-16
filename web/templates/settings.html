@@ -1,0 +1,72 @@
+{{ define "content" }}
+<div class="auth-container fade-in" style="max-width:560px;">
+  <div class="auth-card">
+    <h1 class="auth-title">Settings</h1>
+    <p class="auth-subtitle">Update how others see you.</p>
+
+    {{ with .User }}
+    <div x-data="avatarUploader('{{ .AvatarURL }}', '{{ initial .Username }}')">
+      <div class="avatar-upload-zone"
+           :class="{ 'drag-active': dragging }"
+           @dragover.prevent="dragging = true"
+           @dragleave.prevent="dragging = false"
+           @drop.prevent="handleDrop($event)"
+           @click="$refs.fileInput.click()">
+        <img x-show="preview" :src="preview"
+             class="avatar-preview img-reveal"
+             @load="$el.classList.add('loaded')">
+        <div x-show="!preview && !initial" class="avatar-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span>Drop image<br>or click</span>
+        </div>
+        <div x-show="!preview && initial" class="avatar-placeholder">
+          <span style="font-size:2rem;color:var(--accent);" x-text="initial"></span>
+          <span>Click to upload</span>
+        </div>
+        <input type="file" accept="image/*" x-ref="fileInput" class="avatar-file-input" @change="handleFile($event)">
+      </div>
+      <div class="text-center mb-2" x-show="preview">
+        <button type="button" class="btn btn-ghost btn-sm press-effect" @click="remove()">Remove avatar</button>
+      </div>
+    </div>
+
+    <form id="settings-form" autocomplete="off">
+      <div class="form-group">
+        <label class="form-label" for="st-username">Username</label>
+        <input class="form-input" type="text" id="st-username" value="{{ .Username }}" disabled>
+        <div class="form-hint">Username cannot be changed.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="st-display">Display name</label>
+        <input class="form-input input-glow" type="text" id="st-display" name="display_name"
+               value="{{ .DisplayName }}" maxlength="64" placeholder="How you appear on posts">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="st-bio">Bio</label>
+        <textarea class="form-input form-textarea input-glow" id="st-bio" name="bio"
+                  maxlength="500" placeholder="Tell others what you are about">{{ .Bio }}</textarea>
+        <div class="form-hint" x-data="{ len: {{ len .Bio }} }"
+             @input="len = $el.parentElement.querySelector('textarea').value.length">
+          <span x-text="len">0</span> / 500
+        </div>
+      </div>
+
+      <input type="hidden" name="avatar_url" id="st-avatar-url" value="{{ .AvatarURL }}">
+
+      <div class="form-error" role="alert"></div>
+
+      <div class="auth-submit-row">
+        <button type="submit" class="btn btn-primary press-effect">
+          <span class="btn-label">Save changes</span>
+        </button>
+      </div>
+    </form>
+    {{ end }}
+  </div>
+</div>
+{{ end }}

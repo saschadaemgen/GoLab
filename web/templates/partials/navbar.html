@@ -1,0 +1,180 @@
+{{ define "navbar.html" }}
+<nav id="navbar">
+  <div class="nav-inner">
+    <a href="/" class="nav-brand" hx-boost="true">
+      <span>Go</span><span class="brand-go">Lab</span><span class="brand-dot"></span>
+    </a>
+
+    <div class="nav-links" id="nav-links">
+      {{ if .User }}
+      <a href="/feed" class="{{ isActive .CurrentPath "/feed" }}">Feed</a>
+      <a href="/explore" class="{{ isActive .CurrentPath "/explore" }}">Explore</a>
+      {{ if ge .User.PowerLevel 100 }}
+      <a href="/admin" class="{{ isActive .CurrentPath "/admin" }}">Admin</a>
+      {{ end }}
+      {{ else }}
+      <a href="/explore" class="{{ isActive .CurrentPath "/explore" }}">Explore</a>
+      <a href="/#about">About</a>
+      {{ end }}
+    </div>
+
+    {{ if .User }}
+    <div class="nav-search" x-data="globalSearch()" :class="{ 'search-active': active }">
+      <div class="search-input-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" class="search-input" placeholder="Search posts, channels, users..."
+               x-model="query"
+               @input.debounce.300ms="doSearch()"
+               @focus="active = true"
+               @keydown.escape="close()"
+               data-search-input>
+        <kbd class="search-kbd" x-show="!active && !query">/</kbd>
+      </div>
+      <div class="search-results"
+           x-show="active && query.length >= 2"
+           x-cloak
+           @click.outside="close()"
+           x-transition:enter="crossfade-enter"
+           x-transition:enter-start="crossfade-enter"
+           x-transition:enter-end="">
+        <div x-show="loading" class="search-loading">
+          <div class="skeleton skeleton-line"></div>
+          <div class="skeleton skeleton-line skeleton-line-short"></div>
+        </div>
+        <template x-if="!loading && !hasResults()">
+          <div class="search-empty">No results for "<span x-text="query"></span>"</div>
+        </template>
+        <div x-show="!loading && results.channels.length > 0" class="search-section">
+          <div class="search-section-title">Channels</div>
+          <template x-for="ch in results.channels" :key="'c-' + ch.id">
+            <a :href="'/c/' + ch.slug" class="search-result-item" @click="close()">
+              <span class="search-result-hash">#</span>
+              <span class="search-result-name" x-text="ch.slug"></span>
+              <span class="search-result-meta" x-text="ch.member_count + ' members'"></span>
+            </a>
+          </template>
+        </div>
+        <div x-show="!loading && results.users.length > 0" class="search-section">
+          <div class="search-section-title">Users</div>
+          <template x-for="u in results.users" :key="'u-' + u.id">
+            <a :href="'/u/' + u.username" class="search-result-item" @click="close()">
+              <span class="search-result-avatar">
+                <template x-if="u.avatar_url"><img :src="u.avatar_url"></template>
+                <template x-if="!u.avatar_url"><span x-text="u.username.charAt(0).toUpperCase()"></span></template>
+              </span>
+              <span class="search-result-name" x-text="u.display_name || u.username"></span>
+              <span class="search-result-meta" x-text="'@' + u.username"></span>
+            </a>
+          </template>
+        </div>
+        <div x-show="!loading && results.posts.length > 0" class="search-section">
+          <div class="search-section-title">Posts</div>
+          <template x-for="p in results.posts" :key="'p-' + p.id">
+            <a :href="'/p/' + p.id" class="search-result-item" @click="close()">
+              <span class="search-result-excerpt" x-text="p.content.substring(0, 80) + (p.content.length > 80 ? '...' : '')"></span>
+              <span class="search-result-meta" x-text="'@' + p.author_username"></span>
+            </a>
+          </template>
+        </div>
+      </div>
+    </div>
+    {{ end }}
+
+    <div class="nav-right">
+      {{ if .User }}
+      <div class="dropdown nav-notif-wrap"
+           x-data="notificationsPanel()"
+           x-init="refreshCount(); window.addEventListener('notif-count-push', (e) => { unread = e.detail; loaded = false; })">
+        <button @click="toggle()" class="nav-notif press-effect tooltip" data-tooltip="Notifications" aria-haspopup="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <span class="notif-badge" x-show="unread > 0" x-text="unread" x-cloak></span>
+        </button>
+        <div x-show="open"
+             @click.outside="open = false"
+             x-transition:enter="dropdown-enter"
+             x-transition:enter-start="dropdown-enter"
+             x-transition:enter-end="dropdown-enter-active"
+             x-transition:leave="dropdown-leave"
+             x-transition:leave-start="dropdown-leave"
+             x-transition:leave-end="dropdown-leave-active"
+             x-cloak
+             class="notif-panel">
+          <div class="notif-header">
+            <span>Notifications</span>
+            <button class="notif-mark-read press-effect" @click="markAllRead()">Mark all read</button>
+          </div>
+          <div x-show="loading" class="search-loading">
+            <div class="skeleton skeleton-card"></div>
+            <div class="skeleton skeleton-card"></div>
+          </div>
+          <template x-if="!loading && items.length === 0">
+            <div class="notif-empty">
+              No notifications yet.<br>
+              When people react, reply or follow you, it shows up here.
+            </div>
+          </template>
+          <div x-show="!loading && items.length > 0">
+            <template x-for="n in items" :key="n.id">
+              <a :href="n.link" class="notif-item" :class="{ 'notif-unread': !n.is_read }">
+                <span class="notif-avatar">
+                  <template x-if="n.actor_avatar"><img :src="n.actor_avatar"></template>
+                  <template x-if="!n.actor_avatar"><span x-text="n.actor_initial"></span></template>
+                </span>
+                <span class="notif-body">
+                  <span class="notif-actor" x-text="n.actor_name"></span>
+                  <span class="notif-action" x-text="' ' + n.action"></span>
+                  <template x-if="n.excerpt">
+                    <span class="notif-target" x-text="' - ' + n.excerpt"></span>
+                  </template>
+                  <span class="notif-time" x-text="n.time_ago"></span>
+                </span>
+                <span x-show="!n.is_read" class="notif-dot"></span>
+              </a>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="dropdown" x-data="{ open: false }">
+        <button @click="open = !open" class="nav-user press-effect" aria-haspopup="true" :aria-expanded="open">
+          <span class="nav-avatar">
+            {{ if .User.AvatarURL }}<img src="{{ .User.AvatarURL }}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">{{ else }}{{ initial .User.Username }}{{ end }}
+          </span>
+          <span>{{ .User.Username }}</span>
+        </button>
+        <div x-show="open"
+             x-transition:enter="dropdown-enter"
+             x-transition:enter-start="dropdown-enter"
+             x-transition:enter-end="dropdown-enter-active"
+             x-transition:leave="dropdown-leave"
+             x-transition:leave-start="dropdown-leave"
+             x-transition:leave-end="dropdown-leave-active"
+             @click.outside="open = false"
+             x-cloak
+             class="dropdown-menu">
+          <div class="menu-header">Signed in as {{ .User.Username }}</div>
+          <a href="/u/{{ .User.Username }}" hx-boost="true">My profile</a>
+          <a href="/settings" hx-boost="true">Settings</a>
+          {{ if ge .User.PowerLevel 100 }}
+          <a href="/admin" hx-boost="true">Admin</a>
+          {{ end }}
+          <div class="menu-divider"></div>
+          <button type="button" data-action="logout">Log out</button>
+        </div>
+      </div>
+      {{ else }}
+      <a href="/login" class="btn btn-outline btn-sm press-effect" hx-boost="true">Login</a>
+      <a href="/register" class="btn btn-primary btn-sm press-effect" hx-boost="true">Join</a>
+      {{ end }}
+
+      <button id="nav-toggle" class="nav-toggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</nav>
+{{ end }}

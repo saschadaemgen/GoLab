@@ -1,0 +1,60 @@
+{{ define "content" }}
+<section class="hero fade-in">
+  <div class="hero-glow"></div>
+  <h1 class="hero-title">
+    Build in the open.<br>
+    <span class="accent">Privately.</span>
+  </h1>
+  <p class="hero-subtitle">
+    GoLab is the privacy-first community for builders, researchers and
+    makers. Channels, threads, signed posts - no tracking, no ads, no algorithm.
+  </p>
+  <div class="hero-actions">
+    <a href="/register" class="btn btn-primary btn-lg" hx-boost="true">Create account</a>
+    <a href="/explore" class="btn btn-outline btn-lg" hx-boost="true">Explore channels</a>
+  </div>
+</section>
+
+{{ with .Content }}
+{{ if .TrendingChannels }}
+<section class="home-section scroll-reveal">
+  <h2 class="home-section-title">Trending channels</h2>
+  <div class="explore-grid stagger-in" style="padding:0;margin:0;">
+    {{ range .TrendingChannels }}
+    <a href="/c/{{ .Slug }}" class="channel-card hover-lift" hx-boost="true">
+      <div class="channel-header">
+        <div>
+          <div class="channel-name">{{ .Name }}</div>
+          <div class="channel-slug">#{{ .Slug }}</div>
+        </div>
+        <span class="channel-type-badge">{{ .ChannelType }}</span>
+      </div>
+      {{ if .Description }}<p class="channel-desc">{{ truncate .Description 140 }}</p>{{ end }}
+      <div class="channel-meta">
+        <span>{{ .MemberCount }} {{ pluralize .MemberCount "member" "members" }}</span>
+      </div>
+    </a>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
+{{ end }}
+
+<section class="home-section scroll-reveal" id="about">
+  <h2 class="home-section-title">Why GoLab</h2>
+  <div class="explore-grid stagger-in" style="padding:0;margin:0;">
+    <div class="card hover-lift">
+      <h3 style="margin-bottom:0.5rem;">No algorithm</h3>
+      <p class="muted">Chronological feed. You see what you follow. No ranking, no boosted posts, no dark patterns.</p>
+    </div>
+    <div class="card hover-lift">
+      <h3 style="margin-bottom:0.5rem;">Signed by design</h3>
+      <p class="muted">Every post carries a cryptographic signature. Phase 2 adds hardware-backed identity via GoKey.</p>
+    </div>
+    <div class="card hover-lift">
+      <h3 style="margin-bottom:0.5rem;">Yours to host</h3>
+      <p class="muted">AGPL-3.0 source. Run your own instance, federate later via SMP and ActivityStreams.</p>
+    </div>
+  </div>
+</section>
+{{ end }}

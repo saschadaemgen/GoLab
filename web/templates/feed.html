@@ -1,0 +1,25 @@
+{{ define "content" }}
+{{ with .Content }}
+<div class="feed-layout fade-in">
+  <div class="feed-main">
+    {{ template "compose.html" (dict "Channels" .JoinedChannels "SelectedChannelID" 0) }}
+
+    <div id="feed-posts" class="stagger-in">
+      {{ if .Posts }}
+        {{ range .Posts }}
+          {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+        {{ end }}
+      {{ else }}
+        <div class="empty-state">
+          <h3>Your feed is quiet</h3>
+          <p>Follow people or join channels to see activity here.</p>
+          <a href="/explore" class="btn btn-primary mt-2" hx-boost="true">Explore</a>
+        </div>
+      {{ end }}
+    </div>
+  </div>
+
+  {{ template "sidebar.html" . }}
+</div>
+{{ end }}
+{{ end }}

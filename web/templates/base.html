@@ -1,0 +1,50 @@
+{{ define "base.html" }}<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" id="meta-theme-color" content="#050A12">
+  <title>{{ .Title }}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="stylesheet" href="/static/css/golab.css">
+  <link rel="icon" href="/static/img/default-avatar.svg" type="image/svg+xml">
+
+  <script>
+    // Flash-prevent: apply stored theme before first paint
+    (function () {
+      try {
+        var t = localStorage.getItem('sg-theme');
+        if (t === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+          var m = document.getElementById('meta-theme-color');
+          if (m) m.content = '#FAFBFD';
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body hx-boost="true" hx-ext=""{{ if eq .CurrentPath "/" }} class="hero-page"{{ end }}>
+  <canvas id="sg-bg-canvas" aria-hidden="true"></canvas>
+
+  {{ template "util-bar.html" . }}
+  {{ template "navbar.html" . }}
+
+  <main id="main" class="page-transition">
+    {{ block "content" . }}{{ end }}
+  </main>
+
+  {{ template "footer.html" . }}
+  {{ template "toasts.html" . }}
+
+  <script src="/static/js/htmx.min.js"></script>
+  <script defer src="/static/js/alpine.min.js"></script>
+  <script defer src="/static/js/particles.js"></script>
+  <script defer src="/static/js/theme.js"></script>
+  <script defer src="/static/js/golab.js"></script>
+</body>
+</html>{{ end }}

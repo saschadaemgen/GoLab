@@ -1,0 +1,45 @@
+{{ define "content" }}
+<div class="auth-container fade-in">
+  <div class="auth-card">
+    <h1 class="auth-title">Join GoLab</h1>
+    <p class="auth-subtitle">Create your account in under a minute.</p>
+
+    <form id="register-form" autocomplete="off" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="reg-username">Username</label>
+        <input class="form-input" type="text" id="reg-username" name="username"
+               required minlength="3" maxlength="32"
+               pattern="[A-Za-z0-9_]+"
+               autocomplete="username"
+               placeholder="yourhandle">
+        <div class="form-hint">3-32 characters, letters, numbers and underscores.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="reg-email">Email</label>
+        <input class="form-input" type="email" id="reg-email" name="email"
+               required autocomplete="email"
+               placeholder="you@example.com">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="reg-password">Password</label>
+        <input class="form-input" type="password" id="reg-password" name="password"
+               required minlength="8"
+               autocomplete="new-password"
+               placeholder="At least 8 characters">
+      </div>
+
+      <div class="form-error" role="alert"></div>
+
+      <div class="auth-submit-row">
+        <button type="submit" class="btn btn-primary btn-lg">Create account</button>
+      </div>
+    </form>
+
+    <div class="auth-footer">
+      Already a member? <a href="/login" hx-boost="true">Log in</a>
+    </div>
+  </div>
+</div>
+{{ end }}
