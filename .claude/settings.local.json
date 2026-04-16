@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go version:*)",
+      "Bash(npm --version)",
+      "Bash(git checkout:*)",
+      "Bash(go mod:*)",
+      "Bash(go build:*)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "WebFetch(domain:simplego.dev)",
+      "Bash(curl -sL https://simplego.dev)",
+      "Bash(curl -sL https://simplego.dev/assets/css/main.css)"
+    ]
+  }
+}
