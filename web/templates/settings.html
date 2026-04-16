@@ -6,12 +6,16 @@
 
     {{ with .User }}
     <div x-data="avatarUploader('{{ .AvatarURL }}', '{{ initial .Username }}')">
-      <div class="avatar-upload-zone"
-           :class="{ 'drag-active': dragging }"
-           @dragover.prevent="dragging = true"
-           @dragleave.prevent="dragging = false"
-           @drop.prevent="handleDrop($event)"
-           @click="$refs.fileInput.click()">
+      <!-- The <label> wraps the zone so the browser natively opens the file
+           picker on click (no custom @click needed). The <input> is hidden
+           visually but still focusable via keyboard. This avoids the
+           double-dialog bug caused by a click bubbling both on an absolutely
+           positioned input AND a parent @click handler. -->
+      <label class="avatar-upload-zone"
+             :class="{ 'drag-active': dragging }"
+             @dragover.prevent="dragging = true"
+             @dragleave.prevent="dragging = false"
+             @drop.prevent="handleDrop($event)">
         <img x-show="preview" :src="preview"
              class="avatar-preview img-reveal"
              @load="$el.classList.add('loaded')">
@@ -26,8 +30,9 @@
           <span style="font-size:2rem;color:var(--accent);" x-text="initial"></span>
           <span>Click to upload</span>
         </div>
-        <input type="file" accept="image/*" x-ref="fileInput" class="avatar-file-input" @change="handleFile($event)">
-      </div>
+        <input type="file" accept="image/*" class="avatar-file-input-hidden"
+               @change="handleFile($event)">
+      </label>
       <div class="text-center mb-2" x-show="preview">
         <button type="button" class="btn btn-ghost btn-sm press-effect" @click="remove()">Remove avatar</button>
       </div>

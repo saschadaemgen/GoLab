@@ -7,15 +7,16 @@ import (
 	"github.com/saschadaemgen/GoLab/internal/model"
 )
 
-// CurrentUser reads the session cookie and returns the user if present,
-// or nil if the visitor is not logged in. It never errors: missing or
-// invalid sessions simply return nil.
+// CurrentUser reads the session cookie (either __Host-golab_session or the
+// legacy session_id) and returns the user if present, or nil if the visitor
+// is not logged in. It never errors: missing or invalid sessions simply
+// return nil.
 func CurrentUser(r *http.Request, sessions *SessionStore, users *model.UserStore) *model.User {
-	cookie, err := r.Cookie("session_id")
-	if err != nil {
+	value := readSessionCookie(r)
+	if value == "" {
 		return nil
 	}
-	userID, err := sessions.Find(r.Context(), cookie.Value)
+	userID, err := sessions.Find(r.Context(), value)
 	if err != nil {
 		return nil
 	}

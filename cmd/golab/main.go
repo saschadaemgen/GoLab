@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/saschadaemgen/GoLab/internal/auth"
 	"github.com/saschadaemgen/GoLab/internal/config"
@@ -20,6 +21,16 @@ import (
 	"github.com/saschadaemgen/GoLab/internal/model"
 	"github.com/saschadaemgen/GoLab/internal/render"
 )
+
+// perUserRate returns an httprate key function that buckets requests by
+// the authenticated user id. It requires an upstream RequireAuth so the
+// user is in context; falls back to real IP if for any reason it isn't.
+func perUserRate(r *http.Request) (string, error) {
+	if u := auth.UserFromContext(r.Context()); u != nil {
+		return fmt.Sprintf("user:%d", u.ID), nil
+	}
+	return httprate.KeyByRealIP(r)
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -55,8 +66,11 @@ func run() error {
 		return fmt.Errorf("templates: %w", err)
 	}
 
-	// Markdown renderer
+	// Markdown renderer (kept for old posts and Markdown-submitting API clients).
 	md := render.NewMarkdown()
+
+	// HTML sanitizer - applied to everything Quill/Markdown produces.
+	sanitizer := render.NewSanitizer()
 
 	// WebSocket hub
 	hub := handler.NewHub(tmpls)
@@ -65,7 +79,7 @@ func run() error {
 	go hub.Run(hubCtx)
 
 	// Build router
-	r := newRouter(cfg, pool, tmpls, md, hub)
+	r := newRouter(cfg, pool, tmpls, md, sanitizer, hub)
 
 	// Start server
 	srv := &http.Server{
@@ -97,12 +111,13 @@ func run() error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md *render.Markdown, hub *handler.Hub) *chi.Mux {
+func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md *render.Markdown, sanitizer *render.Sanitizer, hub *handler.Hub) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(handler.SecurityHeaders)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
@@ -134,8 +149,9 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	channelH := &handler.ChannelHandler{Channels: channels, Users: users}
 	postH := &handler.PostHandler{
 		Posts: posts, Channels: channels, Reactions: reactions,
-		Markdown: md, Hub: hub, Notifs: notifDispatch,
+		Markdown: md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
 	}
+	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}
 	feedH := &handler.FeedHandler{Posts: posts}
 	profileH := &handler.ProfileHandler{Users: users, Posts: posts, Follows: follows, Notifs: notifDispatch}
 	notifH := &handler.NotifHandler{Store: notifs}
@@ -190,9 +206,22 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", home.Health)
 
-		// Auth (public)
-		r.Post("/register", authH.Register)
-		r.Post("/login", authH.Login)
+		// Auth (public) - IP-bucketed rate limits to slow brute force and
+		// mass-signup abuse.
+		r.Group(func(r chi.Router) {
+			r.Use(httprate.Limit(5, time.Hour,
+				httprate.WithKeyFuncs(httprate.KeyByRealIP),
+				httprate.WithLimitHandler(handler.RateLimited),
+			))
+			r.Post("/register", authH.Register)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(httprate.Limit(10, time.Minute,
+				httprate.WithKeyFuncs(httprate.KeyByRealIP),
+				httprate.WithLimitHandler(handler.RateLimited),
+			))
+			r.Post("/login", authH.Login)
+		})
 
 		// Auth (protected)
 		r.Group(func(r chi.Router) {
@@ -217,10 +246,14 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Post("/channels/{slug}/leave", channelH.Leave)
 		})
 
-		// Posts (protected)
+		// Posts (protected). 30 creates/minute per user is fine for humans;
+		// the limiter stops a runaway script and broken client loops.
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
-			r.Post("/posts", postH.Create)
+			r.With(httprate.Limit(30, time.Minute,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Post("/posts", postH.Create)
 			r.Get("/posts/{id}", postH.Get)
 			r.Delete("/posts/{id}", postH.Delete)
 			r.Post("/posts/{id}/react", postH.React)
@@ -239,10 +272,24 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
 			r.Put("/users/me", profileH.UpdateMe)
-			r.Post("/users/me/avatar", avatarH.Upload)
+			r.With(httprate.Limit(10, time.Hour,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Post("/users/me/avatar", avatarH.Upload)
 			r.Delete("/users/me/avatar", avatarH.Remove)
 			r.Post("/users/{username}/follow", profileH.Follow)
 			r.Delete("/users/{username}/follow", profileH.Unfollow)
+		})
+
+		// Image upload (Quill editor). 10/hour per user. Expensive due to
+		// decode+resize; we never want one user to saturate the server.
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Use(httprate.Limit(10, time.Hour,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			))
+			r.Post("/upload/image", imageH.Upload)
 		})
 
 		// Notifications (protected)

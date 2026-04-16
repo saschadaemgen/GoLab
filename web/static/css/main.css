@@ -108,6 +108,9 @@
 html { scroll-behavior: smooth; }
 
 :root {
+  /* Conservative fallbacks used on first paint before JS measures the real
+     heights. Actual values are written live by resize observers in
+     golab.js so wrapping nav / retina / zoom / mobile all match reality. */
   --util-bar-height: 38px;
   --navbar-height: 64px;
   --header-total: 102px;
@@ -124,10 +127,11 @@ body {
   padding-top: var(--header-total);
   min-height: 100vh;
   transition: background var(--transition), color var(--transition);
+  /* Let anchored scrolls (#id) clear the fixed header. */
+  scroll-padding-top: var(--header-total);
 }
 
-/* The hero landing is designed to flow behind the transparent navbar.
-   Opt out of body top padding on those pages. */
+/* The hero landing is designed to flow behind the transparent navbar. */
 body.hero-page {
   padding-top: var(--util-bar-height);
 }

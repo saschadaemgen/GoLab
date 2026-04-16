@@ -17,6 +17,7 @@ type PostHandler struct {
 	Channels  *model.ChannelStore
 	Reactions *model.ReactionStore
 	Markdown  *render.Markdown
+	Sanitizer *render.Sanitizer
 	Hub       *Hub           // optional; when present, new posts get broadcast
 	Notifs    *NotifDispatch // optional; used to create notifications on react/reply
 }
@@ -35,8 +36,7 @@ type previewRequest struct {
 	Content string `json:"content"`
 }
 
-// Preview renders Markdown without saving. Used by the compose box
-// Preview tab. Rate-limited by the auth middleware.
+// Preview renders Markdown or sanitizes Quill HTML without saving.
 func (h *PostHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	var req previewRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -48,8 +48,17 @@ func (h *PostHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var html string
-	if h.Markdown != nil {
+	if render.LooksLikeHTML(req.Content) {
+		if h.Sanitizer != nil {
+			html = h.Sanitizer.Clean(req.Content)
+		} else {
+			html = req.Content
+		}
+	} else if h.Markdown != nil {
 		html, _ = h.Markdown.Render(req.Content)
+		if h.Sanitizer != nil {
+			html = h.Sanitizer.Clean(html)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"html": html})
 }
@@ -96,11 +105,33 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Render Markdown to HTML (XSS-safe: goldmark escapes raw HTML).
+	// Dual-format support:
+	//
+	// - If the content looks like HTML (Quill output from the rich editor),
+	//   sanitize with bluemonday and store the cleaned HTML in content_html.
+	//   The `content` column still holds the raw HTML as-submitted so we can
+	//   re-sanitize later without losing fidelity.
+	//
+	// - Otherwise treat the content as Markdown / plain text and run goldmark.
+	//   The rendered HTML is already XSS-safe (goldmark escapes raw HTML by
+	//   default), but we pass it through the sanitizer too as defense-in-depth.
+	//
+	// This lets the new rich editor and old Markdown clients coexist with a
+	// single `content_html` column used for display.
 	var contentHTML string
-	if h.Markdown != nil {
+	if render.LooksLikeHTML(req.Content) {
+		if h.Sanitizer != nil {
+			contentHTML = h.Sanitizer.Clean(req.Content)
+		} else {
+			contentHTML = req.Content
+		}
+	} else if h.Markdown != nil {
 		if rendered, err := h.Markdown.Render(req.Content); err == nil {
-			contentHTML = rendered
+			if h.Sanitizer != nil {
+				contentHTML = h.Sanitizer.Clean(rendered)
+			} else {
+				contentHTML = rendered
+			}
 		}
 	}
 

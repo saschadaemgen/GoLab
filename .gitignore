@@ -23,3 +23,9 @@ Thumbs.db
 
 # Go
 vendor/
+
+# Runtime uploads (avatars, post images). Keep the dir, ignore contents.
+web/static/uploads/avatars/*
+!web/static/uploads/avatars/.gitkeep
+web/static/uploads/images/*
+!web/static/uploads/images/.gitkeep

@@ -67,19 +67,27 @@
     });
 
     // Avatar uploader (settings page)
+    //
+    // Triggering is handled by the parent <label> wrapping the hidden input.
+    // Clicking the zone -> browser fires the native file picker exactly once
+    // -> change event fires -> handleFile -> upload. No manual .click() calls.
     window.Alpine.data('avatarUploader', function (initialUrl, letter) {
       return {
         preview: initialUrl || '',
         dragging: false,
         initial: letter || '',
+        uploading: false,
         handleDrop: function (ev) {
           this.dragging = false;
           var file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
           if (file) this.upload(file);
         },
         handleFile: function (ev) {
-          var file = ev.target.files && ev.target.files[0];
+          var input = ev.target;
+          var file = input.files && input.files[0];
           if (file) this.upload(file);
+          // Clear the input value so selecting the same file again still fires change.
+          input.value = '';
         },
         upload: function (file) {
           var self = this;
@@ -87,7 +95,10 @@
             toast('error', 'Please select an image');
             return;
           }
-          // Show local preview immediately
+          if (self.uploading) return; // prevent double submissions
+          self.uploading = true;
+
+          // Local preview immediately while the server-side resize runs.
           var reader = new FileReader();
           reader.onload = function (e) { self.preview = e.target.result; };
           reader.readAsDataURL(file);
@@ -101,15 +112,24 @@
           }).then(function (r) {
             return r.json().then(function (d) { return { ok: r.ok, data: d }; });
           }).then(function (res) {
+            self.uploading = false;
             if (res.ok) {
               self.preview = res.data.avatar_url;
               var hidden = document.getElementById('st-avatar-url');
               if (hidden) hidden.value = res.data.avatar_url;
+              // Live-update the nav avatar without a full reload.
+              var navAvatar = document.querySelector('.nav-avatar');
+              if (navAvatar) {
+                navAvatar.innerHTML = '<img src="' + res.data.avatar_url + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+              }
               toast('success', 'Avatar uploaded');
             } else {
               toast('error', res.data.error || 'Upload failed');
             }
-          }).catch(function () { toast('error', 'Upload failed'); });
+          }).catch(function () {
+            self.uploading = false;
+            toast('error', 'Upload failed');
+          });
         },
         remove: function () {
           var self = this;
@@ -198,6 +218,137 @@
       }
     });
 
+    // Rich compose editor (Quill 2). Mounted at `x-ref="editor"`.
+    //
+    // Responsibilities:
+    //  - Initialize Quill with our toolbar + image upload handler
+    //  - Track character count (text-length, not HTML-length)
+    //  - Upload images to /api/upload/image and embed them
+    //  - Submit post as HTML via /api/posts, then reset editor state
+    //
+    // Quill is a global provided by web/static/js/quill.min.js. If it's
+    // missing (e.g. slow network) we degrade to a plain contenteditable
+    // so the user can at least type.
+    window.Alpine.data('composeEditor', function () {
+      return {
+        quill: null,
+        charCount: 0,
+        max: 5000,
+        submitting: false,
+
+        init: function () {
+          var self = this;
+          var container = this.$refs.editor;
+          if (!window.Quill) {
+            // Graceful fallback: plain editable div
+            container.setAttribute('contenteditable', 'true');
+            container.style.minHeight = '100px';
+            container.addEventListener('input', function () {
+              self.charCount = (container.innerText || '').trim().length;
+            });
+            return;
+          }
+          this.quill = new window.Quill(container, {
+            theme: 'snow',
+            placeholder: "What's on your mind?",
+            modules: {
+              toolbar: {
+                container: [
+                  [{ header: [1, 2, 3, false] }],
+                  ['bold', 'italic', 'underline', 'strike'],
+                  ['link', 'blockquote', 'code-block'],
+                  [{ list: 'ordered' }, { list: 'bullet' }],
+                  ['image'],
+                  ['clean']
+                ],
+                handlers: {
+                  image: function () { self.uploadImage(); }
+                }
+              }
+            }
+          });
+          this.quill.on('text-change', function () {
+            self.charCount = self.textLength();
+          });
+        },
+
+        textLength: function () {
+          if (!this.quill) return 0;
+          // Quill's getText() includes trailing newline; trim it.
+          return (this.quill.getText() || '').replace(/\n$/, '').length;
+        },
+
+        htmlContent: function () {
+          if (!this.quill) return this.$refs.editor.innerHTML || '';
+          var html = this.quill.root.innerHTML;
+          // Empty Quill document is '<p><br></p>'. Treat that as empty.
+          if (html === '<p><br></p>') return '';
+          return html;
+        },
+
+        uploadImage: function () {
+          var self = this;
+          var input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.onchange = function () {
+            var file = input.files && input.files[0];
+            if (!file) return;
+            var form = new FormData();
+            form.append('image', file);
+            toast('info', 'Uploading image...');
+            fetch('/api/upload/image', {
+              method: 'POST',
+              body: form,
+              credentials: 'same-origin'
+            }).then(function (r) {
+              return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+            }).then(function (res) {
+              if (!res.ok) {
+                toast('error', res.data.error || 'Image upload failed');
+                return;
+              }
+              if (self.quill) {
+                var range = self.quill.getSelection(true);
+                self.quill.insertEmbed(range.index, 'image', res.data.url);
+                self.quill.setSelection(range.index + 1);
+              }
+              toast('success', 'Image added');
+            }).catch(function () {
+              toast('error', 'Image upload failed');
+            });
+          };
+          input.click();
+        },
+
+        submit: function () {
+          if (this.submitting) return;
+          if (this.charCount < 1 || this.charCount > this.max) return;
+          this.submitting = true;
+          var self = this;
+          var form = this.$el;
+          var content = this.htmlContent();
+          var chanEl = form.querySelector('[name=channel_id]');
+          var body = { content: content };
+          if (chanEl && chanEl.value) body.channel_id = parseInt(chanEl.value, 10);
+          apiJSON('/api/posts', 'POST', body).then(function (res) {
+            self.submitting = false;
+            if (res.ok) {
+              if (self.quill) self.quill.setContents([]);
+              else self.$refs.editor.innerHTML = '';
+              self.charCount = 0;
+              toast('success', 'Posted');
+              setTimeout(function () { window.location.reload(); }, 250);
+            } else {
+              toast('error', res.data.error || 'Could not post');
+              form.classList.add('shake');
+              setTimeout(function () { form.classList.remove('shake'); }, 500);
+            }
+          });
+        }
+      };
+    });
+
     // Global search
     window.Alpine.data('globalSearch', function () {
       return {
@@ -233,6 +384,42 @@
       };
     });
   });
+
+  // ---------- header height sync ----------
+  //
+  // The util-bar and navbar are both `position: fixed`. Page content needs
+  // top padding equal to their combined height so nothing hides behind
+  // them. We measure on load, on resize, and via ResizeObserver so mobile
+  // nav wraps, font loads, and zoom all stay correct without magic numbers.
+
+  function syncHeaderHeights() {
+    var util = document.querySelector('.util-bar');
+    var nav = document.getElementById('navbar');
+    var utilH = util ? util.offsetHeight : 38;
+    var navH = nav ? nav.offsetHeight : 64;
+    var root = document.documentElement;
+    root.style.setProperty('--util-bar-height', utilH + 'px');
+    root.style.setProperty('--navbar-height', navH + 'px');
+    root.style.setProperty('--header-total', (utilH + navH) + 'px');
+  }
+
+  function initHeaderSync() {
+    syncHeaderHeights();
+    // Re-measure after layout shifts (font load, image reflow, etc.)
+    window.addEventListener('load', syncHeaderHeights);
+    window.addEventListener('resize', syncHeaderHeights);
+    if ('ResizeObserver' in window) {
+      var ro = new ResizeObserver(syncHeaderHeights);
+      var util = document.querySelector('.util-bar');
+      var nav = document.getElementById('navbar');
+      if (util) ro.observe(util);
+      if (nav) ro.observe(nav);
+    }
+    // Fonts API (Chrome/Firefox) - measure once fonts are swapped in.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(syncHeaderHeights);
+    }
+  }
 
   // ---------- navbar scroll + mobile ----------
 
@@ -378,36 +565,37 @@
     });
   }
 
+  // Reply form (thread page) still uses a plain textarea so old posts'
+  // reply flow keeps working. The main compose form is handled by the
+  // composeEditor Alpine component and does NOT bind here.
   function bindCompose() {
-    var forms = [document.getElementById('compose-form'), document.getElementById('reply-form')];
-    forms.forEach(function (form) {
-      if (!form || form.dataset.bound) return;
-      form.dataset.bound = '1';
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var textarea = form.querySelector('textarea[name=content]');
-        var content = (textarea.value || '').trim();
-        if (content.length < 1 || content.length > 5000) return;
-        var chanEl = form.querySelector('[name=channel_id]');
-        var parentEl = form.querySelector('[name=parent_id]');
-        var body = { content: content };
-        if (chanEl && chanEl.value) body.channel_id = parseInt(chanEl.value, 10);
-        if (parentEl && parentEl.value) body.parent_id = parseInt(parentEl.value, 10);
-        var btn = form.querySelector('button[type=submit]');
-        btn.disabled = true;
-        apiJSON('/api/posts', 'POST', body).then(function (res) {
-          btn.disabled = false;
-          if (res.ok) {
-            textarea.value = '';
-            textarea.dispatchEvent(new Event('input'));
-            toast('success', body.parent_id ? 'Reply posted' : 'Posted');
-            setTimeout(function () { window.location.reload(); }, 250);
-          } else {
-            toast('error', res.data.error || 'Could not post');
-            form.classList.add('shake');
-            setTimeout(function () { form.classList.remove('shake'); }, 500);
-          }
-        });
+    var form = document.getElementById('reply-form');
+    if (!form || form.dataset.bound) return;
+    form.dataset.bound = '1';
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var textarea = form.querySelector('textarea[name=content]');
+      var content = (textarea.value || '').trim();
+      if (content.length < 1 || content.length > 5000) return;
+      var chanEl = form.querySelector('[name=channel_id]');
+      var parentEl = form.querySelector('[name=parent_id]');
+      var body = { content: content };
+      if (chanEl && chanEl.value) body.channel_id = parseInt(chanEl.value, 10);
+      if (parentEl && parentEl.value) body.parent_id = parseInt(parentEl.value, 10);
+      var btn = form.querySelector('button[type=submit]');
+      btn.disabled = true;
+      apiJSON('/api/posts', 'POST', body).then(function (res) {
+        btn.disabled = false;
+        if (res.ok) {
+          textarea.value = '';
+          textarea.dispatchEvent(new Event('input'));
+          toast('success', 'Reply posted');
+          setTimeout(function () { window.location.reload(); }, 250);
+        } else {
+          toast('error', res.data.error || 'Could not post');
+          form.classList.add('shake');
+          setTimeout(function () { form.classList.remove('shake'); }, 500);
+        }
       });
     });
   }
@@ -513,6 +701,32 @@
           apiJSON('/api/admin/users/' + id + '/unban', 'POST', null).then(function (res) {
             if (res.ok) { toast('success', 'User unbanned'); setTimeout(function () { window.location.reload(); }, 250); }
           });
+        });
+      }
+
+      if (action === 'admin-set-power') {
+        // <select> elements need change events, not click. We also revert
+        // the selection visually if the server rejects the request.
+        el.addEventListener('change', function () {
+          var id = el.dataset.userId;
+          var newValue = parseInt(el.value, 10);
+          var previous = parseInt(el.dataset.current, 10);
+          el.classList.add('saving');
+          apiJSON('/api/admin/users/' + id + '/power', 'PUT', { power_level: newValue })
+            .then(function (res) {
+              el.classList.remove('saving');
+              if (res.ok) {
+                el.dataset.current = String(newValue);
+                el.classList.add('success-pop');
+                setTimeout(function () { el.classList.remove('success-pop'); }, 450);
+                toast('success', 'Power level updated');
+              } else {
+                el.value = String(previous); // revert the visible selection
+                toast('error', res.data.error || 'Could not update');
+                el.classList.add('shake');
+                setTimeout(function () { el.classList.remove('shake'); }, 500);
+              }
+            });
         });
       }
     });
@@ -624,10 +838,68 @@
     bindAll();
   });
 
-  // ---------- code block copy buttons ----------
+  // ---------- image lightbox ----------
+  //
+  // Any <img> inside a .post-content block opens in a full-screen lightbox
+  // on click. Backdrop click and Escape both close. We delegate clicks on
+  // document so new posts added via WebSocket/HTMX don't need rebinding.
+
+  var lightboxBound = false;
+  function initLightbox() {
+    if (lightboxBound) return;
+    var lb = document.getElementById('img-lightbox');
+    var lbImg = document.getElementById('img-lightbox-img');
+    if (!lb || !lbImg) return;
+    lightboxBound = true;
+
+    function open(src, alt) {
+      lbImg.src = src;
+      lbImg.alt = alt || '';
+      lb.classList.add('active');
+      lb.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    }
+    function close() {
+      lb.classList.remove('active');
+      lb.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      // Wait for fade-out to finish, then clear src so memory releases.
+      setTimeout(function () {
+        if (!lb.classList.contains('active')) lbImg.src = '';
+      }, 300);
+    }
+
+    // Delegate clicks from anywhere in the document.
+    document.addEventListener('click', function (e) {
+      var img = e.target && e.target.closest ? e.target.closest('.post-content img') : null;
+      if (img) {
+        e.preventDefault();
+        open(img.getAttribute('src'), img.getAttribute('alt') || '');
+        return;
+      }
+      // Click on backdrop or close button closes.
+      if (e.target === lb || (e.target.closest && e.target.closest('.img-lightbox-close'))) {
+        close();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && lb.classList.contains('active')) close();
+    });
+  }
+
+  // ---------- code block copy buttons + syntax highlighting ----------
 
   function decorateCodeBlocks() {
     document.querySelectorAll('.post-content pre').forEach(function (pre) {
+      // Syntax highlighting for Quill-output code blocks.
+      // Quill uses <pre class="ql-syntax">; goldmark uses <pre><code class="language-xxx">.
+      // Both work with highlight.js's auto-detect.
+      if (window.hljs && !pre.dataset.hljsDone) {
+        pre.dataset.hljsDone = '1';
+        try { window.hljs.highlightElement(pre); } catch (e) { /* ignore */ }
+      }
+
       if (pre.dataset.copyBound) return;
       pre.dataset.copyBound = '1';
       var btn = document.createElement('button');
@@ -636,6 +908,7 @@
       btn.textContent = 'Copy';
       btn.addEventListener('click', function (e) {
         e.preventDefault();
+        e.stopPropagation();
         var code = pre.querySelector('code');
         var text = code ? code.textContent : pre.textContent;
         navigator.clipboard.writeText(text).then(function () {
@@ -714,7 +987,9 @@
   // ---------- init ----------
 
   function init() {
+    initHeaderSync();
     initNavbar();
+    initLightbox();
     bindAll();
     wsConnect();
     window.addEventListener('beforeunload', function () {

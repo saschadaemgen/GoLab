@@ -1,51 +1,23 @@
 {{ define "compose.html" }}
 {{ $channels := .Channels }}
 {{ $selected := .SelectedChannelID }}
-<form id="compose-form" class="compose-box"
-      x-data="{ content: '', max: 5000, open: false, tab: 'write', preview: '', loadingPreview: false,
-                async loadPreview() {
-                  if (!this.content.trim()) { this.preview = '<p class=\'muted\'>Nothing to preview yet.</p>'; return }
-                  this.loadingPreview = true
-                  try {
-                    const res = await fetch('/api/preview', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({content:this.content}), credentials:'same-origin'})
-                    const data = await res.json()
-                    this.preview = data.html || ''
-                  } catch(e) { this.preview = '<p class=\'muted\'>Preview unavailable.</p>' }
-                  this.loadingPreview = false
-                } }">
-  <div class="compose-tabs" x-show="open || content.length > 0" x-cloak>
-    <button type="button" class="compose-tab press-effect"
-            :class="{ active: tab === 'write' }"
-            @click="tab = 'write'">Write</button>
-    <button type="button" class="compose-tab press-effect"
-            :class="{ active: tab === 'preview' }"
-            @click="tab = 'preview'; loadPreview()">Preview</button>
-    <span class="compose-md-hint">Markdown supported</span>
-  </div>
+<form id="compose-form"
+      class="compose-box compose-quill"
+      x-data="composeEditor()"
+      x-init="init()"
+      @submit.prevent="submit()">
 
-  <textarea
-    x-show="tab === 'write'"
-    class="compose-textarea input-glow"
-    :class="{ 'compose-expanded': open }"
-    name="content"
-    x-model="content"
-    @focus="open = true"
-    maxlength="5000"
-    placeholder="What's on your mind? Use **bold**, *italic*, `code`, ```lang for fences..."></textarea>
+  <!-- Quill is mounted here at init(). The toolbar and contenteditable
+       get injected by Quill; we only provide the container. -->
+  <div x-ref="editor" class="compose-editor"></div>
 
-  <div x-show="tab === 'preview'" x-cloak class="compose-preview post-content">
-    <div x-show="loadingPreview" class="skeleton skeleton-line"></div>
-    <div x-show="loadingPreview" class="skeleton skeleton-line skeleton-line-short"></div>
-    <div x-show="!loadingPreview" x-html="preview"></div>
-  </div>
-
-  <div class="compose-footer" x-show="open || content.length > 0" x-cloak>
-    <span class="compose-count" :class="{ over: content.length > max }">
-      <span x-text="content.length">0</span> / 5000
+  <div class="compose-footer">
+    <span class="compose-count" :class="{ over: charCount > max }">
+      <span x-text="charCount">0</span> / 5000
     </span>
 
     {{ if $channels }}
-    <select class="compose-select" name="channel_id">
+    <select class="compose-select" name="channel_id" x-ref="channelSelect">
       <option value="">Your timeline</option>
       {{ range $channels }}
       <option value="{{ .ID }}"{{ if eq .ID $selected }} selected{{ end }}>#{{ .Slug }}</option>
@@ -56,8 +28,14 @@
     {{ end }}
 
     <button type="submit" class="btn btn-primary btn-sm press-effect"
-            :disabled="content.trim().length < 1 || content.length > max">
-      Post
+            :disabled="charCount < 1 || charCount > max || submitting">
+      <span x-show="!submitting">Post</span>
+      <span x-show="submitting" class="btn-spinner" x-cloak>
+        <svg class="spin" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" stroke="currentColor"
+                  stroke-width="3" fill="none" stroke-dasharray="31 31"/>
+        </svg>
+      </span>
     </button>
   </div>
 </form>

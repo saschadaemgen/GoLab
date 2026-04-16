@@ -20,7 +20,11 @@
       "Bash(git commit -m ' *)",
       "Bash(git reset *)",
       "Bash(tee /tmp/tidy.out)",
-      "Bash(echo \"---exit=$?---\")"
+      "Bash(echo \"---exit=$?---\")",
+      "Bash(curl -sL https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js -o web/static/js/quill.min.js)",
+      "Bash(curl -sL https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css -o web/static/css/quill.snow.css)",
+      "Bash(curl -sL \"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js\" -o web/static/js/highlight.min.js)",
+      "Bash(curl -sL \"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css\" -o web/static/css/highlight-github-dark.min.css)"
     ]
   }
 }

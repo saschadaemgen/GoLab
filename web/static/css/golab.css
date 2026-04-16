@@ -964,6 +964,143 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ================================================================
+   SPRINT 8 - Quill rich editor (Snow theme overrides)
+
+   Quill ships a light-theme stylesheet (quill.snow.css). We override
+   the pieces that clash with the SimpleGo dark/light design system so
+   the editor feels native in both themes.
+================================================================ */
+
+.compose-quill .ql-toolbar.ql-snow {
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--bg-card);
+  font-family: 'Source Sans 3', sans-serif;
+  padding: 0.4rem 0.6rem;
+}
+.compose-quill .ql-container.ql-snow {
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--bg-deep);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 1rem;
+  min-height: 120px;
+}
+.compose-quill .ql-editor {
+  min-height: 120px;
+  color: var(--text);
+  line-height: 1.7;
+  padding: 0.9rem 1rem;
+}
+.compose-quill .ql-editor.ql-blank::before {
+  color: var(--text-dim);
+  font-style: normal;
+  left: 1rem;
+  right: 1rem;
+}
+
+/* Toolbar icons (SVG uses stroke + fill patterns) */
+[data-theme="dark"] .ql-snow .ql-stroke {
+  stroke: var(--text-dim);
+}
+[data-theme="dark"] .ql-snow .ql-fill {
+  fill: var(--text-dim);
+}
+[data-theme="dark"] .ql-snow .ql-picker-label {
+  color: var(--text-dim);
+}
+[data-theme="dark"] .ql-snow .ql-picker-options {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text);
+}
+[data-theme="dark"] .ql-snow .ql-picker-item {
+  color: var(--text);
+}
+[data-theme="dark"] .ql-snow.ql-toolbar button:hover .ql-stroke,
+[data-theme="dark"] .ql-snow.ql-toolbar button.ql-active .ql-stroke,
+[data-theme="dark"] .ql-snow .ql-toolbar button:hover .ql-stroke,
+[data-theme="dark"] .ql-snow .ql-toolbar button.ql-active .ql-stroke,
+[data-theme="dark"] .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke,
+[data-theme="dark"] .ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-stroke {
+  stroke: var(--accent);
+}
+[data-theme="dark"] .ql-snow.ql-toolbar button:hover .ql-fill,
+[data-theme="dark"] .ql-snow.ql-toolbar button.ql-active .ql-fill,
+[data-theme="dark"] .ql-snow .ql-toolbar button:hover .ql-fill,
+[data-theme="dark"] .ql-snow .ql-toolbar button.ql-active .ql-fill,
+[data-theme="dark"] .ql-snow.ql-toolbar .ql-picker-label:hover .ql-fill,
+[data-theme="dark"] .ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-fill {
+  fill: var(--accent);
+}
+[data-theme="dark"] .ql-snow.ql-toolbar button:hover,
+[data-theme="dark"] .ql-snow.ql-toolbar button.ql-active,
+[data-theme="dark"] .ql-snow.ql-toolbar .ql-picker-label:hover,
+[data-theme="dark"] .ql-snow.ql-toolbar .ql-picker-label.ql-active {
+  color: var(--accent);
+}
+
+[data-theme="light"] .ql-snow.ql-toolbar button:hover .ql-stroke,
+[data-theme="light"] .ql-snow.ql-toolbar button.ql-active .ql-stroke {
+  stroke: var(--accent);
+}
+[data-theme="light"] .ql-snow.ql-toolbar button:hover .ql-fill,
+[data-theme="light"] .ql-snow.ql-toolbar button.ql-active .ql-fill {
+  fill: var(--accent);
+}
+
+/* Link editor tooltip */
+.ql-snow .ql-tooltip {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-sm);
+}
+.ql-snow .ql-tooltip input[type="text"] {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+}
+.ql-snow .ql-tooltip a.ql-action::after {
+  border-right-color: var(--border);
+}
+
+/* Code blocks inside the editor: match our post-content pre styling */
+.ql-editor pre.ql-syntax {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+.ql-editor blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.9rem;
+  color: var(--text);
+}
+.ql-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  margin: 0.4rem 0;
+}
+.ql-editor a {
+  color: var(--accent);
+}
+
+/* Spinner inside the submit button */
+.btn-spinner { display: inline-flex; align-items: center; }
+.btn-spinner .spin { width: 14px; height: 14px; color: currentColor; }
+
+/* ================================================================
    FEATURE 1: Markdown compose tabs + post rendered content
 ================================================================ */
 
@@ -1088,7 +1225,67 @@
   max-width: 100%;
   border-radius: var(--radius-sm);
   margin: 0.5rem 0;
+  cursor: zoom-in;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
+.post-content img:hover {
+  opacity: 0.9;
+}
+
+/* Full-screen lightbox shown when a post image is clicked. */
+.img-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.img-lightbox.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.img-lightbox img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  transform: scale(0.95);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: default;
+}
+.img-lightbox.active img {
+  transform: scale(1);
+}
+.img-lightbox-close {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  backdrop-filter: blur(8px);
+}
+.img-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+.img-lightbox-close svg { width: 18px; height: 18px; }
 
 /* Code block copy button (added client-side) */
 .code-copy-btn {
@@ -1117,13 +1314,14 @@
 ================================================================ */
 
 .avatar-upload-zone {
+  /* label-as-zone: keeps native file-picker semantics on click. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 128px;
   height: 128px;
   border-radius: 50%;
   border: 2px dashed var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
   overflow: hidden;
   position: relative;
@@ -1161,11 +1359,27 @@
   height: 28px;
   color: var(--text-dim);
 }
+/* Legacy input class from older drafts - kept so previously-cached pages
+   don't expose the raw file input. */
 .avatar-file-input {
   position: absolute;
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+/* Visually hidden but keyboard-accessible. Using <label> to wrap the zone
+   means the native click semantics open the picker exactly once. */
+.avatar-file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ================================================================
@@ -1570,3 +1784,29 @@
 .admin-pill-admin { background: rgba(255, 180, 50, 0.12); color: #f59e0b; border: 1px solid rgba(255, 180, 50, 0.3); }
 .admin-pill-banned { background: rgba(220, 50, 50, 0.12); color: var(--danger); border: 1px solid rgba(220, 50, 50, 0.3); }
 .admin-pill-user { background: var(--accent-subtle); color: var(--accent); border: 1px solid var(--accent-border); }
+
+/* Power-level select inline in admin table */
+.admin-power-select {
+  padding: 0.2rem 0.5rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-width: 130px;
+}
+.admin-power-select:hover {
+  border-color: var(--border-hover);
+}
+.admin-power-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+.admin-power-select.saving {
+  opacity: 0.6;
+  pointer-events: none;
+}

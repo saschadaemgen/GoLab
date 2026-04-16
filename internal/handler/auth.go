@@ -164,25 +164,33 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("session_id")
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-		return
+	// Look up under either cookie name so logging out works right after a
+	// deploy switches the name (e.g. from session_id to __Host-golab_session).
+	var value string
+	for _, name := range []string{"__Host-golab_session", "session_id"} {
+		if c, err := r.Cookie(name); err == nil && c.Value != "" {
+			value = c.Value
+			break
+		}
+	}
+	if value != "" {
+		if err := h.Sessions.Delete(r.Context(), value); err != nil {
+			slog.Error("logout: delete session", "error", err)
+		}
 	}
 
-	if err := h.Sessions.Delete(r.Context(), cookie.Value); err != nil {
-		slog.Error("logout: delete session", "error", err)
+	// Clear both possible cookie names defensively.
+	for _, name := range []string{"__Host-golab_session", "session_id"} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   h.Secure,
+			SameSite: http.SameSiteLaxMode,
+		})
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_id",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   h.Secure,
-		SameSite: http.SameSiteLaxMode,
-	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -196,9 +204,21 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
+// sessionCookieName returns the appropriate cookie name for the current
+// deployment. In production (HTTPS) we use the "__Host-" prefix which the
+// browser enforces: only accepted from HTTPS, must have Path=/, must not
+// have a Domain attribute. This prevents subdomain cookie-injection
+// attacks. In local dev we can't use it because we run plain HTTP.
+func (h *AuthHandler) sessionCookieName() string {
+	if h.Secure {
+		return "__Host-golab_session"
+	}
+	return "session_id"
+}
+
 func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, sessionID string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session_id",
+		Name:     h.sessionCookieName(),
 		Value:    sessionID,
 		Path:     "/",
 		MaxAge:   30 * 24 * 60 * 60, // 30 days
