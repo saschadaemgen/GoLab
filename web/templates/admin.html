@@ -35,27 +35,59 @@
           <tr>
             <th>User</th>
             <th>Role</th>
+            <th>Power</th>
             <th>Posts</th>
             <th>Joined</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
+          {{ $me := $.User }}
           {{ range .Users }}
+          {{ $isSelf := and $me (eq $me.ID .ID) }}
           <tr>
             <td>
               <a href="/u/{{ .Username }}" hx-boost="true" style="color:var(--text-bright);font-weight:600;">
                 {{ if .DisplayName }}{{ .DisplayName }}{{ else }}{{ .Username }}{{ end }}
               </a>
               <span class="muted" style="margin-left:0.4rem;">@{{ .Username }}</span>
+              {{ if $isSelf }}<span class="muted mono" style="font-size:0.7rem;margin-left:0.4rem;">(you)</span>{{ end }}
             </td>
             <td>
               {{ if .Banned }}
                 <span class="admin-pill admin-pill-banned">Banned</span>
               {{ else if ge .PowerLevel 100 }}
+                <span class="admin-pill admin-pill-admin">Owner</span>
+              {{ else if ge .PowerLevel 75 }}
                 <span class="admin-pill admin-pill-admin">Admin</span>
+              {{ else if ge .PowerLevel 50 }}
+                <span class="admin-pill admin-pill-user">Mod</span>
+              {{ else if ge .PowerLevel 25 }}
+                <span class="admin-pill admin-pill-user">Contrib</span>
               {{ else }}
-                <span class="admin-pill admin-pill-user">L{{ .PowerLevel }}</span>
+                <span class="admin-pill admin-pill-user">Member</span>
+              {{ end }}
+            </td>
+            <td>
+              {{ if or $isSelf .Banned }}
+                <span class="mono muted" style="font-size:0.78rem;">L{{ .PowerLevel }}</span>
+              {{ else }}
+                <!-- Server enforces: cannot change self, cannot exceed own level,
+                     only id=1 can set Owner. Dropdown mirrors those rules so
+                     users never see options they'll be rejected for. -->
+                <select class="admin-power-select press-effect"
+                        data-action="admin-set-power"
+                        data-user-id="{{ .ID }}"
+                        data-current="{{ .PowerLevel }}">
+                  <option value="0"  {{ if eq .PowerLevel 0 }}selected{{ end }}>Guest (0)</option>
+                  <option value="10" {{ if eq .PowerLevel 10 }}selected{{ end }}>Member (10)</option>
+                  <option value="25" {{ if eq .PowerLevel 25 }}selected{{ end }}>Contributor (25)</option>
+                  {{ if $me }}
+                    {{ if ge $me.PowerLevel 50 }}<option value="50" {{ if eq .PowerLevel 50 }}selected{{ end }}>Moderator (50)</option>{{ end }}
+                    {{ if ge $me.PowerLevel 75 }}<option value="75" {{ if eq .PowerLevel 75 }}selected{{ end }}>Admin (75)</option>{{ end }}
+                    {{ if eq $me.ID 1 }}<option value="100" {{ if eq .PowerLevel 100 }}selected{{ end }}>Owner (100)</option>{{ end }}
+                  {{ end }}
+                </select>
               {{ end }}
             </td>
             <td class="mono">{{ .PostCount }}</td>
@@ -63,6 +95,8 @@
             <td>
               {{ if .Banned }}
                 <button class="btn btn-outline btn-sm press-effect" data-action="admin-unban" data-user-id="{{ .ID }}">Unban</button>
+              {{ else if $isSelf }}
+                <span class="muted mono" style="font-size:0.75rem;">self</span>
               {{ else if lt .PowerLevel 100 }}
                 <button class="btn btn-danger btn-sm press-effect" data-action="admin-ban" data-user-id="{{ .ID }}">Ban</button>
               {{ else }}

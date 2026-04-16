@@ -202,6 +202,30 @@ func (h *AdminHandler) SetPower(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "power level out of range")
 		return
 	}
+
+	// Protection rules (server-enforced, never trust client):
+	//   1) You cannot change your own power level (prevents self-demote lock-out
+	//      or self-promote if you were somehow set admin by a script).
+	//   2) You cannot assign a power level higher than your own. Only user id=1
+	//      is allowed to create other Owners (100).
+	actor := auth.UserFromContext(r.Context())
+	if actor == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if actor.ID == id {
+		writeError(w, http.StatusForbidden, "cannot change your own power level")
+		return
+	}
+	if req.PowerLevel > actor.PowerLevel {
+		writeError(w, http.StatusForbidden, "cannot assign a power level higher than your own")
+		return
+	}
+	if req.PowerLevel == 100 && actor.ID != 1 {
+		writeError(w, http.StatusForbidden, "only the platform owner (id=1) can promote to Owner")
+		return
+	}
+
 	_, err = h.DB.Exec(r.Context(),
 		`UPDATE users SET power_level = $2 WHERE id = $1`, id, req.PowerLevel)
 	if err != nil {
