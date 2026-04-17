@@ -1,19 +1,21 @@
 {{ define "compose.html" }}
-{{ $channels := .Channels }}
-{{ $selectedChannel := .SelectedChannelID }}
 {{ $spaces := .Spaces }}
 {{ $selectedSpace := .SelectedSpaceID }}
+{{ $currentUser := .User }}
+{{ $powerLevel := 0 }}
+{{ if $currentUser }}{{ $powerLevel = $currentUser.PowerLevel }}{{ end }}
 <form id="compose-form"
       method="POST"
       action="/api/posts"
       class="compose-box compose-quill"
-      x-data="composeEditor()"
+      x-data="composeEditor({ powerLevel: {{ $powerLevel }} })"
       @submit.prevent="submit()">
 
-  <!-- Quill mounts here. The toolbar + contenteditable are injected. -->
+  <!-- Quill mounts here. Emoji button gets appended to the toolbar
+       by composeEditor.init() in golab.js. -->
   <div x-ref="editor" class="compose-editor"></div>
 
-  <!-- Row: post type radio pills (discussion / question / tutorial / code / showcase / link) -->
+  <!-- Row: post type radio pills -->
   <div class="compose-type-row" role="radiogroup" aria-label="Post type">
     <label class="type-radio">
       <input type="radio" name="post_type" value="discussion" checked>
@@ -43,7 +45,6 @@
 
   <!-- Row: tag input with autocomplete -->
   <div class="compose-tags" x-data="tagInput()">
-    <!-- Chips for already-selected tags -->
     <template x-for="slug in selectedTags" :key="slug">
       <span class="tag-chip">
         #<span x-text="slug"></span>
@@ -52,7 +53,6 @@
       </span>
     </template>
 
-    <!-- Autocomplete input; wraps to its own row when chips fill the line -->
     <div class="tag-input-wrap" x-show="selectedTags.length < maxTags">
       <input type="text"
              class="tag-input"
@@ -64,7 +64,6 @@
              maxlength="32"
              autocomplete="off">
 
-      <!-- Suggestion dropdown -->
       <div class="tag-suggestions"
            x-show="suggestions.length > 0 || loading"
            @click.outside="suggestions = []"
@@ -82,21 +81,25 @@
       </div>
     </div>
 
-    <!-- Hidden input reads the current selection for form submit -->
     <input type="hidden" name="tags" :value="selectedTags.join(',')">
   </div>
 
-  <!-- Row: counter + space/channel selects + post button -->
+  <!-- Row: counter + single space picker + post button -->
   <div class="compose-footer">
     <span class="compose-count" :class="{ over: charCount > max }">
       <span x-text="charCount">0</span> / 5000
     </span>
 
     {{ if $spaces }}
-    <select class="compose-select compose-space-select" name="space_id">
-      <option value="">Choose space...</option>
+    <select class="compose-select compose-space-select"
+            name="space_id"
+            x-ref="spaceSelect"
+            @change="onSpaceChange($event)"
+            required>
+      <option value="" disabled{{ if not $selectedSpace }} selected{{ end }}>Where does this go?</option>
       {{ range $spaces }}
       <option value="{{ .ID }}"
+              data-slug="{{ .Slug }}"
               {{ if eq .ID $selectedSpace }}selected{{ end }}>
         {{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}
       </option>
@@ -106,19 +109,8 @@
     <input type="hidden" name="space_id" value="{{ $selectedSpace }}">
     {{ end }}
 
-    {{ if $channels }}
-    <select class="compose-select" name="channel_id">
-      <option value="">No channel</option>
-      {{ range $channels }}
-      <option value="{{ .ID }}"{{ if eq .ID $selectedChannel }} selected{{ end }}>#{{ .Slug }}</option>
-      {{ end }}
-    </select>
-    {{ else if $selectedChannel }}
-    <input type="hidden" name="channel_id" value="{{ $selectedChannel }}">
-    {{ end }}
-
     <button type="submit" class="btn btn-primary btn-sm press-effect"
-            :disabled="charCount < 1 || charCount > max || submitting">
+            :disabled="!canSubmit()">
       <span x-show="!submitting">Post</span>
       <span x-show="submitting" class="btn-spinner" x-cloak>
         <svg class="spin" viewBox="0 0 24 24">
@@ -127,6 +119,13 @@
         </svg>
       </span>
     </button>
+  </div>
+
+  <!-- Inline notice when user picks announcements but has power < 75 -->
+  <div class="compose-notice"
+       x-show="spaceSlug === 'announcements' && powerLevel < 75"
+       x-cloak>
+    Only admins (power level 75+) can post to Announcements.
   </div>
 </form>
 {{ end }}

@@ -249,12 +249,34 @@
     // Quill is a global provided by web/static/js/quill.min.js. If it's
     // missing (e.g. slow network) we degrade to a plain contenteditable
     // so the user can at least type.
-    window.Alpine.data('composeEditor', function () {
+    window.Alpine.data('composeEditor', function (cfg) {
+      cfg = cfg || {};
       return {
         quill: null,
         charCount: 0,
         max: 5000,
         submitting: false,
+        // Sprint 10.5: track the currently selected space slug so we
+        // can gate posting in "announcements" behind power_level >= 75
+        // client-side. The server still enforces this.
+        spaceSlug: '',
+        powerLevel: cfg.powerLevel || 0,
+
+        onSpaceChange: function (ev) {
+          var option = ev.target.options[ev.target.selectedIndex];
+          this.spaceSlug = option ? (option.dataset.slug || '') : '';
+        },
+
+        canPostToAnnouncements: function () {
+          return this.powerLevel >= 75;
+        },
+
+        canSubmit: function () {
+          if (this.submitting) return false;
+          if (this.charCount < 1 || this.charCount > this.max) return false;
+          if (this.spaceSlug === 'announcements' && !this.canPostToAnnouncements()) return false;
+          return true;
+        },
 
         init: function () {
           var self = this;
@@ -311,6 +333,120 @@
           this.quill.on('text-change', function () {
             self.charCount = self.textLength();
           });
+
+          // Paste a .gif URL -> convert to an <img> embed automatically.
+          // Quill's matchers fire during clipboard processing so the URL
+          // never lands as plain text first.
+          try {
+            this.quill.clipboard.addMatcher(Node.TEXT_NODE, function (node, delta) {
+              var text = node.data || '';
+              var gifRe = /\bhttps?:\/\/[^\s<>"']+\.gif(\?[^\s<>"']*)?\b/i;
+              var m = text.match(gifRe);
+              if (m) {
+                return new (window.Quill.import('delta'))()
+                  .insert({ image: m[0] });
+              }
+              return delta;
+            });
+          } catch (e) { /* Quill version mismatch, ignore */ }
+
+          // Append an emoji button to Quill's toolbar. We don't touch
+          // the toolbar config (stays declarative) so the button sits
+          // at the end as a detached custom tool.
+          this.attachEmojiButton();
+        },
+
+        attachEmojiButton: function () {
+          var self = this;
+          var form = this.$el;
+          var toolbar = form.querySelector('.ql-toolbar');
+          if (!toolbar || toolbar.querySelector('.ql-emoji-btn')) return;
+
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ql-emoji-btn';
+          btn.title = 'Emoji';
+          btn.setAttribute('aria-label', 'Insert emoji');
+          btn.innerHTML =
+            '<svg viewBox="0 0 24 24" width="18" height="18" fill="none"' +
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"' +
+            ' stroke-linejoin="round">' +
+            '<circle cx="12" cy="12" r="10"/>' +
+            '<path d="M8 14s1.5 2 4 2 4-2 4-2"/>' +
+            '<line x1="9" y1="9" x2="9.01" y2="9"/>' +
+            '<line x1="15" y1="9" x2="15.01" y2="9"/></svg>';
+
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            self.toggleEmojiPicker(btn);
+          });
+
+          toolbar.appendChild(btn);
+        },
+
+        // Compact grid picker with 40 of the most-used emoji for
+        // a community context. No library, no network, instant open.
+        // We ship the full LC-Emoji-Picker files alongside but the
+        // library isn't on the critical path (we can fall back to
+        // it lazily if the user ever asks for the long tail).
+        toggleEmojiPicker: function (anchor) {
+          var existing = document.querySelector('.emoji-quickpicker');
+          if (existing) { existing.remove(); return; }
+
+          var self = this;
+          var panel = document.createElement('div');
+          panel.className = 'emoji-quickpicker';
+          var common = [
+            '\u{1F600}', '\u{1F602}', '\u{1F60A}', '\u{1F60D}', '\u{1F914}',
+            '\u{1F44D}', '\u{1F44E}', '\u{1F525}', '\u{1F389}', '\u{1F64C}',
+            '\u{1F64F}', '\u{1F4AF}', '\u{2764}\u{FE0F}', '\u{1F499}', '\u{1F4A1}',
+            '\u{1F527}', '\u{1F4BB}', '\u{1F512}', '\u{1F510}', '\u{1F6E1}\u{FE0F}',
+            '\u{1F9E0}', '\u{1F440}', '\u{1F44B}', '\u{1F60E}', '\u{1F605}',
+            '\u{1F62D}', '\u{1F631}', '\u{1F44F}', '\u{1F680}', '\u{1F41B}',
+            '\u{1F41E}', '\u{2705}', '\u{274C}', '\u{26A0}\u{FE0F}', '\u{1F4A5}',
+            '\u{1F4AC}', '\u{1F4DD}', '\u{1F4CC}', '\u{1F517}', '\u{2728}'
+          ];
+          common.forEach(function (e) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = e;
+            b.className = 'emoji-quickpicker-item';
+            b.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              if (!self.quill) return;
+              var range = self.quill.getSelection(true);
+              self.quill.insertText(range.index, e, 'user');
+              self.quill.setSelection(range.index + e.length);
+              panel.remove();
+            });
+            panel.appendChild(b);
+          });
+
+          var rect = anchor.getBoundingClientRect();
+          panel.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+          panel.style.left = (rect.left + window.scrollX) + 'px';
+          document.body.appendChild(panel);
+
+          // Close on outside click or Escape.
+          setTimeout(function () {
+            var closer = function (e) {
+              if (!panel.contains(e.target) && e.target !== anchor) {
+                panel.remove();
+                document.removeEventListener('click', closer);
+                document.removeEventListener('keydown', keyCloser);
+              }
+            };
+            var keyCloser = function (e) {
+              if (e.key === 'Escape') {
+                panel.remove();
+                document.removeEventListener('click', closer);
+                document.removeEventListener('keydown', keyCloser);
+              }
+            };
+            document.addEventListener('click', closer);
+            document.addEventListener('keydown', keyCloser);
+          }, 10);
         },
 
         // Alpine calls destroy() when the component is torn down (element
@@ -349,25 +485,48 @@
             var form = new FormData();
             form.append('image', file);
             toast('info', 'Uploading image...');
+
             fetch('/api/upload/image', {
               method: 'POST',
               body: form,
               credentials: 'same-origin'
             }).then(function (r) {
-              return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+              // Keep the original ok/status around even if JSON decode fails
+              // so the diagnostic below can differentiate "server returned
+              // non-JSON" from "actual network failure".
+              return r.text().then(function (text) {
+                var data = {};
+                try { data = JSON.parse(text); } catch (e) { /* non-JSON body */ }
+                return { ok: r.ok, status: r.status, data: data, raw: text };
+              });
             }).then(function (res) {
               if (!res.ok) {
-                toast('error', res.data.error || 'Image upload failed');
+                console.error('Image upload failed', res.status, res.raw);
+                toast('error', (res.data && res.data.error) || 'Image upload failed (' + res.status + ')');
                 return;
               }
-              if (self.quill) {
-                var range = self.quill.getSelection(true);
-                self.quill.insertEmbed(range.index, 'image', res.data.url);
-                self.quill.setSelection(range.index + 1);
-              }
+              // Success toast first so the user sees confirmation even if
+              // the embed into Quill has trouble (e.g. stale selection).
               toast('success', 'Image added');
-            }).catch(function () {
-              toast('error', 'Image upload failed');
+              if (!self.quill) return;
+              try {
+                var range = self.quill.getSelection(true);
+                if (!range) {
+                  // Focus dropped while the native file dialog was open -
+                  // insert at the end of the document as fallback.
+                  var end = self.quill.getLength();
+                  self.quill.setSelection(end, 0);
+                  range = self.quill.getSelection(true) || { index: end };
+                }
+                self.quill.insertEmbed(range.index, 'image', res.data.url, 'user');
+                self.quill.setSelection(range.index + 1, 0);
+              } catch (e) {
+                console.error('Quill insertEmbed failed', e);
+                toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + res.data.url);
+              }
+            }).catch(function (err) {
+              console.error('Image upload network error', err);
+              toast('error', 'Image upload failed (network)');
             });
           };
           input.click();
@@ -772,19 +931,12 @@
       }
 
       if (action === 'react') {
-        el.addEventListener('click', function () {
-          var id = el.dataset.postId;
-          var willLike = !el.classList.contains('active');
-          el.classList.toggle('active');
-          // optimistic counter
-          var counter = document.getElementById('react-count-' + id);
-          if (counter) {
-            var n = parseInt(counter.textContent || '0', 10);
-            counter.textContent = willLike ? n + 1 : Math.max(0, n - 1);
-            counter.classList.add('count-update');
-            setTimeout(function () { counter.classList.remove('count-update'); }, 320);
-          }
-          apiJSON('/api/posts/' + id + '/react', willLike ? 'POST' : 'DELETE', null);
+        // Sprint 10.5: clicking the react button opens a quick picker
+        // with 6 emoji types. The old "like toggle" behaviour becomes
+        // one of those 6 (heart).
+        el.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openReactionPicker(el);
         });
       }
 
@@ -887,47 +1039,85 @@
   }
 
   // ---------- WebSocket client ----------
+  //
+  // Sprint 10.5: fixed connection leak.
+  //
+  // Previously each reconnect spawned a fresh WebSocket without closing
+  // the existing one, and HTMX page swaps would create another one on
+  // top. With a couple of users open for an hour, the server saw 30+
+  // concurrent sockets from 2-3 people.
+  //
+  // Fix:
+  //   1. Stash the active ws on window.__golabWS and close the old one
+  //      before opening a new one (also catches re-inits after HTMX
+  //      hx-boost swaps which re-run this module).
+  //   2. Proper exponential backoff from 1s up to 30s; reset to 1s on
+  //      a successful open so occasional hiccups don't cascade.
+  //   3. Clear the scheduled-reconnect timer on beforeunload so a
+  //      stale socket doesn't spawn after the page is gone.
 
-  var ws = null;
-  var wsAttempt = 0;
   var wsClosed = false;
+  var wsBackoff = 1000;         // current retry delay, doubles each fail
+  var wsBackoffMax = 30000;
+  var wsRetryTimer = null;
 
   function wsConnect() {
+    // Close any existing socket before opening a new one.
+    if (window.__golabWS) {
+      try {
+        window.__golabWS.onopen = null;
+        window.__golabWS.onmessage = null;
+        window.__golabWS.onclose = null;
+        window.__golabWS.onerror = null;
+        if (window.__golabWS.readyState === WebSocket.OPEN ||
+            window.__golabWS.readyState === WebSocket.CONNECTING) {
+          window.__golabWS.close(1000, 'reconnect');
+        }
+      } catch (e) { /* ignore */ }
+      window.__golabWS = null;
+    }
+
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var sock;
     try {
-      var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(proto + '//' + location.host + '/ws');
+      sock = new WebSocket(proto + '//' + location.host + '/ws');
     } catch (e) {
       scheduleReconnect();
       return;
     }
+    window.__golabWS = sock;
 
-    ws.onopen = function () {
-      wsAttempt = 0;
-      // Subscribe to current context
+    sock.onopen = function () {
+      wsBackoff = 1000; // reset backoff on successful connect
       var ctx = detectContext();
-      if (ctx) ws.send(JSON.stringify({ type: 'subscribe', topic: ctx }));
+      if (ctx) sock.send(JSON.stringify({ type: 'subscribe', topic: ctx }));
     };
 
-    ws.onmessage = function (ev) {
+    sock.onmessage = function (ev) {
       var msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
       handleWSMessage(msg);
     };
 
-    ws.onclose = function () {
+    sock.onclose = function () {
       if (wsClosed) return;
       scheduleReconnect();
     };
 
-    ws.onerror = function () {
-      if (ws) try { ws.close(); } catch (e) {}
+    sock.onerror = function () {
+      // Let the onclose handler above own the retry scheduling. Close
+      // defensively in case the socket is hung in a half-open state.
+      try { sock.close(); } catch (e) {}
     };
   }
 
   function scheduleReconnect() {
-    wsAttempt++;
-    var delay = Math.min(1000 * Math.pow(1.6, wsAttempt), 20000);
-    setTimeout(wsConnect, delay);
+    if (wsRetryTimer) clearTimeout(wsRetryTimer);
+    wsRetryTimer = setTimeout(function () {
+      wsRetryTimer = null;
+      wsConnect();
+    }, wsBackoff);
+    wsBackoff = Math.min(wsBackoff * 2, wsBackoffMax);
   }
 
   function detectContext() {
@@ -992,6 +1182,105 @@
     bindAll();
   });
 
+  // ---------- Sprint 10.5 reaction quick picker ----------
+  //
+  // The 6 types match the server's allowedReactionTypes map. Clicking
+  // a type toggles the user's reaction via POST /api/posts/:id/react.
+  // The server enforces one reaction per user per post; clicking the
+  // currently-held type removes it, a different type switches it.
+
+  var REACTION_EMOJI = {
+    heart:     '\u{2764}\u{FE0F}',
+    thumbsup:  '\u{1F44D}',
+    laugh:     '\u{1F602}',
+    surprised: '\u{1F62E}',
+    sad:       '\u{1F622}',
+    fire:      '\u{1F525}'
+  };
+  var REACTION_ORDER = ['heart', 'thumbsup', 'laugh', 'surprised', 'sad', 'fire'];
+
+  function openReactionPicker(anchor) {
+    var existing = document.querySelector('.reaction-picker');
+    if (existing) { existing.remove(); return; }
+
+    var postId = anchor.dataset.postId;
+    if (!postId) return;
+
+    var panel = document.createElement('div');
+    panel.className = 'reaction-picker';
+
+    REACTION_ORDER.forEach(function (type) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'reaction-picker-item';
+      b.title = type;
+      b.textContent = REACTION_EMOJI[type];
+      b.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        panel.remove();
+        submitReaction(anchor, postId, type);
+      });
+      panel.appendChild(b);
+    });
+
+    // Anchor above the react button.
+    var rect = anchor.getBoundingClientRect();
+    panel.style.top = (rect.top + window.scrollY - 48) + 'px';
+    panel.style.left = (rect.left + window.scrollX) + 'px';
+    document.body.appendChild(panel);
+
+    setTimeout(function () {
+      var closer = function (e) {
+        if (!panel.contains(e.target) && e.target !== anchor) {
+          panel.remove();
+          document.removeEventListener('click', closer);
+          document.removeEventListener('keydown', keyCloser);
+        }
+      };
+      var keyCloser = function (e) {
+        if (e.key === 'Escape') {
+          panel.remove();
+          document.removeEventListener('click', closer);
+          document.removeEventListener('keydown', keyCloser);
+        }
+      };
+      document.addEventListener('click', closer);
+      document.addEventListener('keydown', keyCloser);
+    }, 10);
+  }
+
+  function submitReaction(anchor, postId, type) {
+    apiJSON('/api/posts/' + postId + '/react', 'POST', { reaction_type: type })
+      .then(function (res) {
+        if (!res.ok) {
+          toast('error', (res.data && res.data.error) || 'Could not react');
+          return;
+        }
+        // Update the button visuals from the server response.
+        var data = res.data || {};
+        anchor.classList.toggle('active', !!data.user_type);
+        var icon = anchor.querySelector('.reaction-icon');
+        var heart = anchor.querySelector('.reaction-heart');
+        if (data.user_type) {
+          if (icon) icon.textContent = REACTION_EMOJI[data.user_type] || '';
+          if (heart) heart.style.display = 'none';
+        } else {
+          if (icon) icon.textContent = '';
+          if (heart) heart.style.display = '';
+        }
+        var counter = anchor.querySelector('.reaction-count, #react-count-' + postId);
+        if (counter && typeof data.count === 'number') {
+          counter.textContent = data.count;
+          counter.classList.add('number-bump');
+          setTimeout(function () { counter.classList.remove('number-bump'); }, 320);
+        }
+        // Heart-pop micro animation
+        anchor.classList.add('heart-pop');
+        setTimeout(function () { anchor.classList.remove('heart-pop'); }, 400);
+      })
+      .catch(function () { toast('error', 'Network error'); });
+  }
+
   // ---------- image lightbox ----------
   //
   // Any <img> inside a .post-content block opens in a full-screen lightbox
@@ -1043,6 +1332,26 @@
   }
 
   // ---------- code block copy buttons + syntax highlighting ----------
+
+  // Sprint 10.5: badge every .gif image in post content with a small
+  // "GIF" chip. Runs on init and after HTMX / WebSocket swaps.
+  function decorateGifs() {
+    document.querySelectorAll('.post-content img').forEach(function (img) {
+      if (img.dataset.gifBadgeBound) return;
+      var src = (img.getAttribute('src') || '').toLowerCase();
+      if (!src.endsWith('.gif') && src.indexOf('.gif?') === -1) return;
+      img.dataset.gifBadgeBound = '1';
+      // Wrap with a relative-positioned span so the badge anchors.
+      var wrap = document.createElement('span');
+      wrap.className = 'gif-wrap';
+      img.parentNode.insertBefore(wrap, img);
+      wrap.appendChild(img);
+      var badge = document.createElement('span');
+      badge.className = 'gif-badge';
+      badge.textContent = 'GIF';
+      wrap.appendChild(badge);
+    });
+  }
 
   function decorateCodeBlocks() {
     document.querySelectorAll('.post-content pre').forEach(function (pre) {
@@ -1134,6 +1443,7 @@
     bindCompose();
     bindActions();
     decorateCodeBlocks();
+    decorateGifs();
     setupScrollReveal();
     animateCounters();
   }
@@ -1148,7 +1458,11 @@
     wsConnect();
     window.addEventListener('beforeunload', function () {
       wsClosed = true;
-      if (ws) { try { ws.close(); } catch (e) {} }
+      if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+      if (window.__golabWS) {
+        try { window.__golabWS.close(1000, 'unload'); } catch (e) {}
+        window.__golabWS = null;
+      }
     });
   }
 

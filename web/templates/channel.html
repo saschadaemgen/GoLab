@@ -38,10 +38,9 @@
 
     {{ if and $.User .IsMember }}
       {{ template "compose.html" (dict
-        "Channels" nil
-        "SelectedChannelID" $ch.ID
         "Spaces" $.Spaces
-        "SelectedSpaceID" 0) }}
+        "SelectedSpaceID" 0
+        "User" $.User) }}
     {{ end }}
 
     <div id="feed-posts" class="stagger-in">

@@ -409,6 +409,52 @@ img.avatar {
   color: var(--text-dim);
 }
 
+/* Space navigation inside the sidebar (Sprint 10.5). Icon tile +
+   name + post count. The active row highlights in the space's own
+   colour so the sidebar mirrors the space-bar state. */
+.sidebar-space-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.sidebar-space-link:hover {
+  background: var(--bg-deep);
+  color: var(--text-bright);
+}
+.sidebar-space-link.active {
+  background: var(--bg-deep);
+  color: var(--text-bright);
+  font-weight: var(--weight-semibold);
+}
+.sidebar-space-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: var(--weight-bold);
+}
+.sidebar-space-name {
+  flex: 1;
+  font-size: var(--font-sm);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-space-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--font-xs);
+  color: var(--text-dim);
+  padding: 0 var(--space-1);
+}
+
 /* ===== Profile (Sprint 11) ===== */
 
 .profile-header {
@@ -686,12 +732,14 @@ img.avatar {
 /* Toast notifications */
 .toast-container {
   position: fixed;
-  top: 60px;
-  right: 1.5rem;
-  z-index: 9999;
+  top: calc(var(--header-total) + var(--space-3));
+  right: var(--space-4);
+  /* Higher than navbar (10000), space-bar (500), modals (9000),
+     lightbox (10050) so toasts are always visible. */
+  z-index: 10100;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
   pointer-events: none;
 }
 .toast {
@@ -1092,8 +1140,20 @@ img.avatar {
 
 /* Space select in compose footer */
 .compose-space-select {
-  min-width: 150px;
+  min-width: 180px;
 }
+
+/* Sprint 10.5 compose inline notice (shown when a non-admin picks
+   announcements). Subtle warning tone, doesn't disrupt the form. */
+.compose-notice {
+  padding: var(--space-2) var(--space-4);
+  background: rgba(243, 156, 18, 0.08);
+  color: #B45309;
+  border-top: 1px solid rgba(243, 156, 18, 0.2);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+}
+[data-theme="dark"] .compose-notice { color: #d29922; }
 
 /* ================================================================
    SPRINT 10 - Post card meta badges + tags at bottom
@@ -1802,6 +1862,119 @@ img.avatar {
 .btn-spinner { display: inline-flex; align-items: center; }
 .btn-spinner .spin { width: 14px; height: 14px; color: currentColor; }
 
+/* Sprint 10.5 emoji button inside Quill toolbar */
+.ql-toolbar .ql-emoji-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0 var(--space-1);
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.ql-toolbar .ql-emoji-btn:hover,
+.ql-toolbar .ql-emoji-btn:focus {
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+/* Emoji quick-picker (opens from the toolbar emoji button) */
+.emoji-quickpicker {
+  position: absolute;
+  z-index: 9500;
+  display: grid;
+  grid-template-columns: repeat(8, 32px);
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: emojiPickerIn 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 320px;
+}
+@keyframes emojiPickerIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.emoji-quickpicker-item {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, background 0.12s ease;
+}
+.emoji-quickpicker-item:hover {
+  background: var(--bg-deep);
+  transform: scale(1.15);
+}
+
+/* Reaction picker anchored above the post's react button */
+.reaction-picker {
+  position: absolute;
+  z-index: 9500;
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: reactionPickerIn 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes reactionPickerIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.reaction-picker-item {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.reaction-picker-item:hover {
+  background: var(--bg-deep);
+  transform: scale(1.25);
+}
+
+/* Reaction button: icon span is empty by default (falls back to the
+   heart svg). When the user has reacted, icon is filled with the
+   chosen emoji character and the svg is hidden. */
+.reaction-button .reaction-icon:empty { display: none; }
+.reaction-button .reaction-icon:not(:empty) {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.reaction-button.active { color: var(--accent); }
+.reaction-button.active .reaction-heart {
+  fill: currentColor;
+}
+
 /* ================================================================
    FEATURE 1: Markdown compose tabs + post rendered content
 ================================================================ */
@@ -1926,12 +2099,37 @@ img.avatar {
 .post-content img {
   max-width: 100%;
   border-radius: var(--radius-sm);
-  margin: 0.5rem 0;
+  margin: var(--space-2) 0;
   cursor: zoom-in;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
-.post-content img:hover {
-  opacity: 0.9;
+.post-content img:hover { opacity: 0.9; }
+
+/* Sprint 10.5 - GIF badge wrapper. `.gif-wrap` is injected by
+   decorateGifs() in golab.js around each .gif <img> so the badge
+   anchors correctly without changing server HTML. */
+.gif-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.gif-wrap img { display: block; }
+.gif-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  padding: 0.15rem 0.45rem;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 /* Full-screen lightbox shown when a post image is clicked. */

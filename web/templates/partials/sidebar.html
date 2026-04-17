@@ -1,47 +1,35 @@
 {{ define "sidebar.html" }}
-{{ $joined := .JoinedChannels }}
-{{ $suggested := .Suggested }}
+{{ $spaces := $.Spaces }}
+{{ $currentSpace := $.CurrentSpace }}
 
 <aside>
   <section class="sidebar-card">
-    <h4 class="sidebar-title">Your channels</h4>
-    {{ if $joined }}
+    <h4 class="sidebar-title">Spaces</h4>
     <ul class="sidebar-list">
-      {{ range $joined }}
+      {{ range $spaces }}
       <li>
-        <a href="/c/{{ .Slug }}" class="sidebar-link" hx-boost="true">
-          <span>#{{ .Slug }}</span>
-          <span class="sidebar-count">{{ .MemberCount }}</span>
-        </a>
-      </li>
-      {{ end }}
-    </ul>
-    {{ else }}
-    <p class="sidebar-text">You haven't joined any channels yet. <a href="/explore" hx-boost="true">Discover</a>.</p>
-    {{ end }}
-  </section>
-
-  {{ if $suggested }}
-  <section class="sidebar-card">
-    <h4 class="sidebar-title">Suggested</h4>
-    <ul class="sidebar-list">
-      {{ range $suggested }}
-      <li>
-        <a href="/c/{{ .Slug }}" class="sidebar-link" hx-boost="true">
-          <span>#{{ .Slug }}</span>
-          <span class="sidebar-count">{{ .MemberCount }}</span>
+        <a href="/s/{{ .Slug }}"
+           class="sidebar-space-link{{ if eq .Slug $currentSpace }} active{{ end }}"
+           hx-boost="true">
+          <span class="sidebar-space-icon" style="color: {{ .Color }};">
+            {{ if .Icon }}{{ .Icon }}{{ else }}#{{ end }}
+          </span>
+          <span class="sidebar-space-name">{{ .Name }}</span>
+          {{ if gt .PostCount 0 }}
+          <span class="sidebar-space-count">{{ .PostCount }}</span>
+          {{ end }}
         </a>
       </li>
       {{ end }}
     </ul>
   </section>
-  {{ end }}
 
   <section class="sidebar-card">
-    <h4 class="sidebar-title">Create</h4>
-    <a href="/explore#create" class="btn btn-outline btn-sm" hx-boost="true" style="width:100%;justify-content:center;">
-      New channel
-    </a>
+    <h4 class="sidebar-title">About GoLab</h4>
+    <p class="sidebar-text">
+      Privacy-first community for builders. No algorithm, no tracking,
+      no ads. Just signal.
+    </p>
   </section>
 </aside>
 {{ end }}

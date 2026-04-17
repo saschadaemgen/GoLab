@@ -4,10 +4,9 @@
   <div class="two-col fade-in">
     <main>
       {{ template "compose.html" (dict
-        "Channels" .JoinedChannels
-        "SelectedChannelID" 0
         "Spaces" $.Spaces
-        "SelectedSpaceID" 0) }}
+        "SelectedSpaceID" 0
+        "User" $.User) }}
 
       <div id="feed-posts" class="stagger-in">
         {{ if .Posts }}

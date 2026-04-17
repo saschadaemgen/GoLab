@@ -23,48 +23,9 @@
     {{ end }}
     {{ end }}
 
-    {{ if .User }}
-    <section class="home-section" id="create">
-      <h2 class="home-section-title">Create a channel</h2>
-      <div class="card" style="padding: var(--space-6); max-width: 640px; margin: 0 auto;">
-        <form id="create-channel-form"
-              method="POST"
-              action="/api/channels"
-              autocomplete="off">
-          <div class="form-group">
-            <label class="form-label" for="ch-slug">Slug</label>
-            <input class="form-input" type="text" id="ch-slug" name="slug"
-                   required minlength="3" maxlength="64"
-                   pattern="[a-z0-9][a-z0-9\-]+[a-z0-9]"
-                   placeholder="e.g. gochat-dev">
-            <div class="form-hint">Lowercase letters, numbers and hyphens. Becomes the URL (/c/slug).</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="ch-name">Name</label>
-            <input class="form-input" type="text" id="ch-name" name="name"
-                   required minlength="1" maxlength="128"
-                   placeholder="GoChat Development">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="ch-desc">Description</label>
-            <textarea class="form-input form-textarea" id="ch-desc" name="description"
-                      maxlength="1000"
-                      placeholder="What is this channel about?"></textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="ch-type">Type</label>
-            <select class="form-input" id="ch-type" name="channel_type">
-              <option value="public">Public - anyone can view and join</option>
-              <option value="project">Project - themed around a project</option>
-              <option value="announce">Announce - read only for most members</option>
-            </select>
-          </div>
-          <div class="form-error" role="alert"></div>
-          <button type="submit" class="btn btn-primary">Create channel</button>
-        </form>
-      </div>
-    </section>
-    {{ end }}
+    {{/* Channels (Sprint 10.5) stay in DB but are hidden from the UI;
+         there is no "Create channel" form anymore. Spaces are
+         admin-fixed, tags are user-applied. */}}
   </div>
 </div>
 {{ end }}

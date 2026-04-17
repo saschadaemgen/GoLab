@@ -151,6 +151,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	channelH := &handler.ChannelHandler{Channels: channels, Users: users}
 	postH := &handler.PostHandler{
 		Posts: posts, Channels: channels, Reactions: reactions, Tags: tags,
+		Spaces:   spaces,
 		Markdown: md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
 	}
 	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}

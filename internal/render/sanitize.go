@@ -24,11 +24,24 @@ func NewSanitizer() *Sanitizer {
 		Matching(regexp.MustCompile(`^(ql-|language-|hljs|chroma|code-block-wrapper)([\w\- ]*)$`)).
 		OnElements("pre", "code", "span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote")
 
-	// Images must come from our own upload endpoint. Reject any other src.
+	// Images are allowed either from our own upload endpoint OR from a
+	// small allowlist of GIF hosts so users can paste GIF URLs from
+	// Tenor, Giphy, Imgur, Reddit, etc. without a third-party API.
+	// Tenor/Giphy branding URLs stay valid even after their API
+	// shutdowns because the static CDNs remain public.
 	p.AllowAttrs("src").
-		Matching(regexp.MustCompile(`^/static/uploads/`)).
+		Matching(regexp.MustCompile(
+			`^(/static/uploads/` +
+				`|https://media\d?\.tenor\.com/` +
+				`|https://media\d?\.giphy\.com/` +
+				`|https://i\.giphy\.com/` +
+				`|https://i\.imgur\.com/` +
+				`|https://i\.redd\.it/` +
+				`).+`,
+		)).
 		OnElements("img")
 	p.AllowAttrs("alt").OnElements("img")
+	p.AllowAttrs("loading").Matching(regexp.MustCompile(`^(lazy|eager)$`)).OnElements("img")
 
 	// Permit Quill's data-language attribute on pre for syntax highlighting.
 	p.AllowDataAttributes()

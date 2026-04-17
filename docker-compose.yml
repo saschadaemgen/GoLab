@@ -13,6 +13,11 @@ services:
       - GOLAB_DB_PASSWORD=golab-dev
       - GOLAB_DB_SSLMODE=disable
       - GOLAB_SECRET=dev-secret-change-in-production
+    # Persist uploads across `docker-compose build` rebuilds. Without
+    # this volume, every rebuild destroyed user avatars and post
+    # images because they lived inside the ephemeral container fs.
+    volumes:
+      - golab-uploads:/app/web/static/uploads
     depends_on:
       - db
     restart: unless-stopped
@@ -31,3 +36,4 @@ services:
 
 volumes:
   golab-data:
+  golab-uploads:

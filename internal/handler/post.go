@@ -17,11 +17,17 @@ type PostHandler struct {
 	Channels  *model.ChannelStore
 	Reactions *model.ReactionStore
 	Tags      *model.TagStore
+	Spaces    *model.SpaceStore
 	Markdown  *render.Markdown
 	Sanitizer *render.Sanitizer
 	Hub       *Hub           // optional; when present, new posts get broadcast
 	Notifs    *NotifDispatch // optional; used to create notifications on react/reply
 }
+
+// minPowerToPostInAnnouncements is the admin threshold. Only users at
+// or above this level can post to the "announcements" space. Sprint 10.5
+// rule.
+const minPowerToPostInAnnouncements = 75
 
 type createPostRequest struct {
 	Content   string   `json:"content"`
@@ -49,6 +55,17 @@ var validPostTypes = map[string]bool{
 
 type reactRequest struct {
 	ReactionType string `json:"reaction_type"`
+}
+
+// allowedReactionTypes gates the 6 Sprint 10.5 emoji reactions.
+// Anything else falls back to "heart".
+var allowedReactionTypes = map[string]bool{
+	"heart":     true,
+	"thumbsup":  true,
+	"laugh":     true,
+	"surprised": true,
+	"sad":       true,
+	"fire":      true,
 }
 
 type previewRequest struct {
@@ -107,6 +124,18 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if !isMember {
 			writeError(w, http.StatusForbidden, "must be a channel member to post")
 			return
+		}
+	}
+
+	// Announcements space: admin-only posting (power_level >= 75).
+	// Look up the space by ID; if the client picked announcements and
+	// the user doesn't have the power, reject.
+	if req.SpaceID != nil && h.Spaces != nil {
+		if sp, err := h.Spaces.FindByID(r.Context(), *req.SpaceID); err == nil && sp != nil {
+			if sp.Slug == "announcements" && user.PowerLevel < minPowerToPostInAnnouncements {
+				writeError(w, http.StatusForbidden, "only admins can post to Announcements")
+				return
+			}
 		}
 	}
 
@@ -299,24 +328,38 @@ func (h *PostHandler) React(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req reactRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ReactionType == "" {
-		req.ReactionType = "like"
+	_ = json.NewDecoder(r.Body).Decode(&req) // body is optional
+	if !allowedReactionTypes[req.ReactionType] {
+		req.ReactionType = "heart"
 	}
 
-	if err := h.Reactions.React(r.Context(), user.ID, id, req.ReactionType); err != nil {
+	result, err := h.Reactions.Toggle(r.Context(), user.ID, id, req.ReactionType)
+	if err != nil {
 		slog.Error("react", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Notify the post author (unless the user is reacting to their own post).
-	if h.Notifs != nil {
+	// Only fire a notification when a reaction was added or switched -
+	// removing a reaction shouldn't re-notify the post author.
+	if h.Notifs != nil && result != model.ReactRemoved {
 		if post, err := h.Posts.FindByID(r.Context(), id); err == nil && post != nil {
 			h.Notifs.Notify(r.Context(), post.AuthorID, user.ID, model.NotifReaction, &id)
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "reacted"})
+	// Return the final state so the client can update without a reload:
+	// which type (if any) this user now holds, plus the total count.
+	userType, _ := h.Reactions.UserReactionType(r.Context(), user.ID, id)
+	var count int
+	if p, err := h.Posts.FindByID(r.Context(), id); err == nil && p != nil {
+		count = p.ReactionCount
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"result":    string(result),
+		"user_type": userType,
+		"count":     count,
+	})
 }
 
 func (h *PostHandler) Unreact(w http.ResponseWriter, r *http.Request) {

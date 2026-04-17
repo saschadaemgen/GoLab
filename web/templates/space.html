@@ -60,10 +60,9 @@
     <main>
       {{ if $.User }}
       {{ template "compose.html" (dict
-        "Channels" nil
-        "SelectedChannelID" 0
         "Spaces" $.Spaces
-        "SelectedSpaceID" $sp.ID) }}
+        "SelectedSpaceID" $sp.ID
+        "User" $.User) }}
       {{ end }}
 
       {{ if .Posts }}
