@@ -1,56 +1,58 @@
 {{ define "content" }}
 {{ with .Content }}
-<div class="thread-container fade-in">
-  {{ if .Channel }}
-  <a href="/c/{{ .Channel.Slug }}" class="thread-back" hx-boost="true">back to #{{ .Channel.Slug }}</a>
-  {{ else }}
-  <a href="/feed" class="thread-back" hx-boost="true">back to feed</a>
-  {{ end }}
-
-  <div class="thread-root">
-    {{ template "post-card.html" (dict "Post" .Post "User" $.User) }}
-  </div>
-
-  {{ if $.User }}
-  <div class="thread-reply-compose">
-    <form id="reply-form"
-          method="POST"
-          action="/api/posts"
-          class="compose-box"
-          x-data="{ content: '', max: 5000 }"
-          data-parent-id="{{ .Post.ID }}">
-      <textarea class="compose-textarea input-glow compose-expanded"
-                name="content"
-                x-model="content"
-                maxlength="5000"
-                placeholder="Reply to @{{ .Post.AuthorUsername }}..."></textarea>
-      <div class="compose-footer">
-        <span class="compose-count" :class="{ over: content.length > max }">
-          <span x-text="content.length">0</span> / 5000
-        </span>
-        <input type="hidden" name="parent_id" value="{{ .Post.ID }}">
-        <button type="submit" class="btn btn-primary btn-sm press-effect"
-                :disabled="content.trim().length < 1 || content.length > max">
-          Reply
-        </button>
-      </div>
-    </form>
-  </div>
-  {{ end }}
-
-  <div class="thread-replies stagger-in" id="thread-replies">
-    {{ if .Replies }}
-      {{ range .Replies }}
-      <div class="thread-reply" style="--depth: 1">
-        {{ template "post-card.html" (dict "Post" . "User" $.User) }}
-      </div>
-      {{ end }}
+<div class="page-container fade-in">
+  <div class="single-col">
+    {{ if .Channel }}
+    <a href="/c/{{ .Channel.Slug }}" class="thread-back" hx-boost="true">back to #{{ .Channel.Slug }}</a>
     {{ else }}
-      <div class="empty-state">
-        <h3>No replies yet</h3>
-        <p>{{ if $.User }}Be the first to reply.{{ else }}<a href="/login" hx-boost="true">Log in</a> to reply.{{ end }}</p>
-      </div>
+    <a href="/feed" class="thread-back" hx-boost="true">back to feed</a>
     {{ end }}
+
+    <div class="thread-root">
+      {{ template "post-card.html" (dict "Post" .Post "User" $.User) }}
+    </div>
+
+    {{ if $.User }}
+    <div class="thread-reply-compose">
+      <form id="reply-form"
+            method="POST"
+            action="/api/posts"
+            class="compose-box"
+            x-data="{ content: '', max: 5000 }"
+            data-parent-id="{{ .Post.ID }}">
+        <textarea class="compose-textarea input-glow compose-expanded"
+                  name="content"
+                  x-model="content"
+                  maxlength="5000"
+                  placeholder="Reply to @{{ .Post.AuthorUsername }}..."></textarea>
+        <div class="compose-footer">
+          <span class="compose-count" :class="{ over: content.length > max }">
+            <span x-text="content.length">0</span> / 5000
+          </span>
+          <input type="hidden" name="parent_id" value="{{ .Post.ID }}">
+          <button type="submit" class="btn btn-primary btn-sm press-effect"
+                  :disabled="content.trim().length < 1 || content.length > max">
+            Reply
+          </button>
+        </div>
+      </form>
+    </div>
+    {{ end }}
+
+    <div class="thread-replies stagger-in" id="thread-replies">
+      {{ if .Replies }}
+        {{ range .Replies }}
+        <div class="thread-reply" style="--depth: 1">
+          {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+        </div>
+        {{ end }}
+      {{ else }}
+        <div class="empty-state">
+          <h3>No replies yet</h3>
+          <p>{{ if $.User }}Be the first to reply.{{ else }}<a href="/login" hx-boost="true">Log in</a> to reply.{{ end }}</p>
+        </div>
+      {{ end }}
+    </div>
   </div>
 </div>
 {{ end }}

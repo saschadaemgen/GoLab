@@ -1,41 +1,41 @@
 {{ define "content" }}
 {{ with .Content }}
 {{ $ch := .Channel }}
-<div class="fade-in">
-  <header class="channel-page-header">
-    <div class="channel-page-title">
-      <h1>{{ $ch.Name }}</h1>
-      <span class="slug">#{{ $ch.Slug }}</span>
-    </div>
-    {{ if $ch.Description }}
-    <p class="channel-page-desc">{{ $ch.Description }}</p>
-    {{ end }}
-    <div class="channel-page-actions">
-      <span class="channel-page-stat">{{ $ch.MemberCount }} {{ pluralize $ch.MemberCount "member" "members" }}</span>
-      <span class="channel-page-stat">Created {{ timeAgo $ch.CreatedAt }}</span>
-      {{ if $.User }}
-        {{ if .IsMember }}
-        <button class="btn btn-outline btn-sm btn-join joined"
-                data-action="channel-toggle"
-                data-slug="{{ $ch.Slug }}"
-                data-mode="leave">
-          Joined
-        </button>
-        {{ else }}
-        <button class="btn btn-primary btn-sm btn-join"
-                data-action="channel-toggle"
-                data-slug="{{ $ch.Slug }}"
-                data-mode="join">
-          Join
-        </button>
-        {{ end }}
-      {{ else }}
-        <a class="btn btn-primary btn-sm" href="/login" hx-boost="true">Log in to join</a>
+<div class="page-container fade-in">
+  <div class="single-col">
+    <header class="channel-page-header">
+      <div class="channel-page-title">
+        <h1>{{ $ch.Name }}</h1>
+        <span class="slug">#{{ $ch.Slug }}</span>
+      </div>
+      {{ if $ch.Description }}
+      <p class="channel-page-desc">{{ $ch.Description }}</p>
       {{ end }}
-    </div>
-  </header>
+      <div class="channel-page-actions">
+        <span class="channel-page-stat">{{ $ch.MemberCount }} {{ pluralize $ch.MemberCount "member" "members" }}</span>
+        <span class="channel-page-stat">Created {{ timeAgo $ch.CreatedAt }}</span>
+        {{ if $.User }}
+          {{ if .IsMember }}
+          <button class="btn btn-outline btn-sm btn-join joined"
+                  data-action="channel-toggle"
+                  data-slug="{{ $ch.Slug }}"
+                  data-mode="leave">
+            Joined
+          </button>
+          {{ else }}
+          <button class="btn btn-primary btn-sm btn-join"
+                  data-action="channel-toggle"
+                  data-slug="{{ $ch.Slug }}"
+                  data-mode="join">
+            Join
+          </button>
+          {{ end }}
+        {{ else }}
+          <a class="btn btn-primary btn-sm" href="/login" hx-boost="true">Log in to join</a>
+        {{ end }}
+      </div>
+    </header>
 
-  <div class="channel-page-body">
     {{ if and $.User .IsMember }}
       {{ template "compose.html" (dict
         "Channels" nil

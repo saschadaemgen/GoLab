@@ -6,38 +6,77 @@
 /* ===== CSS Variables ===== */
 
 :root {
+  /* ---- Sprint 11 layout grid ---- */
+  --content-max: 1200px;
+  --content-padding: 1.5rem;
+  --sidebar-width: 320px;
+  --gap: 1.5rem;
+
+  /* ---- Sprint 11 spacing scale (use ONLY these) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* ---- Sprint 11 font scale ---- */
+  --font-xs: 0.7rem;
+  --font-sm: 0.8rem;
+  --font-base: 0.95rem;
+  --font-md: 1.1rem;
+  --font-lg: 1.4rem;
+  --font-xl: 1.75rem;
+  --font-2xl: 2.5rem;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.8;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+
+  /* ---- Light theme palette ---- */
   --accent: #1A7D5A;
   --accent-bright: #146B4C;
-  --accent-dim: rgba(26,125,90,0.25);
+  --accent-dim: rgba(26,125,90,0.15);
   --accent-glow: rgba(26,125,90,0.15);
   --accent-subtle: rgba(26,125,90,0.06);
-  --accent-border: rgba(26,125,90,0.18);
+  --accent-border: rgba(26,125,90,0.2);
 
-  --bg-deep: #FAFBFC;
-  --bg-dark: #F0F3F5;
-  --bg-card: rgba(255,255,255,0.92);
-  --bg-card-hover: rgba(255,255,255,1);
+  --bg-base:  #f6f8fa;
+  --bg-deep:  #f0f3f6;
+  --bg-dark:  #e9edf2;
+  --bg-card:  #ffffff;
+  --bg-card-hover: #ffffff;
+  --bg-card-rgb: 255, 255, 255;
 
-  --text: #2C3440;
-  --text-bright: #111827;
-  --text-dim: rgba(44,52,64,0.55);
-  --text-muted: rgba(44,52,64,0.3);
+  --text-bright: #1f2328;
+  --text:        #424a53;
+  --text-dim:    #656d76;
+  --text-muted:  #8c959f;
   --white: #111827;
 
-  --danger: rgba(220,50,50,0.85);
-  --success: #0F8A3F;
-  --warning: #B45309;
+  --danger:  #cf222e;
+  --success: #1a7f37;
+  --warning: #9a6700;
 
-  --border: rgba(26,125,90,0.12);
-  --border-hover: rgba(26,125,90,0.3);
+  --border: #d0d7de;
+  --border-hover: #afb8c1;
 
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-lg: 16px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
   --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   --shadow-glow: 0 0 20px rgba(26,125,90,0.06);
-  --shadow-card: 0 1px 8px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.06);
+  --shadow-card: 0 1px 3px rgba(31, 35, 40, 0.04);
 
   --nav-bg: rgba(250,251,252,0.92);
   --nav-shadow: 0 1px 0 rgba(0,0,0,0.08);
@@ -57,33 +96,35 @@
 [data-theme="dark"] {
   --accent: #45BDD1;
   --accent-bright: #6DD0DF;
-  --accent-dim: rgba(69,189,209,0.3);
+  --accent-dim: rgba(69,189,209,0.15);
   --accent-glow: rgba(69,189,209,0.15);
   --accent-subtle: rgba(69,189,209,0.08);
-  --accent-border: rgba(69,189,209,0.15);
+  --accent-border: rgba(69,189,209,0.25);
 
-  --bg-deep: #050A12;
-  --bg-dark: #080D18;
-  --bg-card: rgba(10,18,32,0.7);
-  --bg-card-hover: rgba(14,24,42,0.85);
+  --bg-base:  #0a0e14;
+  --bg-deep:  #0d1117;
+  --bg-dark:  #111820;
+  --bg-card:  #111820;
+  --bg-card-hover: #171e27;
+  --bg-card-rgb: 17, 24, 32;
 
-  --text: #CBD5E1;
-  --text-bright: #E8EDF4;
-  --text-dim: rgba(203,213,225,0.5);
-  --text-muted: rgba(203,213,225,0.3);
+  --text-bright: #e6edf3;
+  --text:        #c9d1d9;
+  --text-dim:    #8b949e;
+  --text-muted:  #484f58;
   --white: #FFFFFF;
 
-  --danger: rgba(255,100,100,0.75);
-  --success: #34D399;
-  --warning: #FBBF24;
+  --danger:  #f85149;
+  --success: #3fb950;
+  --warning: #d29922;
 
-  --border: rgba(69,189,209,0.12);
-  --border-hover: rgba(69,189,209,0.3);
+  --border: #21262d;
+  --border-hover: #363b42;
 
   --shadow-glow: 0 0 30px rgba(69,189,209,0.1);
-  --shadow-card: 0 4px 24px rgba(0,0,0,0.3);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
 
-  --nav-bg: rgba(5,10,18,0.9);
+  --nav-bg: rgba(17, 24, 32, 0.9);
   --nav-shadow: 0 1px 0 rgba(69,189,209,0.08);
 
   --logo-fill: #FFFFFF;
@@ -222,7 +263,10 @@ code, pre, .mono {
   .util-link span { display: none; }
 }
 
-/* ===== Navbar ===== */
+/* ===== Navbar (Sprint 11) =====
+   Fixed at top, under the util-bar. Backdrop-blurs over the content
+   behind it at all times so the brand + search stay legible while
+   the user scrolls through posts. */
 
 #navbar {
   position: fixed;
@@ -232,26 +276,27 @@ code, pre, .mono {
   height: 64px;
   display: flex;
   align-items: center;
-  background: transparent;
-  transition: background var(--transition), box-shadow var(--transition), border-color var(--transition);
-  border-bottom: 1px solid transparent;
-}
-#navbar.scrolled {
-  background: var(--nav-bg);
-  box-shadow: var(--nav-shadow);
+  background: rgba(var(--bg-card-rgb), 0.88);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+  transition: box-shadow var(--transition);
+}
+#navbar.scrolled {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   border-bottom-color: var(--border);
 }
 .nav-inner {
   width: 100%;
-  max-width: 1140px;
+  max-width: var(--content-max);
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
-  gap: 2rem;
+  padding: 0 var(--content-padding);
+  gap: var(--space-4);
 }
 .nav-brand {
   display: flex;
@@ -357,27 +402,123 @@ code, pre, .mono {
   .nav-toggle { display: flex; }
   .nav-links {
     position: fixed;
-    top: 102px; left: 0; right: 0; bottom: 0;
-    background: var(--bg-deep);
+    top: var(--header-total); left: 0; right: 0; bottom: 0;
+    background: var(--bg-base);
     flex-direction: column;
     justify-content: flex-start;
-    padding: 2.5rem 2rem;
-    gap: 1.5rem;
+    padding: var(--space-10) var(--space-6);
+    gap: var(--space-5);
     transform: translateX(100%);
     transition: transform var(--transition);
     z-index: 9999;
+    overflow-y: auto;
   }
   .nav-links.open { transform: translateX(0); }
-  .nav-links a { font-size: 1.05rem; }
+  .nav-links a { font-size: var(--font-md); }
   .nav-right { margin-left: auto; }
 }
 
-/* ===== Container / Layout ===== */
+/* Navbar grows denser on smaller viewports. At 480px the search
+   field retreats behind a toggle icon (see nav-search-icon-mobile
+   in golab.css for that button). */
+@media (max-width: 768px) {
+  #navbar { height: 56px; }
+  .nav-brand { font-size: 1.15rem; }
+  .nav-inner { gap: var(--space-3); }
+}
+@media (max-width: 480px) {
+  #navbar { height: 52px; }
+  .nav-brand { font-size: 1rem; }
+}
 
-.container {
-  max-width: 1140px;
+/* ===== Container / Layout (Sprint 11) ===== */
+
+/* Every page wraps its content in .page-container. Sets the max width
+   and horizontal padding globally so no page has to guess. */
+.page-container {
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 var(--content-padding);
+}
+
+/* Two-column layout for content pages (feed, space, channel, profile).
+   Collapses to single column below 1024px with sidebar above main. */
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+  gap: var(--gap);
+  align-items: start;
+  padding: var(--space-6) 0 var(--space-10);
+}
+
+.two-col > main { min-width: 0; }
+
+/* Single column for auth, settings, thread, tag. */
+.single-col {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--space-6) 0 var(--space-10);
+}
+
+@media (max-width: 1024px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+  .two-col > aside {
+    order: -1; /* sidebar above main on tablet */
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --content-padding: 1rem;
+    --gap: 1rem;
+  }
+  .two-col, .single-col {
+    padding: var(--space-5) 0 var(--space-8);
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --content-padding: 0.75rem;
+    --gap: 0.75rem;
+    --font-xl: 1.4rem;
+    --font-2xl: 1.8rem;
+    --font-lg: 1.2rem;
+  }
+}
+
+/* Shared card base. Apply alongside semantic component classes
+   (post-card, sidebar-card, compose-box, admin-stat-card, etc.) so
+   every card rounds, borders and transitions identically. */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card-interactive {
+  cursor: pointer;
+}
+.card-interactive:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+[data-theme="dark"] .card-interactive:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+.card-accent {
+  border-left: 3px solid var(--accent);
+}
+
+/* Legacy shim: pages that still use .container map to the new grid so
+   the Sprint 11 landing doesn't require re-templating those pages in
+   one go. Safe to remove once every template uses .page-container. */
+.container {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 var(--content-padding);
 }
 
 .page {
@@ -465,8 +606,8 @@ code, pre, .mono {
 
 #site-footer {
   position: relative;
-  margin-top: 6rem;
-  padding: 4rem 1.5rem 1.5rem;
+  margin-top: var(--space-12);
+  padding: var(--space-12) var(--content-padding) var(--space-6);
   border-top: 1px solid var(--border);
   background: var(--bg-dark);
 }
@@ -479,11 +620,11 @@ code, pre, .mono {
   opacity: 0.4;
 }
 .footer-inner {
-  max-width: 1140px;
+  max-width: var(--content-max);
   margin: 0 auto;
   display: grid;
   grid-template-columns: 2.2fr 1fr 1fr 1fr;
-  gap: 3rem;
+  gap: var(--space-10);
 }
 .footer-brand {
   font-size: 1.4rem;
@@ -571,9 +712,9 @@ code, pre, .mono {
 }
 
 .footer-bottom {
-  max-width: 1140px;
-  margin: 3rem auto 0;
-  padding-top: 1.5rem;
+  max-width: var(--content-max);
+  margin: var(--space-10) auto 0;
+  padding-top: var(--space-5);
   border-top: 1px solid var(--border);
 }
 .footer-bottom-inner {
@@ -590,24 +731,17 @@ code, pre, .mono {
 .footer-bottom a:hover { color: var(--accent); }
 
 @media (max-width: 900px) {
-  .footer-inner { grid-template-columns: 1fr 1fr; gap: 2rem; }
+  .footer-inner { grid-template-columns: 1fr 1fr; gap: var(--space-8); }
   .footer-brand-col { grid-column: 1 / -1; }
 }
 @media (max-width: 500px) {
-  .footer-inner { grid-template-columns: 1fr; }
+  .footer-inner { grid-template-columns: 1fr; gap: var(--space-6); }
+  .footer-bottom-inner { flex-direction: column; text-align: center; }
 }
 
-/* ===== Card (generic) ===== */
-
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  transition: border-color var(--transition), background var(--transition);
-  backdrop-filter: blur(6px);
-}
-.card:hover { border-color: var(--border-hover); }
+/* Legacy generic .card removed - Sprint 11 .card is defined once
+   above in the layout section and left un-opinionated on padding
+   so it can be composed with component-specific classes. */
 
 /* ===== Badge / tag ===== */
 

@@ -12,15 +12,15 @@
 
     <div class="profile-stats">
       <div class="profile-stat">
-        <span class="profile-stat-value">{{ len .RecentPosts }}</span>
+        <span class="profile-stat-number">{{ len .RecentPosts }}</span>
         <span class="profile-stat-label">Posts</span>
       </div>
       <div class="profile-stat">
-        <span class="profile-stat-value">{{ .FollowerCount }}</span>
+        <span class="profile-stat-number">{{ .FollowerCount }}</span>
         <span class="profile-stat-label">Followers</span>
       </div>
       <div class="profile-stat">
-        <span class="profile-stat-value">{{ .FollowingCount }}</span>
+        <span class="profile-stat-number">{{ .FollowingCount }}</span>
         <span class="profile-stat-label">Following</span>
       </div>
     </div>
@@ -40,23 +40,25 @@
     </div>
   </header>
 
-  <div class="profile-body">
-    <h2 class="home-section-title">Recent posts</h2>
-    <div id="feed-posts" class="stagger-in">
-      {{ if .RecentPosts }}
-        {{ range .RecentPosts }}
-          {{ template "post-card.html" (dict "Post" . "User" $.User) }}
-        {{ end }}
-      {{ else }}
-        <div class="empty-state">
-          <h3>No posts yet</h3>
-          {{ if .IsSelf }}
-          <p>Share something from your <a href="/feed" hx-boost="true">feed</a>.</p>
-          {{ else }}
-          <p>{{ $p.Username }} hasn't posted yet.</p>
+  <div class="page-container">
+    <div class="single-col">
+      <h2 class="home-section-title">Recent posts</h2>
+      <div id="feed-posts" class="stagger-in">
+        {{ if .RecentPosts }}
+          {{ range .RecentPosts }}
+            {{ template "post-card.html" (dict "Post" . "User" $.User) }}
           {{ end }}
-        </div>
-      {{ end }}
+        {{ else }}
+          <div class="empty-state">
+            <h3>No posts yet</h3>
+            {{ if .IsSelf }}
+            <p>Share something from your <a href="/feed" hx-boost="true">feed</a>.</p>
+            {{ else }}
+            <p>{{ $p.Username }} hasn't posted yet.</p>
+            {{ end }}
+          </div>
+        {{ end }}
+      </div>
     </div>
   </div>
 </div>

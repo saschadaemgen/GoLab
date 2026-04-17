@@ -2,9 +2,9 @@
 {{ $joined := .JoinedChannels }}
 {{ $suggested := .Suggested }}
 
-<aside class="feed-sidebar">
-  <section class="sidebar-section">
-    <h3 class="sidebar-title">Your channels</h3>
+<aside>
+  <section class="sidebar-card">
+    <h4 class="sidebar-title">Your channels</h4>
     {{ if $joined }}
     <ul class="sidebar-list">
       {{ range $joined }}
@@ -17,13 +17,13 @@
       {{ end }}
     </ul>
     {{ else }}
-    <p class="sidebar-empty">You haven't joined any channels yet. <a href="/explore" hx-boost="true">Discover channels</a>.</p>
+    <p class="sidebar-text">You haven't joined any channels yet. <a href="/explore" hx-boost="true">Discover</a>.</p>
     {{ end }}
   </section>
 
   {{ if $suggested }}
-  <section class="sidebar-section">
-    <h3 class="sidebar-title">Suggested</h3>
+  <section class="sidebar-card">
+    <h4 class="sidebar-title">Suggested</h4>
     <ul class="sidebar-list">
       {{ range $suggested }}
       <li>
@@ -37,8 +37,8 @@
   </section>
   {{ end }}
 
-  <section class="sidebar-section">
-    <h3 class="sidebar-title">Create</h3>
+  <section class="sidebar-card">
+    <h4 class="sidebar-title">Create</h4>
     <a href="/explore#create" class="btn btn-outline btn-sm" hx-boost="true" style="width:100%;justify-content:center;">
       New channel
     </a>

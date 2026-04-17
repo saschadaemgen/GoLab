@@ -4,32 +4,64 @@
 /* ===== Hero (home page) ===== */
 
 .hero {
-  padding: 3rem 1.5rem 4rem;
+  padding: var(--space-12) var(--content-padding) var(--space-8);
   text-align: center;
-  max-width: 800px;
+  max-width: 720px;
   margin: 0 auto;
 }
 .hero-title {
-  font-size: clamp(2rem, 5vw, 3.25rem);
-  font-weight: 900;
-  line-height: 1.1;
+  font-size: clamp(2rem, 6vw, var(--font-2xl));
+  font-weight: var(--weight-extrabold);
+  line-height: var(--leading-tight);
   color: var(--text-bright);
-  margin-bottom: 1rem;
-  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-4);
+  letter-spacing: -0.03em;
 }
-.hero-title .accent { color: var(--accent); }
+.hero-title .accent,
+.hero-accent { color: var(--accent); }
 .hero-subtitle {
-  font-size: 1.1rem;
+  font-size: var(--font-md);
   color: var(--text-dim);
   max-width: 540px;
-  margin: 0 auto 2rem;
-  line-height: 1.6;
+  margin: 0 auto var(--space-8);
+  line-height: var(--leading-relaxed);
 }
+.hero-buttons,
 .hero-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-3);
   justify-content: center;
   flex-wrap: wrap;
+}
+
+/* Feature card grid below hero */
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap);
+  padding: var(--space-8) 0 var(--space-12);
+}
+.feature-card {
+  padding: var(--space-6);
+}
+.feature-title {
+  font-size: var(--font-base);
+  font-weight: var(--weight-bold);
+  color: var(--text-bright);
+  margin: 0 0 var(--space-2);
+}
+.feature-text {
+  font-size: var(--font-sm);
+  color: var(--text-dim);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .features { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .features { grid-template-columns: 1fr; }
+  .hero { padding: var(--space-8) var(--content-padding) var(--space-5); }
 }
 
 .home-section {
@@ -55,18 +87,27 @@
   background: var(--accent);
 }
 
-/* ===== Post card ===== */
+/* ===== Post card (Sprint 11) =====
+   Structured: header (avatar + name + time) -> meta row (space +
+   type badges) -> content -> tags -> actions. Clean dividers
+   between sections. Mobile goes edge-to-edge under 480px so post
+   content uses the full narrow viewport. */
 
 .post-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-  transition: border-color var(--transition);
-  backdrop-filter: blur(6px);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.post-card:hover { border-color: var(--border-hover); }
+.post-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+[data-theme="dark"] .post-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
 
 .post-header {
   display: flex;
@@ -160,33 +201,58 @@ img.avatar {
 
 .post-actions {
   display: flex;
-  gap: 1.8rem;
-  padding-top: 0.5rem;
+  align-items: center;
+  gap: var(--space-5);
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
   border-top: 1px solid var(--border);
-  margin-top: 0.75rem;
 }
 .post-action {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
   color: var(--text-dim);
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   cursor: pointer;
-  transition: color var(--transition);
+  transition: color 0.15s ease, background 0.15s ease;
   background: none;
   border: none;
-  padding: 0.25rem 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   font-family: inherit;
+  text-decoration: none;
 }
-.post-action:hover { color: var(--accent); }
-.post-action.active { color: var(--accent); }
+.post-action:hover {
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+.post-action.active,
+.post-action.reacted {
+  color: var(--accent);
+}
 .post-action svg {
   width: 16px; height: 16px;
   stroke: currentColor;
   fill: none;
   stroke-width: 2;
+  flex-shrink: 0;
 }
-.post-action.active svg { fill: var(--accent); }
+.post-action.active svg,
+.post-action.reacted svg { fill: var(--accent); }
+
+/* Edge-to-edge post cards on very narrow phones. The card's own
+   border/radius feels fussy at 375px; running full-bleed with just
+   top/bottom dividers gives more content room. */
+@media (max-width: 480px) {
+  .post-card {
+    padding: var(--space-4);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    margin-left: calc(-1 * var(--content-padding));
+    margin-right: calc(-1 * var(--content-padding));
+  }
+}
 
 /* ===== Compose box ===== */
 
@@ -301,81 +367,58 @@ img.avatar {
   letter-spacing: 0.08em;
 }
 
-/* ===== Feed layout ===== */
-
+/* Legacy feed-layout kept for any templates still referencing it.
+   New pages use .page-container > .two-col from main.css. */
 .feed-layout {
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 2rem;
-  max-width: 1040px;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+  gap: var(--gap);
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: 1.5rem 1.5rem 4rem;
+  padding: var(--space-6) var(--content-padding) var(--space-10);
 }
 .feed-main { min-width: 0; }
-.feed-sidebar > * { margin-bottom: 1rem; }
+.feed-sidebar > * { margin-bottom: var(--space-4); }
 
-@media (max-width: 880px) {
+@media (max-width: 1024px) {
   .feed-layout {
     grid-template-columns: 1fr;
   }
   .feed-sidebar { order: -1; }
 }
 
-/* ===== Sidebar sections ===== */
+/* ===== Sidebar link list (used inside .sidebar-card, Sprint 11) ===== */
 
-.sidebar-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
-  backdrop-filter: blur(6px);
-}
-.sidebar-title {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-bright);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border);
-}
-.sidebar-list { list-style: none; }
-.sidebar-list li { margin-bottom: 0.6rem; }
+.sidebar-list { list-style: none; padding: 0; margin: 0; }
+.sidebar-list li { margin-bottom: var(--space-2); }
 .sidebar-list li:last-child { margin-bottom: 0; }
 .sidebar-link {
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: var(--text);
-  font-size: 0.92rem;
-  padding: 0.25rem 0;
+  font-size: var(--font-sm);
+  padding: var(--space-1) 0;
   text-decoration: none;
+  transition: color 0.15s ease;
 }
 .sidebar-link:hover { color: var(--accent); }
 .sidebar-count {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
+  font-size: var(--font-xs);
   color: var(--text-dim);
-}
-.sidebar-empty {
-  color: var(--text-dim);
-  font-size: 0.9rem;
-  line-height: 1.5;
 }
 
-/* ===== Profile ===== */
+/* ===== Profile (Sprint 11) ===== */
 
 .profile-header {
-  max-width: 720px;
-  margin: 1.5rem auto 2.5rem;
-  padding: 2.5rem 2rem;
   text-align: center;
+  padding: var(--space-10) var(--content-padding) var(--space-8);
+  border-bottom: 1px solid var(--border);
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  backdrop-filter: blur(6px);
+}
+@media (max-width: 768px) {
+  .profile-header { padding: var(--space-8) var(--content-padding) var(--space-6); }
 }
 .profile-avatar {
   width: 96px; height: 96px;
@@ -418,22 +461,30 @@ img.avatar {
 .profile-stats {
   display: flex;
   justify-content: center;
-  gap: 2.2rem;
-  margin: 1rem 0 1.5rem;
+  gap: var(--space-10);
+  margin: var(--space-5) 0 var(--space-6);
 }
 .profile-stat { text-align: center; }
+.profile-stat-number,
 .profile-stat-value {
   display: block;
-  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
   color: var(--text-bright);
-  font-size: 1.15rem;
+  line-height: var(--leading-tight);
 }
 .profile-stat-label {
-  font-size: 0.75rem;
+  display: block;
+  font-size: var(--font-xs);
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-family: 'JetBrains Mono', monospace;
+  margin-top: var(--space-1);
+}
+@media (max-width: 480px) {
+  .profile-stats { gap: var(--space-6); }
 }
 .profile-actions {
   display: flex;
@@ -442,21 +493,20 @@ img.avatar {
 }
 
 .profile-body {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 0 1.5rem 4rem;
+  /* layout now handled by .page-container > .single-col */
 }
 
 /* ===== Channel header ===== */
 
 .channel-page-header {
-  max-width: 720px;
-  margin: 1.5rem auto 2rem;
-  padding: 2rem;
+  margin: 0 0 var(--space-6);
+  padding: var(--space-8) var(--space-6);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(6px);
+}
+@media (max-width: 480px) {
+  .channel-page-header { padding: var(--space-5); }
 }
 .channel-page-title {
   display: flex;
@@ -491,24 +541,25 @@ img.avatar {
 }
 
 .channel-page-body {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 0 1.5rem 4rem;
+  /* layout now handled by .page-container > .single-col */
 }
 
 /* ===== Auth screens ===== */
 
 .auth-container {
   max-width: 440px;
-  margin: 2.5rem auto 4rem;
-  padding: 0 1.5rem;
+  margin: 0 auto;
+  padding: var(--space-10) var(--content-padding) var(--space-10);
 }
 .auth-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 2.5rem;
-  backdrop-filter: blur(6px);
+  padding: var(--space-10);
+}
+@media (max-width: 480px) {
+  .auth-container { padding: var(--space-6) var(--content-padding) var(--space-8); }
+  .auth-card { padding: var(--space-6); }
 }
 .auth-title {
   font-size: 1.6rem;
@@ -535,26 +586,27 @@ img.avatar {
 /* ===== Explore grid ===== */
 
 .explore-grid {
-  max-width: 980px;
-  margin: 2rem auto 4rem;
-  padding: 0 1.5rem;
+  margin: var(--space-4) 0 var(--space-10);
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
+  gap: var(--gap);
 }
-
 .explore-header {
-  max-width: 980px;
-  margin: 1.5rem auto 1rem;
-  padding: 0 1.5rem;
+  padding: var(--space-8) 0 var(--space-4);
 }
 .explore-header h1 {
-  font-size: 1.8rem;
-  margin-bottom: 0.3rem;
+  font-size: var(--font-xl);
+  font-weight: var(--weight-extrabold);
+  margin: 0 0 var(--space-1);
+  letter-spacing: -0.02em;
 }
 .explore-header p {
   color: var(--text-dim);
-  font-size: 0.95rem;
+  font-size: var(--font-base);
+  margin: 0;
+}
+@media (max-width: 768px) {
+  .explore-header { padding: var(--space-5) 0 var(--space-3); }
 }
 
 /* ===== Empty states ===== */
@@ -849,20 +901,18 @@ img.avatar {
    SPRINT 10 - Tag page
 ================================================================ */
 
-.tag-page {
-  max-width: 720px;
-  margin: 0 auto;
-  padding-bottom: 4rem;
-}
 .tag-header {
-  padding: 1.5rem;
+  padding: var(--space-8) var(--content-padding);
   border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
 }
 .tag-header-inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 .tag-title {
@@ -892,14 +942,11 @@ img.avatar {
   color: var(--text-dim);
   margin: 0.5rem 0 0;
 }
-.tag-body {
-  padding: 1.5rem;
-}
+/* .tag-body removed - content now lives inside .page-container > .single-col */
 
 @media (max-width: 640px) {
-  .tag-header { padding: 1rem; }
-  .tag-title { font-size: 1.4rem; }
-  .tag-body { padding: 1rem; }
+  .tag-header { padding: var(--space-5) var(--content-padding); }
+  .tag-title { font-size: var(--font-lg); }
 }
 
 /* ================================================================
@@ -1135,57 +1182,78 @@ img.avatar {
 }
 
 /* ================================================================
-   SPRINT 10 - Space bar (below navbar, above content).
-
-   Horizontally scrollable pill bar. Each pill's accent color is
-   carried in --space-color so hover/active can tint that color
-   without duplicating per-space CSS.
-
-   The bar sits in normal document flow (not fixed), so it scrolls
-   away under the still-fixed navbar when the user scrolls down.
+   SPRINT 11 - Space bar: sticky under the fixed navbar, backdrop-
+   blurred, count badges, mobile-compact. Each pill carries its
+   space color in the --space-color custom property so hover/active
+   can tint per-space without duplicating CSS.
 ================================================================ */
 
 .space-bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--content-padding);
+  background: rgba(var(--bg-card-rgb), 0.88);
+  border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-card);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  position: sticky;
+  top: var(--header-total);
+  z-index: 500;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .space-bar::-webkit-scrollbar { display: none; }
 
 .space-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
   white-space: nowrap;
   text-decoration: none;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.15s ease;
   cursor: pointer;
   flex-shrink: 0;
+  position: relative;
 }
 .space-pill:hover {
   border-color: var(--space-color);
   color: var(--space-color);
+  background: var(--bg-card-hover);
+}
+.space-pill:active {
+  transform: scale(0.97);
 }
 .space-pill.active {
   border-color: var(--space-color);
   background: var(--space-color);
   color: #fff;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.space-pill.active::after {
+  /* Little dot below the active pill. Sits inside the sticky bar; the
+     bar's border-bottom clips it cleanly. */
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--space-color);
 }
 
 .space-icon {
@@ -1196,128 +1264,185 @@ img.avatar {
   font-size: 0.95rem;
   line-height: 1;
 }
+/* Post-count badge sits flush on the right of each pill. Renders in
+   the space's own tint on inactive pills, white-on-transparent on the
+   active pill. */
 .space-count {
+  display: inline-block;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
-  opacity: 0.7;
-  padding: 0 0.25rem;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--space-color) 15%, transparent);
+  color: var(--space-color);
+  line-height: 1.4;
+}
+.space-pill.active .space-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 @media (max-width: 768px) {
-  .space-bar { padding: 0.5rem 1rem; gap: 0.35rem; }
-  .space-pill { font-size: 0.8rem; padding: 0.3rem 0.7rem; }
-  .space-name { /* keep visible on mobile */ }
-  .space-icon { font-size: 0.9rem; }
+  .space-bar {
+    padding: var(--space-2) var(--content-padding);
+    gap: var(--space-1);
+  }
+  .space-pill {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-xs);
+  }
+  /* Hide count badges on mobile - room for more pills instead. */
+  .space-count { display: none; }
 }
 
 /* ================================================================
-   SPRINT 10 - Space page layout: header, type tabs, sidebar.
+   SPRINT 11 - Space page: gradient header, big icon tile, stats,
+   type tabs. The header and type tabs span the full viewport width
+   while the posts below live inside .page-container > .two-col.
 ================================================================ */
 
-.space-page {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding-bottom: 4rem;
-}
-
 .space-header {
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-8) var(--content-padding);
+  border-bottom: 1px solid var(--border);
+}
+.space-header::before {
+  /* Soft gradient wash in the space colour. Non-interactive. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--space-color) 12%, transparent) 0%,
+    transparent 60%
+  );
+  pointer-events: none;
+}
+.space-header-inner {
+  position: relative;
+  z-index: 1;
+  max-width: var(--content-max);
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-6);
 }
 .space-header-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-5);
   min-width: 0;
 }
 .space-header-icon {
-  display: inline-flex;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px; height: 52px;
-  border-radius: 12px;
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
+  font-size: 1.8rem;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-weight: var(--weight-bold);
+  border: 2px solid var(--space-color);
+  color: var(--space-color);
+  background: color-mix(in srgb, var(--space-color) 10%, transparent);
   flex-shrink: 0;
 }
 .space-title {
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: var(--font-xl);
+  font-weight: var(--weight-extrabold);
   color: var(--text-bright);
   margin: 0;
-  line-height: 1.2;
+  letter-spacing: -0.02em;
+  line-height: var(--leading-tight);
 }
 .space-description {
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   color: var(--text-dim);
-  margin: 0.25rem 0 0;
+  margin: var(--space-1) 0 0;
   max-width: 640px;
+  line-height: var(--leading-normal);
 }
 .space-stats {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-8);
   flex-shrink: 0;
 }
 .space-stat {
-  font-size: 0.85rem;
-  color: var(--text-dim);
+  text-align: center;
+}
+.space-stat-number {
+  display: block;
   font-family: 'JetBrains Mono', monospace;
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+  color: var(--space-color);
+  line-height: var(--leading-tight);
 }
-.space-stat strong {
-  color: var(--text-bright);
-  font-weight: 700;
+.space-stat-label {
+  display: block;
+  font-size: var(--font-xs);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: var(--space-1);
 }
 
-@media (max-width: 640px) {
-  .space-header { flex-direction: column; align-items: flex-start; padding: 1rem; }
-  .space-header-icon { width: 44px; height: 44px; font-size: 1.2rem; }
-  .space-title { font-size: 1.2rem; }
+@media (max-width: 768px) {
+  .space-header { padding: var(--space-6) var(--content-padding); }
+  .space-header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+  .space-header-info {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-4);
+  }
+  .space-header-icon { width: 52px; height: 52px; font-size: 1.4rem; }
+  .space-title { font-size: var(--font-lg); }
+  .space-stats { gap: var(--space-6); }
 }
 
-/* Type filter tabs below the space header (SP3 wires them up) */
+/* Type filter tabs: full-width row with an inner max-width so the
+   tabs align with the rest of the content. */
 .type-tabs {
-  display: flex;
-  gap: 0;
   border-bottom: 1px solid var(--border);
-  padding: 0 1.5rem;
   overflow-x: auto;
   scrollbar-width: none;
+  background: var(--bg-card);
 }
 .type-tabs::-webkit-scrollbar { display: none; }
+.type-tabs-inner {
+  display: flex;
+  gap: 0;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 var(--content-padding);
+}
 .type-tab {
-  padding: 0.65rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 500;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
   color: var(--text-dim);
   text-decoration: none;
   border-bottom: 2px solid transparent;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;
 }
 .type-tab:hover { color: var(--text-bright); }
 .type-tab.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
-
-/* Space layout grid: posts + sidebar */
-.space-body {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 1.5rem;
-  padding: 1.5rem;
-}
-@media (max-width: 880px) {
-  .space-body { grid-template-columns: 1fr; }
-  .space-sidebar { order: -1; } /* sidebar above posts on mobile */
+@media (max-width: 768px) {
+  .type-tab { padding: var(--space-2) var(--space-3); font-size: var(--font-xs); }
 }
 
 .sidebar-card {
@@ -2089,10 +2214,9 @@ img.avatar {
    FEATURE 4: Thread view
 ================================================================ */
 
+/* .thread-container is legacy - thread page now uses .page-container > .single-col */
 .thread-container {
-  max-width: 720px;
-  margin: 1.5rem auto 4rem;
-  padding: 0 1.5rem;
+  /* removed: wrapping now handled by page layout primitives */
 }
 .thread-root {
   border-left: 3px solid var(--accent);
@@ -2135,7 +2259,38 @@ img.avatar {
 .nav-search {
   position: relative;
   flex: 0 1 280px;
-  margin: 0 0.5rem;
+  margin: 0 var(--space-2);
+  transition: flex-basis 0.2s ease;
+}
+@media (max-width: 900px) {
+  .nav-search { flex: 0 1 200px; }
+}
+@media (max-width: 768px) {
+  .nav-search { flex: 0 1 160px; }
+}
+@media (max-width: 560px) {
+  /* Search field collapses to its icon to keep the navbar one row. */
+  .nav-search {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  .nav-search .search-input {
+    width: 36px;
+    padding: var(--space-1) 0 var(--space-1) 28px;
+    border-color: transparent;
+    cursor: pointer;
+    color: transparent;
+  }
+  .nav-search .search-input::placeholder { color: transparent; }
+  .nav-search .search-input:focus {
+    width: min(70vw, 280px);
+    padding: var(--space-1) var(--space-2) var(--space-1) 2.1rem;
+    border-color: var(--accent);
+    color: var(--text);
+    cursor: text;
+  }
+  .nav-search .search-input:focus::placeholder { color: var(--text-dim); }
+  .nav-search .search-kbd { display: none; }
 }
 .search-input-wrap {
   position: relative;
@@ -2262,9 +2417,9 @@ img.avatar {
 ================================================================ */
 
 .admin-page {
-  max-width: 1080px;
-  margin: 1.5rem auto 4rem;
-  padding: 0 1.5rem;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-6) var(--content-padding) var(--space-10);
 }
 .admin-header { margin-bottom: 1.5rem; }
 .admin-header h1 { font-size: 1.75rem; }
@@ -2272,9 +2427,15 @@ img.avatar {
 
 .admin-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--gap);
+  margin-bottom: var(--space-8);
+}
+@media (max-width: 768px) {
+  .admin-stats { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .admin-stats { grid-template-columns: 1fr; }
 }
 .admin-stat-card {
   background: var(--bg-card);
@@ -2322,11 +2483,12 @@ img.avatar {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
-  backdrop-filter: blur(6px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .admin-table {
   width: 100%;
+  min-width: 600px; /* force horizontal scroll on phones instead of squishing */
   border-collapse: collapse;
 }
 .admin-table th {

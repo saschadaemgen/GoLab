@@ -1,11 +1,15 @@
 {{ define "content" }}
 {{ with .Content }}
 {{ $sp := .Space }}
-<div class="space-page fade-in">
-  <!-- Header: icon, name, description, stats -->
-  <header class="space-header">
+
+<!-- Gradient space header (full width, under the space bar).
+     The gradient pulls the space's brand colour through a soft
+     left-to-right wash so every space feels tonally distinct. -->
+<header class="space-header fade-in"
+        style="--space-color: {{ $sp.Color }};">
+  <div class="space-header-inner">
     <div class="space-header-info">
-      <div class="space-header-icon" style="color: {{ $sp.Color }}; border-color: {{ $sp.Color }};">
+      <div class="space-header-icon">
         {{ if $sp.Icon }}{{ $sp.Icon }}{{ else }}#{{ end }}
       </div>
       <div>
@@ -16,12 +20,17 @@
       </div>
     </div>
     <div class="space-stats">
-      <span class="space-stat"><strong>{{ $sp.PostCount }}</strong> posts</span>
+      <div class="space-stat">
+        <span class="space-stat-number">{{ $sp.PostCount }}</span>
+        <span class="space-stat-label">Posts</span>
+      </div>
     </div>
-  </header>
+  </div>
+</header>
 
-  <!-- Post type filter tabs (SP3 will wire the links; SP2 renders them) -->
-  <nav class="type-tabs" aria-label="Filter by post type">
+<!-- Type filter tabs, also spanning full width. -->
+<nav class="type-tabs" aria-label="Filter by post type">
+  <div class="type-tabs-inner">
     <a href="/s/{{ $sp.Slug }}"
        class="type-tab{{ if eq .ActiveType "" }} active{{ end }}"
        hx-boost="true">All</a>
@@ -43,10 +52,11 @@
     <a href="/s/{{ $sp.Slug }}?type=link"
        class="type-tab{{ if eq .ActiveType "link" }} active{{ end }}"
        hx-boost="true">Links</a>
-  </nav>
+  </div>
+</nav>
 
-  <!-- Body: posts + sidebar -->
-  <div class="space-body">
+<div class="page-container">
+  <div class="two-col">
     <main>
       {{ if $.User }}
       {{ template "compose.html" (dict
@@ -70,7 +80,7 @@
       {{ end }}
     </main>
 
-    <aside class="space-sidebar">
+    <aside>
       {{ if .PopularTags }}
       <section class="sidebar-card">
         <h4 class="sidebar-title">Popular tags</h4>

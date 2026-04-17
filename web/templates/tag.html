@@ -1,22 +1,22 @@
 {{ define "content" }}
 {{ with .Content }}
 {{ $tag := .Tag }}
-<div class="tag-page fade-in">
-  <header class="tag-header">
-    <div class="tag-header-inner">
-      <h1 class="tag-title">#{{ $tag.Name }}</h1>
-      <div class="tag-meta">
-        <span class="tag-post-count">
-          <strong>{{ $tag.UseCount }}</strong> {{ if eq $tag.UseCount 1 }}post{{ else }}posts{{ end }}
-        </span>
-      </div>
+<header class="tag-header fade-in">
+  <div class="tag-header-inner">
+    <h1 class="tag-title">#{{ $tag.Name }}</h1>
+    <div class="tag-meta">
+      <span class="tag-post-count">
+        <strong>{{ $tag.UseCount }}</strong> {{ if eq $tag.UseCount 1 }}post{{ else }}posts{{ end }}
+      </span>
     </div>
-    <p class="tag-hint">
-      Posts from any space tagged with <span class="mono">#{{ $tag.Name }}</span>.
-    </p>
-  </header>
+  </div>
+  <p class="tag-hint">
+    Posts from any space tagged with <span class="mono">#{{ $tag.Name }}</span>.
+  </p>
+</header>
 
-  <div class="tag-body">
+<div class="page-container">
+  <div class="single-col">
     {{ if .Posts }}
     <div class="stagger-in">
       {{ range .Posts }}
