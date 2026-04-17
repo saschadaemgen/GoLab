@@ -4,8 +4,8 @@
 <article class="post-card" id="post-{{ $post.ID }}"
          x-data="{ liked: false, count: {{ $post.ReactionCount }} }">
   <header class="post-header">
-    <a href="/u/{{ $post.AuthorUsername }}" hx-boost="true">
-      <div class="post-avatar" aria-hidden="true">{{ initial $post.AuthorUsername }}</div>
+    <a href="/u/{{ $post.AuthorUsername }}" hx-boost="true" class="post-avatar-link">
+      {{ template "avatar" (dict "URL" $post.AuthorAvatarURL "Username" $post.AuthorUsername "Size" "md") }}
     </a>
     <div class="post-meta">
       <a href="/u/{{ $post.AuthorUsername }}" class="post-author" hx-boost="true">

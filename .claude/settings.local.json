@@ -12,7 +12,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:cdn.jsdelivr.net)",
       "WebFetch(domain:highlightjs.org)",
-      "WebFetch(domain:quilljs.com)"
+      "WebFetch(domain:quilljs.com)",
+      "mcp__Claude_Preview__preview_start"
     ],
     "deny": [
       "Bash(*rm -rf*)",

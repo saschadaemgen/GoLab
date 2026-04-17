@@ -3,7 +3,9 @@
 {{ $p := .Profile }}
 <div class="fade-in">
   <header class="profile-header">
-    <div class="profile-avatar">{{ initial $p.Username }}</div>
+    <div class="profile-avatar-wrap">
+      {{ template "avatar" (dict "URL" $p.AvatarURL "Username" $p.Username "Size" "lg") }}
+    </div>
     <h1 class="profile-name">{{ if $p.DisplayName }}{{ $p.DisplayName }}{{ else }}{{ $p.Username }}{{ end }}</h1>
     <div class="profile-username">@{{ $p.Username }}</div>
     {{ if $p.Bio }}<p class="profile-bio">{{ $p.Bio }}</p>{{ end }}

@@ -1,0 +1,20 @@
+{{ define "avatar" }}
+{{- /*
+  Renders a user avatar. Inputs (via dict):
+    URL       - avatar URL (can be empty)
+    Username  - username, used for alt text and initial fallback
+    Size      - "sm" (28px nav), "md" (40px post), "lg" (96px profile)
+*/ -}}
+{{- $cls := "avatar" -}}
+{{- if eq .Size "sm" }}{{ $cls = "avatar avatar-sm" }}{{ end -}}
+{{- if eq .Size "md" }}{{ $cls = "avatar avatar-md" }}{{ end -}}
+{{- if eq .Size "lg" }}{{ $cls = "avatar avatar-lg" }}{{ end -}}
+
+{{- if .URL -}}
+<img src="{{ .URL }}" alt="{{ .Username }}"
+     class="{{ $cls }} img-reveal" loading="lazy"
+     onload="this.classList.add('loaded')" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'{{ $cls }} avatar-initial',textContent:'{{ initial .Username }}'}))">
+{{- else -}}
+<span class="{{ $cls }} avatar-initial" aria-hidden="true">{{ initial .Username }}</span>
+{{- end -}}
+{{ end }}

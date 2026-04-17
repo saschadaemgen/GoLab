@@ -87,6 +87,42 @@
   font-family: 'JetBrains Mono', monospace;
   flex-shrink: 0;
 }
+
+/* ================================================================
+   Shared avatar styles (Sprint 9).
+
+   The {{ template "avatar" }} partial emits either an <img> (when
+   the user has uploaded one) or a <span> with the capital initial
+   letter (fallback). Both share the `.avatar` base so the circle
+   stays the same size whether or not an image is available. Size
+   modifiers (.avatar-sm, -md, -lg) override width/height/font-size.
+================================================================ */
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  overflow: hidden;
+  flex-shrink: 0;
+  line-height: 1;
+  vertical-align: middle;
+}
+img.avatar {
+  object-fit: cover;
+  background: var(--bg-deep);
+}
+.avatar-sm { width: 28px;  height: 28px;  font-size: 0.75rem; }
+.avatar-md { width: 40px;  height: 40px;  font-size: 0.95rem; }
+.avatar-lg { width: 96px;  height: 96px;  font-size: 2.2rem; }
+
+/* The `.avatar-initial` span needs text-align to center the single
+   letter; flex centering already handles vertical alignment. */
+.avatar-initial { text-align: center; }
 .post-meta { flex: 1; min-width: 0; }
 .post-author {
   font-weight: 600;
@@ -352,6 +388,14 @@
   font-size: 2.2rem;
   font-weight: 700;
   font-family: 'JetBrains Mono', monospace;
+  margin: 0 auto 1rem;
+}
+
+/* Wrapper around the avatar partial on the profile page. Keeps the
+   centering/margin without baking layout into the shared .avatar class. */
+.profile-avatar-wrap {
+  display: flex;
+  justify-content: center;
   margin: 0 auto 1rem;
 }
 .profile-name {
