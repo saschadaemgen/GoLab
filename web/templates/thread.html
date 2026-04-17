@@ -13,7 +13,10 @@
 
   {{ if $.User }}
   <div class="thread-reply-compose">
-    <form id="reply-form" class="compose-box"
+    <form id="reply-form"
+          method="POST"
+          action="/api/posts"
+          class="compose-box"
           x-data="{ content: '', max: 5000 }"
           data-parent-id="{{ .Post.ID }}">
       <textarea class="compose-textarea input-glow compose-expanded"

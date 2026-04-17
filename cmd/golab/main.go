@@ -193,6 +193,11 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		r.Use(requireAuthRedirect)
 		r.Get("/feed", pageH.FeedPage)
 		r.Get("/settings", pageH.SettingsPage)
+		// POST /settings is the no-JS fallback for the settings form.
+		// HTML forms can't use PUT, so we expose a POST alias that
+		// reuses the same handler. UpdateMe reads form-encoded bodies
+		// and redirects back to /settings on success.
+		r.Post("/settings", profileH.UpdateMe)
 	})
 
 	// Admin page (HTML)

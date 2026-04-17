@@ -34,10 +34,88 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+// wantsFormResponse reports whether the caller submitted an HTML form
+// (application/x-www-form-urlencoded or multipart/form-data). Those
+// callers get an HTTP 303 redirect on success so the URL bar ends up
+// clean. AJAX/JSON callers get JSON.
+func wantsFormResponse(r *http.Request) bool {
+	ct := r.Header.Get("Content-Type")
+	return strings.HasPrefix(ct, "application/x-www-form-urlencoded") ||
+		strings.HasPrefix(ct, "multipart/form-data")
+}
+
+// decodeRegister reads a registration request from either JSON or
+// form-encoded body. Returns the parsed request or an error.
+func decodeRegister(r *http.Request) (registerRequest, error) {
 	var req registerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if wantsFormResponse(r) {
+		if err := r.ParseForm(); err != nil {
+			return req, err
+		}
+		req.Username = r.Form.Get("username")
+		req.Email = r.Form.Get("email")
+		req.Password = r.Form.Get("password")
+		return req, nil
+	}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	return req, err
+}
+
+// decodeLogin reads a login request from either JSON or form-encoded body.
+func decodeLogin(r *http.Request) (loginRequest, error) {
+	var req loginRequest
+	if wantsFormResponse(r) {
+		if err := r.ParseForm(); err != nil {
+			return req, err
+		}
+		req.Email = r.Form.Get("email")
+		req.Password = r.Form.Get("password")
+		return req, nil
+	}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	return req, err
+}
+
+// redirectOrJSON handles the success path based on how the client submitted.
+// Form submissions get a 303 See Other to `path` so the browser does a fresh
+// GET and the URL bar loses the POST context. AJAX callers get `jsonBody`.
+func redirectOrJSON(w http.ResponseWriter, r *http.Request, path string, jsonBody any) {
+	if wantsFormResponse(r) {
+		http.Redirect(w, r, path, http.StatusSeeOther)
+		return
+	}
+	writeJSON(w, http.StatusOK, jsonBody)
+}
+
+// errorRedirectOrJSON reports an error either as JSON (AJAX) or as a
+// redirect back to errorPath with ?error=... (form fallback). Keeps the
+// password out of the URL even in the error path.
+func errorRedirectOrJSON(w http.ResponseWriter, r *http.Request, errorPath string, status int, message string) {
+	if wantsFormResponse(r) {
+		http.Redirect(w, r, errorPath+"?error="+urlEncode(message), http.StatusSeeOther)
+		return
+	}
+	writeError(w, status, message)
+}
+
+func urlEncode(s string) string {
+	// Minimal URL-encode: only encode the characters that break a query string.
+	// net/url would be fuller but we want to avoid adding an import path here
+	// just for this helper.
+	r := strings.NewReplacer(
+		"%", "%25",
+		"&", "%26",
+		"?", "%3F",
+		" ", "+",
+		"\n", "%0A",
+	)
+	return r.Replace(s)
+}
+
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	req, err := decodeRegister(r)
+	if err != nil {
+		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -46,19 +124,19 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Validate username
 	if !usernameRegex.MatchString(req.Username) {
-		writeError(w, http.StatusBadRequest, "username must be 3-32 alphanumeric characters or underscores")
+		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, "username must be 3-32 alphanumeric characters or underscores")
 		return
 	}
 
 	// Validate email
 	if !emailRegex.MatchString(req.Email) {
-		writeError(w, http.StatusBadRequest, "invalid email address")
+		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, "invalid email address")
 		return
 	}
 
-	// Validate password
-	if len(req.Password) < 8 {
-		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+	// Validate password per NIST SP 800-63B: length only, 8-128 chars.
+	if err := validatePassword(req.Password); err != nil {
+		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -66,11 +144,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.Users.FindByUsername(r.Context(), req.Username)
 	if err != nil {
 		slog.Error("register: find by username", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
 		return
 	}
 	if existing != nil {
-		writeError(w, http.StatusConflict, "username already taken")
+		errorRedirectOrJSON(w, r, "/register", http.StatusConflict, "username already taken")
 		return
 	}
 
@@ -78,11 +156,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	existing, err = h.Users.FindByEmail(r.Context(), req.Email)
 	if err != nil {
 		slog.Error("register: find by email", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
 		return
 	}
 	if existing != nil {
-		writeError(w, http.StatusConflict, "email already registered")
+		errorRedirectOrJSON(w, r, "/register", http.StatusConflict, "email already registered")
 		return
 	}
 
@@ -90,7 +168,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		slog.Error("register: hash password", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -98,7 +176,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	user, err := h.Users.Create(r.Context(), req.Username, req.Email, hash)
 	if err != nil {
 		slog.Error("register: create user", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -106,22 +184,43 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := h.Sessions.Create(r.Context(), user.ID)
 	if err != nil {
 		slog.Error("register: create session", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	h.setSessionCookie(w, sessionID)
 
 	slog.Info("user registered", "username", user.Username, "id", user.ID)
-	writeJSON(w, http.StatusCreated, map[string]any{
+	redirectOrJSON(w, r, "/feed", map[string]any{
 		"user": user,
 	})
 }
 
+// validatePassword enforces the NIST SP 800-63B recommendation of length
+// only, no composition rules. Minimum 8, maximum 128 characters.
+func validatePassword(pw string) error {
+	if len(pw) < 8 {
+		return errPasswordTooShort
+	}
+	if len(pw) > 128 {
+		return errPasswordTooLong
+	}
+	return nil
+}
+
+var (
+	errPasswordTooShort = &passwordError{"password must be at least 8 characters"}
+	errPasswordTooLong  = &passwordError{"password must not exceed 128 characters"}
+)
+
+type passwordError struct{ msg string }
+
+func (e *passwordError) Error() string { return e.msg }
+
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	req, err := decodeLogin(r)
+	if err != nil {
+		errorRedirectOrJSON(w, r, "/login", http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -130,35 +229,35 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	user, err := h.Users.FindByEmail(r.Context(), req.Email)
 	if err != nil {
 		slog.Error("login: find by email", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		errorRedirectOrJSON(w, r, "/login", http.StatusInternalServerError, "internal error")
 		return
 	}
 	if user == nil {
-		writeError(w, http.StatusUnauthorized, "invalid email or password")
+		errorRedirectOrJSON(w, r, "/login", http.StatusUnauthorized, "invalid email or password")
 		return
 	}
 
 	if !auth.CheckPassword(user.PasswordHash, req.Password) {
-		writeError(w, http.StatusUnauthorized, "invalid email or password")
+		errorRedirectOrJSON(w, r, "/login", http.StatusUnauthorized, "invalid email or password")
 		return
 	}
 
 	if user.Banned {
-		writeError(w, http.StatusForbidden, "this account has been banned")
+		errorRedirectOrJSON(w, r, "/login", http.StatusForbidden, "this account has been banned")
 		return
 	}
 
 	sessionID, err := h.Sessions.Create(r.Context(), user.ID)
 	if err != nil {
 		slog.Error("login: create session", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		errorRedirectOrJSON(w, r, "/login", http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	h.setSessionCookie(w, sessionID)
 
 	slog.Info("user logged in", "username", user.Username, "id", user.ID)
-	writeJSON(w, http.StatusOK, map[string]any{
+	redirectOrJSON(w, r, "/feed", map[string]any{
 		"user": user,
 	})
 }

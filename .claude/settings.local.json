@@ -1,31 +1,29 @@
 {
   "permissions": {
     "allow": [
-      "Bash(go version:*)",
-      "Bash(npm --version)",
-      "Bash(git checkout:*)",
-      "Bash(go mod:*)",
-      "Bash(go build:*)",
-      "mcp__Claude_in_Chrome__tabs_context_mcp",
-      "WebFetch(domain:simplego.dev)",
-      "Bash(curl -sL https://simplego.dev)",
-      "Bash(curl -sL https://simplego.dev/assets/css/main.css)",
-      "Bash(curl -sL https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js -o web/static/js/htmx.min.js)",
-      "Bash(curl -sL https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js -o web/static/js/alpine.min.js)",
-      "Bash(go get *)",
-      "Bash(go vet *)",
-      "Bash(go run *)",
-      "Bash(go test *)",
-      "Bash(git add *)",
-      "Bash(git commit -m ' *)",
-      "Bash(git reset *)",
-      "Bash(tee /tmp/tidy.out)",
-      "Bash(echo \"---exit=$?---\")",
-      "Bash(curl -sL https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js -o web/static/js/quill.min.js)",
-      "Bash(curl -sL https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css -o web/static/css/quill.snow.css)",
-      "Bash(curl -sL \"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js\" -o web/static/js/highlight.min.js)",
-      "Bash(curl -sL \"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css\" -o web/static/css/highlight-github-dark.min.css)",
-      "mcp__Claude_Preview__preview_start"
+      "Read",
+      "Edit",
+      "MultiEdit",
+      "Write",
+      "Bash(*)",
+      "WebSearch",
+      "WebFetch(domain:pkg.go.dev)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "WebFetch(domain:highlightjs.org)",
+      "WebFetch(domain:quilljs.com)"
+    ],
+    "deny": [
+      "Bash(*rm -rf*)",
+      "Bash(*sudo*)",
+      "Bash(*git push*)",
+      "Bash(*git remote*)",
+      "Bash(*go mod edit -go*)",
+      "Bash(*DROP TABLE*)",
+      "Bash(*DROP COLUMN*)",
+      "Bash(*goose down*)",
+      "Bash(*migrate-down*)"
     ]
   }
 }

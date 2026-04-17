@@ -23,6 +23,22 @@ type updateProfileRequest struct {
 	AvatarURL   string `json:"avatar_url"`
 }
 
+// decodeUpdateProfile reads from JSON or form body.
+func decodeUpdateProfile(r *http.Request) (updateProfileRequest, error) {
+	var req updateProfileRequest
+	if wantsFormResponse(r) {
+		if err := r.ParseForm(); err != nil {
+			return req, err
+		}
+		req.DisplayName = r.Form.Get("display_name")
+		req.Bio = r.Form.Get("bio")
+		req.AvatarURL = r.Form.Get("avatar_url")
+		return req, nil
+	}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	return req, err
+}
+
 func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 	username := chi.URLParam(r, "username")
 
@@ -75,24 +91,24 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *ProfileHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 
-	var req updateProfileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	req, err := decodeUpdateProfile(r)
+	if err != nil {
+		errorRedirectOrJSON(w, r, "/settings", http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if len(req.DisplayName) > 64 {
-		writeError(w, http.StatusBadRequest, "display name must be 64 characters or fewer")
+		errorRedirectOrJSON(w, r, "/settings", http.StatusBadRequest, "display name must be 64 characters or fewer")
 		return
 	}
 
 	if err := h.Users.UpdateProfile(r.Context(), user.ID, req.DisplayName, req.Bio, req.AvatarURL); err != nil {
 		slog.Error("update profile", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		errorRedirectOrJSON(w, r, "/settings", http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	redirectOrJSON(w, r, "/settings", map[string]string{"status": "updated"})
 }
 
 func (h *ProfileHandler) Follow(w http.ResponseWriter, r *http.Request) {

@@ -4,7 +4,15 @@
     <h1 class="auth-title">Join GoLab</h1>
     <p class="auth-subtitle">Create your account in under a minute.</p>
 
-    <form id="register-form" autocomplete="off" novalidate>
+    {{ if .Content }}{{ with .Content }}{{ if .Error }}
+    <div class="flash flash-error" role="alert">{{ .Error }}</div>
+    {{ end }}{{ end }}{{ end }}
+
+    <form id="register-form"
+          method="POST"
+          action="/api/register"
+          autocomplete="off"
+          novalidate>
       <div class="form-group">
         <label class="form-label" for="reg-username">Username</label>
         <input class="form-input" type="text" id="reg-username" name="username"
@@ -25,7 +33,7 @@
       <div class="form-group">
         <label class="form-label" for="reg-password">Password</label>
         <input class="form-input" type="password" id="reg-password" name="password"
-               required minlength="8"
+               required minlength="8" maxlength="128"
                autocomplete="new-password"
                placeholder="At least 8 characters">
       </div>

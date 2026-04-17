@@ -75,12 +75,17 @@ func (h *PageHandler) Home(w http.ResponseWriter, r *http.Request) {
 
 // ---------- Register / Login ----------
 
+type authContent struct {
+	Error string
+}
+
 func (h *PageHandler) RegisterPage(w http.ResponseWriter, r *http.Request) {
 	if auth.UserFromContext(r.Context()) != nil {
 		http.Redirect(w, r, "/feed", http.StatusFound)
 		return
 	}
 	data := h.newPageData(r, "Join GoLab")
+	data.Content = authContent{Error: r.URL.Query().Get("error")}
 	if err := h.Render.Render(w, "register", data); err != nil {
 		slog.Error("render register", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -93,6 +98,7 @@ func (h *PageHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := h.newPageData(r, "Login to GoLab")
+	data.Content = authContent{Error: r.URL.Query().Get("error")}
 	if err := h.Render.Render(w, "login", data); err != nil {
 		slog.Error("render login", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

@@ -2,6 +2,8 @@
 {{ $channels := .Channels }}
 {{ $selected := .SelectedChannelID }}
 <form id="compose-form"
+      method="POST"
+      action="/api/posts"
       class="compose-box compose-quill"
       x-data="composeEditor()"
       @submit.prevent="submit()">

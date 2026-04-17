@@ -26,7 +26,10 @@
   <section class="home-section" id="create" style="max-width:640px;margin:3rem auto 4rem;">
     <h2 class="home-section-title">Create a channel</h2>
     <div class="card">
-      <form id="create-channel-form" autocomplete="off">
+      <form id="create-channel-form"
+            method="POST"
+            action="/api/channels"
+            autocomplete="off">
         <div class="form-group">
           <label class="form-label" for="ch-slug">Slug</label>
           <input class="form-input" type="text" id="ch-slug" name="slug"
