@@ -13,6 +13,21 @@
       </a>
       <span class="post-handle">@{{ $post.AuthorUsername }}</span>
       <span class="post-time">{{ timeAgo $post.CreatedAt }}</span>
+
+      {{ if or $post.SpaceName (and $post.PostType (ne $post.PostType "discussion")) }}
+      <div class="post-meta-row">
+        {{ if $post.SpaceName }}
+        <a href="/s/{{ $post.SpaceSlug }}" class="post-space-badge"
+           style="--badge-color: {{ $post.SpaceColor }};"
+           hx-boost="true">
+          {{ $post.SpaceName }}
+        </a>
+        {{ end }}
+        {{ if and $post.PostType (ne $post.PostType "discussion") }}
+        <span class="post-type-badge post-type-{{ $post.PostType }}">{{ $post.PostType }}</span>
+        {{ end }}
+      </div>
+      {{ end }}
     </div>
     {{ if and $currentUser (eq $currentUser.ID $post.AuthorID) }}
     <div class="dropdown" x-data="{ open: false }" style="margin-left:auto;">
@@ -40,6 +55,14 @@
       {{ $post.Content }}
     {{- end -}}
   </div>
+
+  {{ if $post.Tags }}
+  <div class="post-tags">
+    {{ range $post.Tags }}
+    <a href="/t/{{ .Slug }}" class="post-tag" hx-boost="true">#{{ .Name }}</a>
+    {{ end }}
+  </div>
+  {{ end }}
 
   <footer class="post-actions">
     <button class="post-action" data-action="react" data-post-id="{{ $post.ID }}"

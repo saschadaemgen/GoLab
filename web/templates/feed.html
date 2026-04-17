@@ -2,7 +2,11 @@
 {{ with .Content }}
 <div class="feed-layout fade-in">
   <div class="feed-main">
-    {{ template "compose.html" (dict "Channels" .JoinedChannels "SelectedChannelID" 0) }}
+    {{ template "compose.html" (dict
+      "Channels" .JoinedChannels
+      "SelectedChannelID" 0
+      "Spaces" $.Spaces
+      "SelectedSpaceID" 0) }}
 
     <div id="feed-posts" class="stagger-in">
       {{ if .Posts }}

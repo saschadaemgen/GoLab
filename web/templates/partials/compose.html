@@ -1,6 +1,8 @@
 {{ define "compose.html" }}
 {{ $channels := .Channels }}
-{{ $selected := .SelectedChannelID }}
+{{ $selectedChannel := .SelectedChannelID }}
+{{ $spaces := .Spaces }}
+{{ $selectedSpace := .SelectedSpaceID }}
 <form id="compose-form"
       method="POST"
       action="/api/posts"
@@ -8,24 +10,111 @@
       x-data="composeEditor()"
       @submit.prevent="submit()">
 
-  <!-- Quill is mounted here at init(). The toolbar and contenteditable
-       get injected by Quill; we only provide the container. -->
+  <!-- Quill mounts here. The toolbar + contenteditable are injected. -->
   <div x-ref="editor" class="compose-editor"></div>
 
+  <!-- Row: post type radio pills (discussion / question / tutorial / code / showcase / link) -->
+  <div class="compose-type-row" role="radiogroup" aria-label="Post type">
+    <label class="type-radio">
+      <input type="radio" name="post_type" value="discussion" checked>
+      <span class="type-radio-pill">Discussion</span>
+    </label>
+    <label class="type-radio">
+      <input type="radio" name="post_type" value="question">
+      <span class="type-radio-pill">Question</span>
+    </label>
+    <label class="type-radio">
+      <input type="radio" name="post_type" value="tutorial">
+      <span class="type-radio-pill">Tutorial</span>
+    </label>
+    <label class="type-radio">
+      <input type="radio" name="post_type" value="code">
+      <span class="type-radio-pill">Code</span>
+    </label>
+    <label class="type-radio">
+      <input type="radio" name="post_type" value="showcase">
+      <span class="type-radio-pill">Showcase</span>
+    </label>
+    <label class="type-radio">
+      <input type="radio" name="post_type" value="link">
+      <span class="type-radio-pill">Link</span>
+    </label>
+  </div>
+
+  <!-- Row: tag input with autocomplete -->
+  <div class="compose-tags" x-data="tagInput()">
+    <!-- Chips for already-selected tags -->
+    <template x-for="slug in selectedTags" :key="slug">
+      <span class="tag-chip">
+        #<span x-text="slug"></span>
+        <button type="button" class="tag-chip-remove"
+                @click="removeTag(slug)" aria-label="Remove tag">&times;</button>
+      </span>
+    </template>
+
+    <!-- Autocomplete input; wraps to its own row when chips fill the line -->
+    <div class="tag-input-wrap" x-show="selectedTags.length < maxTags">
+      <input type="text"
+             class="tag-input"
+             x-model="query"
+             @input.debounce.200ms="searchTags()"
+             @keydown="handleKey($event)"
+             @focus="searchTags()"
+             placeholder="Add tag (Enter)"
+             maxlength="32"
+             autocomplete="off">
+
+      <!-- Suggestion dropdown -->
+      <div class="tag-suggestions"
+           x-show="suggestions.length > 0 || loading"
+           @click.outside="suggestions = []"
+           x-cloak>
+        <template x-if="loading">
+          <div class="tag-suggestion-item muted">Searching...</div>
+        </template>
+        <template x-for="s in suggestions" :key="s.slug">
+          <button type="button" class="tag-suggestion-item"
+                  @click="addTag(s.slug)">
+            <span>#<span x-text="s.name"></span></span>
+            <span class="tag-suggestion-count" x-text="s.use_count + ' posts'"></span>
+          </button>
+        </template>
+      </div>
+    </div>
+
+    <!-- Hidden input reads the current selection for form submit -->
+    <input type="hidden" name="tags" :value="selectedTags.join(',')">
+  </div>
+
+  <!-- Row: counter + space/channel selects + post button -->
   <div class="compose-footer">
     <span class="compose-count" :class="{ over: charCount > max }">
       <span x-text="charCount">0</span> / 5000
     </span>
 
-    {{ if $channels }}
-    <select class="compose-select" name="channel_id" x-ref="channelSelect">
-      <option value="">Your timeline</option>
-      {{ range $channels }}
-      <option value="{{ .ID }}"{{ if eq .ID $selected }} selected{{ end }}>#{{ .Slug }}</option>
+    {{ if $spaces }}
+    <select class="compose-select compose-space-select" name="space_id">
+      <option value="">Choose space...</option>
+      {{ range $spaces }}
+      <option value="{{ .ID }}"
+              {{ if eq .ID $selectedSpace }}selected{{ end }}>
+        {{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}
+      </option>
       {{ end }}
     </select>
-    {{ else if $selected }}
-    <input type="hidden" name="channel_id" value="{{ $selected }}">
+    {{ else if $selectedSpace }}
+    <input type="hidden" name="space_id" value="{{ $selectedSpace }}">
+    {{ end }}
+
+    {{ if $channels }}
+    <select class="compose-select" name="channel_id">
+      <option value="">No channel</option>
+      {{ range $channels }}
+      <option value="{{ .ID }}"{{ if eq .ID $selectedChannel }} selected{{ end }}>#{{ .Slug }}</option>
+      {{ end }}
+    </select>
+    {{ else if $selectedChannel }}
+    <input type="hidden" name="channel_id" value="{{ $selectedChannel }}">
     {{ end }}
 
     <button type="submit" class="btn btn-primary btn-sm press-effect"

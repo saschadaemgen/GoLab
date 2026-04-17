@@ -846,6 +846,295 @@ img.avatar {
 }
 
 /* ================================================================
+   SPRINT 10 - Tag page
+================================================================ */
+
+.tag-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-bottom: 4rem;
+}
+.tag-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.tag-header-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.tag-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.tag-meta {
+  display: flex;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+.tag-post-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.tag-post-count strong {
+  color: var(--text-bright);
+  font-weight: 700;
+}
+.tag-hint {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  margin: 0.5rem 0 0;
+}
+.tag-body {
+  padding: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .tag-header { padding: 1rem; }
+  .tag-title { font-size: 1.4rem; }
+  .tag-body { padding: 1rem; }
+}
+
+/* ================================================================
+   SPRINT 10 - Compose upgrades: post-type pills, tag input, space select
+================================================================ */
+
+/* Row of radio pills between Quill and the tag input */
+.compose-type-row {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.6rem 0 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.compose-type-row::-webkit-scrollbar { display: none; }
+.type-radio { display: inline-block; }
+.type-radio input { display: none; }
+.type-radio-pill {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.type-radio-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.type-radio input:checked + .type-radio-pill {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Tag input row (chips + autocomplete) */
+.compose-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+  border-top: 1px dashed var(--border);
+  margin-top: 0.5rem;
+  position: relative;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  animation: tagChipIn 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes tagChipIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.tag-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+.tag-chip-remove:hover { color: var(--danger); }
+
+.tag-input-wrap {
+  position: relative;
+  flex: 1 1 150px;
+  min-width: 150px;
+}
+.tag-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 0.25rem 0.1rem;
+  width: 100%;
+}
+
+/* Autocomplete dropdown anchored under the tag input */
+.tag-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 260px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 200;
+  animation: tagSuggestionsIn 0.15s ease;
+}
+@keyframes tagSuggestionsIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tag-suggestion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+.tag-suggestion-item:last-child { border-bottom: none; }
+.tag-suggestion-item:hover { background: var(--accent-subtle); }
+.tag-suggestion-item.muted { color: var(--text-dim); cursor: default; }
+.tag-suggestion-count {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  margin-left: 1rem;
+}
+
+/* Space select in compose footer */
+.compose-space-select {
+  min-width: 150px;
+}
+
+/* ================================================================
+   SPRINT 10 - Post card meta badges + tags at bottom
+================================================================ */
+
+.post-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.post-space-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--badge-color);
+  color: var(--badge-color);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.15s ease;
+}
+.post-space-badge:hover {
+  background: var(--badge-color);
+  color: #fff;
+}
+
+.post-type-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: 'JetBrains Mono', monospace;
+}
+.post-type-question {
+  background: rgba(155, 89, 182, 0.15);
+  color: #B070CF;
+  border: 1px solid rgba(155, 89, 182, 0.3);
+}
+.post-type-tutorial {
+  background: rgba(46, 204, 113, 0.15);
+  color: #3EDE86;
+  border: 1px solid rgba(46, 204, 113, 0.3);
+}
+.post-type-code {
+  background: rgba(69, 189, 209, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(69, 189, 209, 0.3);
+}
+.post-type-showcase {
+  background: rgba(243, 156, 18, 0.15);
+  color: #F5B041;
+  border: 1px solid rgba(243, 156, 18, 0.3);
+}
+.post-type-link {
+  background: rgba(52, 152, 219, 0.15);
+  color: #5DADE2;
+  border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+.post-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--border);
+}
+.post-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--accent);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+.post-tag:hover {
+  opacity: 0.7;
+  text-decoration: underline;
+}
+
+/* ================================================================
    SPRINT 10 - Space bar (below navbar, above content).
 
    Horizontally scrollable pill bar. Each pill's accent color is

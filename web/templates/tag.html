@@ -1,9 +1,35 @@
 {{ define "content" }}
 {{ with .Content }}
-<div class="fade-in" style="max-width:720px;margin:1.5rem auto;padding:0 1.5rem;">
-  <h1 style="font-family:'JetBrains Mono',monospace;color:var(--accent);">#{{ .Tag.Name }}</h1>
-  <p class="muted">{{ .Tag.UseCount }} posts</p>
-  <p class="muted mono" style="font-size:0.8rem;">(Stop Point 6 will render the full post list here.)</p>
+{{ $tag := .Tag }}
+<div class="tag-page fade-in">
+  <header class="tag-header">
+    <div class="tag-header-inner">
+      <h1 class="tag-title">#{{ $tag.Name }}</h1>
+      <div class="tag-meta">
+        <span class="tag-post-count">
+          <strong>{{ $tag.UseCount }}</strong> {{ if eq $tag.UseCount 1 }}post{{ else }}posts{{ end }}
+        </span>
+      </div>
+    </div>
+    <p class="tag-hint">
+      Posts from any space tagged with <span class="mono">#{{ $tag.Name }}</span>.
+    </p>
+  </header>
+
+  <div class="tag-body">
+    {{ if .Posts }}
+    <div class="stagger-in">
+      {{ range .Posts }}
+        {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+      {{ end }}
+    </div>
+    {{ else }}
+    <div class="empty-state">
+      <h3>No posts yet</h3>
+      <p>Be the first to post with <span class="mono">#{{ $tag.Name }}</span>.</p>
+    </div>
+    {{ end }}
+  </div>
 </div>
 {{ end }}
 {{ end }}

@@ -380,9 +380,34 @@
           var self = this;
           var form = this.$el;
           var content = this.htmlContent();
-          var chanEl = form.querySelector('[name=channel_id]');
           var body = { content: content };
+
+          // Legacy channel dropdown (optional; only present when the
+          // compose partial is rendered with a channel list).
+          var chanEl = form.querySelector('[name=channel_id]');
           if (chanEl && chanEl.value) body.channel_id = parseInt(chanEl.value, 10);
+
+          // Parent id for reply forms.
+          var parentEl = form.querySelector('[name=parent_id]');
+          if (parentEl && parentEl.value) body.parent_id = parseInt(parentEl.value, 10);
+
+          // Sprint 10: space, post type, tags.
+          var spaceEl = form.querySelector('[name=space_id]');
+          if (spaceEl && spaceEl.value) body.space_id = parseInt(spaceEl.value, 10);
+
+          var typeEl = form.querySelector('[name=post_type]:checked') ||
+                       form.querySelector('[name=post_type]');
+          if (typeEl && typeEl.value) body.post_type = typeEl.value;
+
+          // Tags come from the tagInput() Alpine component's hidden input
+          // which holds comma-joined slugs. Empty string -> no tags.
+          var tagsEl = form.querySelector('[name=tags]');
+          if (tagsEl && tagsEl.value) {
+            body.tags = tagsEl.value.split(',')
+              .map(function (s) { return s.trim(); })
+              .filter(function (s) { return s.length > 0; });
+          }
+
           apiJSON('/api/posts', 'POST', body).then(function (res) {
             self.submitting = false;
             if (res.ok) {
@@ -397,6 +422,83 @@
               setTimeout(function () { form.classList.remove('shake'); }, 500);
             }
           });
+        }
+      };
+    });
+
+    // Tag autocomplete input. Users type a tag name, the component
+    // queries /api/tags/search and shows up to 10 suggestions. Pressing
+    // Enter or comma commits the typed text (slugified client-side) as
+    // a tag chip. Max 5 tags per post per Sprint 10 rules.
+    //
+    // Selected tag slugs are written to a hidden <input name="tags"> as a
+    // comma-joined string; the composeEditor submit() reads that value.
+    window.Alpine.data('tagInput', function (initial) {
+      return {
+        selectedTags: Array.isArray(initial) ? initial.slice(0, 5) : [],
+        query: '',
+        suggestions: [],
+        maxTags: 5,
+        loading: false,
+
+        // Keep the hidden input in sync on every change so the outer
+        // form picks up the current selection at submit time.
+        hiddenValue: function () { return this.selectedTags.join(','); },
+
+        slugify: function (name) {
+          return (name || '')
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 32);
+        },
+
+        searchTags: function () {
+          var q = this.query.trim();
+          if (q.length < 1) { this.suggestions = []; return; }
+          this.loading = true;
+          var self = this;
+          fetch('/api/tags/search?q=' + encodeURIComponent(q), {
+            credentials: 'same-origin'
+          }).then(function (r) { return r.ok ? r.json() : []; })
+            .then(function (data) {
+              self.loading = false;
+              var already = new Set(self.selectedTags);
+              self.suggestions = (data || []).filter(function (t) {
+                return !already.has(t.slug);
+              });
+            }).catch(function () { self.loading = false; });
+        },
+
+        addTag: function (name) {
+          var slug = this.slugify(name);
+          if (!slug || slug.length < 2) return;
+          if (this.selectedTags.length >= this.maxTags) {
+            toast('info', 'Maximum ' + this.maxTags + ' tags');
+            return;
+          }
+          if (this.selectedTags.includes(slug)) return;
+          this.selectedTags.push(slug);
+          this.query = '';
+          this.suggestions = [];
+        },
+
+        removeTag: function (slug) {
+          this.selectedTags = this.selectedTags.filter(function (t) { return t !== slug; });
+        },
+
+        // Enter and comma both commit the typed tag.
+        handleKey: function (ev) {
+          if (ev.key === 'Enter' || ev.key === ',') {
+            ev.preventDefault();
+            if (this.query.trim()) this.addTag(this.query);
+          } else if (ev.key === 'Backspace' && !this.query && this.selectedTags.length > 0) {
+            // Backspace on empty input pops the last chip, like Slack / GitHub.
+            this.selectedTags.pop();
+          }
         }
       };
     });

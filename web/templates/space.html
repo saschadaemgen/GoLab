@@ -48,8 +48,13 @@
   <!-- Body: posts + sidebar -->
   <div class="space-body">
     <main>
-      <!-- SP5 will replace this with the Quill compose partial pre-seeded
-           with this space's ID so users post straight into the space. -->
+      {{ if $.User }}
+      {{ template "compose.html" (dict
+        "Channels" nil
+        "SelectedChannelID" 0
+        "Spaces" $.Spaces
+        "SelectedSpaceID" $sp.ID) }}
+      {{ end }}
 
       {{ if .Posts }}
       <div class="stagger-in">

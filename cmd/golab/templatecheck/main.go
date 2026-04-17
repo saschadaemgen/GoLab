@@ -29,11 +29,19 @@ func main() {
 	dummyPost := model.Post{
 		ID: 1, ASType: "Note", AuthorID: 1,
 		Content:           "Hello GoLab, first post!",
+		PostType:          "tutorial",
 		ReactionCount:     3, ReplyCount: 1, RepostCount: 0,
 		CreatedAt:         time.Now().Add(-15 * time.Minute),
 		UpdatedAt:         time.Now(),
 		AuthorUsername:    "prinz",
 		AuthorDisplayName: "Der Prinz",
+		SpaceName:         "SimpleX Protocol",
+		SpaceSlug:         "simplex",
+		SpaceColor:        "#45BDD1",
+		Tags: []model.Tag{
+			{ID: 1, Name: "smp-protocol", Slug: "smp-protocol", UseCount: 7},
+			{ID: 2, Name: "docker", Slug: "docker", UseCount: 5},
+		},
 	}
 
 	dummySpaces := []model.Space{
