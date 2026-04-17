@@ -129,6 +129,8 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	follows := &model.FollowStore{DB: pool}
 	reactions := &model.ReactionStore{DB: pool}
 	notifs := &model.NotificationStore{DB: pool}
+	spaces := &model.SpaceStore{DB: pool}
+	tags := &model.TagStore{DB: pool}
 	sessions := &auth.SessionStore{DB: pool}
 
 	// Notification dispatcher (used by post + profile handlers to fan events).
@@ -148,10 +150,12 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	}
 	channelH := &handler.ChannelHandler{Channels: channels, Users: users}
 	postH := &handler.PostHandler{
-		Posts: posts, Channels: channels, Reactions: reactions,
+		Posts: posts, Channels: channels, Reactions: reactions, Tags: tags,
 		Markdown: md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
 	}
 	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}
+	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags}
+	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts}
 	feedH := &handler.FeedHandler{Posts: posts}
 	profileH := &handler.ProfileHandler{Users: users, Posts: posts, Follows: follows, Notifs: notifDispatch}
 	notifH := &handler.NotifHandler{Store: notifs}
@@ -187,6 +191,8 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		r.Get("/c/{slug}", pageH.ChannelPage)
 		r.Get("/u/{username}", pageH.ProfilePage)
 		r.Get("/p/{id}", pageH.ThreadPage)
+		r.Get("/s/{slug}", spaceH.SpacePage)
+		r.Get("/t/{slug}", tagH.TagPage)
 	})
 
 	r.Group(func(r chi.Router) {
@@ -311,6 +317,10 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Use(requireAuth)
 			r.Get("/search", searchH.Search)
 		})
+
+		// Spaces + tags (public read)
+		r.Get("/spaces", spaceH.List)
+		r.Get("/tags/search", tagH.Search)
 
 		// Admin (power_level >= 100)
 		r.Group(func(r chi.Router) {

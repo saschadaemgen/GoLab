@@ -100,6 +100,23 @@ func main() {
 				},
 			},
 		},
+		"space": map[string]any{
+			"Title": "Space - GoLab", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/s/simplex",
+			"Content": map[string]any{
+				"Space":       &model.Space{ID: 1, Slug: "simplex", Name: "SimpleX Protocol", Description: "SMP protocol, clients, relays", Color: "#45BDD1", Icon: "*", SortOrder: 1, PostCount: 12},
+				"Posts":       []model.Post{dummyPost},
+				"PopularTags": []model.Tag{{ID: 1, Name: "smp-protocol", Slug: "smp-protocol", UseCount: 7}},
+				"ActiveType":  "",
+				"ActiveTag":   "",
+			},
+		},
+		"tag": map[string]any{
+			"Title": "#docker - GoLab", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/t/docker",
+			"Content": map[string]any{
+				"Tag":   &model.Tag{ID: 4, Name: "docker", Slug: "docker", UseCount: 9},
+				"Posts": []model.Post{dummyPost},
+			},
+		},
 	}
 
 	for name, data := range pages {

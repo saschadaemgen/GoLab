@@ -1,0 +1,10 @@
+{{ define "content" }}
+{{ with .Content }}
+<div class="fade-in" style="max-width:1040px;margin:1.5rem auto;padding:0 1.5rem;">
+  <h1>{{ .Space.Name }}</h1>
+  <p class="muted">{{ .Space.Description }}</p>
+  <p class="muted mono">{{ .Space.PostCount }} posts{{ if .ActiveType }} - type: {{ .ActiveType }}{{ end }}{{ if .ActiveTag }} - tag: #{{ .ActiveTag }}{{ end }}</p>
+  <p class="muted mono" style="font-size:0.8rem;">(Stop Point 2 will add the space bar, filter tabs, posts list and tag sidebar.)</p>
+</div>
+{{ end }}
+{{ end }}

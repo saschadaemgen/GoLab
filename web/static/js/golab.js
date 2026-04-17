@@ -130,10 +130,16 @@
               self.preview = res.data.avatar_url;
               var hidden = document.getElementById('st-avatar-url');
               if (hidden) hidden.value = res.data.avatar_url;
-              // Live-update the nav avatar without a full reload.
+              // Live-update the nav avatar without a full reload. Mirror
+              // the markup the avatar partial produces so the circle
+              // styling (via .avatar.avatar-sm) stays consistent.
               var navAvatar = document.querySelector('.nav-avatar');
               if (navAvatar) {
-                navAvatar.innerHTML = '<img src="' + res.data.avatar_url + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+                var img = document.createElement('img');
+                img.src = res.data.avatar_url;
+                img.alt = '';
+                img.className = 'avatar avatar-sm img-reveal loaded';
+                navAvatar.replaceChildren(img);
               }
               toast('success', 'Avatar uploaded');
             } else {

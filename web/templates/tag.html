@@ -1,0 +1,9 @@
+{{ define "content" }}
+{{ with .Content }}
+<div class="fade-in" style="max-width:720px;margin:1.5rem auto;padding:0 1.5rem;">
+  <h1 style="font-family:'JetBrains Mono',monospace;color:var(--accent);">#{{ .Tag.Name }}</h1>
+  <p class="muted">{{ .Tag.UseCount }} posts</p>
+  <p class="muted mono" style="font-size:0.8rem;">(Stop Point 6 will render the full post list here.)</p>
+</div>
+{{ end }}
+{{ end }}

@@ -142,7 +142,7 @@
       <div class="dropdown" x-data="{ open: false }">
         <button @click="open = !open" class="nav-user press-effect" aria-haspopup="true" :aria-expanded="open">
           <span class="nav-avatar">
-            {{ if .User.AvatarURL }}<img src="{{ .User.AvatarURL }}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">{{ else }}{{ initial .User.Username }}{{ end }}
+            {{ template "avatar" (dict "URL" .User.AvatarURL "Username" .User.Username "Size" "sm") }}
           </span>
           <span>{{ .User.Username }}</span>
         </button>

@@ -322,17 +322,15 @@ code, pre, .mono {
   border-color: var(--border-hover);
   color: var(--accent);
 }
+/* nav-avatar is a marker wrapper. The circle, sizing and color all come
+   from the nested .avatar.avatar-sm produced by the shared avatar
+   partial (web/templates/partials/avatar.html). JS live-update after
+   upload replaces the inner content only, keeping this wrapper stable
+   as a selector. */
 .nav-avatar {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: var(--accent-subtle);
-  color: var(--accent);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 0.8rem;
-  font-family: 'JetBrains Mono', monospace;
 }
 
 .nav-toggle {

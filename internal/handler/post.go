@@ -16,6 +16,7 @@ type PostHandler struct {
 	Posts     *model.PostStore
 	Channels  *model.ChannelStore
 	Reactions *model.ReactionStore
+	Tags      *model.TagStore
 	Markdown  *render.Markdown
 	Sanitizer *render.Sanitizer
 	Hub       *Hub           // optional; when present, new posts get broadcast
@@ -23,9 +24,27 @@ type PostHandler struct {
 }
 
 type createPostRequest struct {
-	Content   string `json:"content"`
-	ChannelID *int64 `json:"channel_id,omitempty"`
-	ParentID  *int64 `json:"parent_id,omitempty"`
+	Content   string   `json:"content"`
+	ChannelID *int64   `json:"channel_id,omitempty"`
+	ParentID  *int64   `json:"parent_id,omitempty"`
+	SpaceID   *int64   `json:"space_id,omitempty"`
+	PostType  string   `json:"post_type,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+}
+
+// maxTagsPerPost enforces the briefing rule: at most 5 tags. We also
+// enforce it client-side in the Alpine tagInput component.
+const maxTagsPerPost = 5
+
+// validPostTypes are the post_type values the server accepts. Anything
+// else falls back to "discussion".
+var validPostTypes = map[string]bool{
+	"discussion": true,
+	"question":   true,
+	"tutorial":   true,
+	"code":       true,
+	"showcase":   true,
+	"link":       true,
 }
 
 type reactRequest struct {
@@ -135,17 +154,67 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	post, err := h.Posts.Create(r.Context(), "Note", user.ID, req.ChannelID, req.ParentID, req.Content, contentHTML)
+	// Normalise post_type to a known value. Empty / unknown -> discussion.
+	postType := req.PostType
+	if !validPostTypes[postType] {
+		postType = "discussion"
+	}
+
+	post, err := h.Posts.Create(r.Context(), model.CreateParams{
+		ASType:      "Note",
+		AuthorID:    user.ID,
+		ChannelID:   req.ChannelID,
+		ParentID:    req.ParentID,
+		SpaceID:     req.SpaceID,
+		PostType:    postType,
+		Content:     req.Content,
+		ContentHTML: contentHTML,
+	})
 	if err != nil {
 		slog.Error("create post", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Populate author fields for fragment rendering
+	// Populate author fields for fragment rendering. FindByID inside
+	// Create already filled the joined user fields, but a reply in a
+	// fragment should still see the current user's avatar without
+	// re-querying. Harmless overwrite with identical data.
 	post.AuthorUsername = user.Username
 	post.AuthorDisplayName = user.DisplayName
 	post.AuthorAvatarURL = user.AvatarURL
+
+	// Attach tags. Each tag name is sluggified, FindOrCreate'd, then
+	// joined to the post. Duplicates inside the request are collapsed by
+	// the DB unique constraint. Cap at maxTagsPerPost so a malicious
+	// client can't spam 5000 tags.
+	if h.Tags != nil && len(req.Tags) > 0 {
+		tagIDs := make([]int64, 0, len(req.Tags))
+		seen := map[string]bool{}
+		for i, name := range req.Tags {
+			if i >= maxTagsPerPost {
+				break
+			}
+			slug := model.Slugify(name)
+			if slug == "" || seen[slug] {
+				continue
+			}
+			seen[slug] = true
+			tag, err := h.Tags.FindOrCreate(r.Context(), slug, user.ID)
+			if err != nil {
+				slog.Warn("create post: find or create tag", "tag", slug, "error", err)
+				continue
+			}
+			tagIDs = append(tagIDs, tag.ID)
+		}
+		if err := h.Tags.AttachToPost(r.Context(), post.ID, tagIDs); err != nil {
+			slog.Warn("create post: attach tags", "error", err)
+		}
+		// Reload with tag data for the fragment render downstream.
+		if tags, err := h.Tags.ListByPost(r.Context(), post.ID); err == nil {
+			post.Tags = tags
+		}
+	}
 
 	slog.Info("post created", "id", post.ID, "author", user.Username)
 

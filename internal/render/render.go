@@ -32,6 +32,8 @@ var pageNames = []string{
 	"settings",
 	"thread",
 	"admin",
+	"space",
+	"tag",
 }
 
 func New(templatesDir string) (*Engine, error) {
