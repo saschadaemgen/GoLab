@@ -14,6 +14,10 @@ const (
 	NotifReply    = "reply"
 	NotifFollow   = "follow"
 	NotifMention  = "mention"
+	// Sprint 12 moderation
+	NotifNewUser  = "new_user"  // admin notif: new user registered and needs approval
+	NotifApproved = "approved"  // user notif: their account was approved
+	NotifRejected = "rejected"  // user notif: their account was not approved
 )
 
 type Notification struct {

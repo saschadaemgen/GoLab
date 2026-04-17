@@ -1,0 +1,26 @@
+{{ define "content" }}
+<div class="pending-page fade-in">
+  <div class="pending-card">
+    <div class="pending-icon" aria-hidden="true">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+    </div>
+    <h1 class="pending-title">Account pending</h1>
+    <p class="pending-text">
+      Your account has been created and is waiting for approval by an administrator.
+      You will receive a notification once your account is activated.
+    </p>
+    <p class="pending-hint">
+      In the meantime you can browse posts and spaces in read-only mode.
+    </p>
+
+    <div class="pending-actions">
+      <a href="/feed" class="btn btn-outline" hx-boost="true">Browse the feed</a>
+      <button type="button" class="btn btn-ghost" data-action="logout">Log out</button>
+    </div>
+  </div>
+</div>
+{{ end }}

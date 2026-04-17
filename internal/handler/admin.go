@@ -14,12 +14,17 @@ import (
 	"github.com/saschadaemgen/GoLab/internal/render"
 )
 
-// RequireAdmin blocks users whose power_level is below 100. Place it
-// after RequireAuth (or RequireAuthRedirect for HTML pages).
+// RequireAdmin blocks users whose power_level is below 75. Admins
+// (75) handle moderation (approve/reject, ban/unban). Sensitive
+// mutations like changing platform settings are further restricted
+// inside individual handlers (e.g. SetSetting requires id=1).
+//
+// Place this middleware after RequireAuth (or RequireAuthRedirect
+// for HTML pages).
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u := auth.UserFromContext(r.Context())
-		if u == nil || u.PowerLevel < 100 {
+		if u == nil || u.PowerLevel < 75 {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -29,9 +34,12 @@ func RequireAdmin(next http.Handler) http.Handler {
 
 // AdminHandler serves the /admin dashboard and its API companions.
 type AdminHandler struct {
-	DB     *pgxpool.Pool
-	Render *render.Engine
-	Users  *model.UserStore
+	DB            *pgxpool.Pool
+	Render        *render.Engine
+	Users         *model.UserStore
+	Settings      *model.SettingsStore
+	Notifications *model.NotificationStore
+	Hub           *Hub
 }
 
 type adminStats struct {
@@ -62,9 +70,11 @@ type adminChannel struct {
 }
 
 type adminDashboard struct {
-	Stats    adminStats
-	Users    []adminUser
-	Channels []adminChannel
+	Stats           adminStats
+	Users           []adminUser
+	Channels        []adminChannel
+	PendingUsers    []model.User // Sprint 12 moderation queue
+	RequireApproval bool         // current state of the toggle
 }
 
 // Page renders the full /admin dashboard (server-rendered).
@@ -128,6 +138,17 @@ func (h *AdminHandler) collect(r *http.Request) adminDashboard {
 			}
 		}
 	}
+
+	// Sprint 12 moderation data: pending users queue + require_approval
+	// setting current state for the toggle.
+	if h.Users != nil {
+		if pending, err := h.Users.ListPending(ctx, 50); err == nil {
+			out.PendingUsers = pending
+		}
+	}
+	if h.Settings != nil {
+		out.RequireApproval = h.Settings.GetBool(ctx, "require_approval")
+	}
 	return out
 }
 
@@ -185,6 +206,124 @@ func (h *AdminHandler) Unban(w http.ResponseWriter, r *http.Request) {
 
 type powerReq struct {
 	PowerLevel int `json:"power_level"`
+}
+
+// Approve a pending user. Sets status = active and dispatches an
+// "approved" notification to the user. Safe to call on an already-
+// active user (it's a no-op UPDATE that still touches updated_at).
+func (h *AdminHandler) Approve(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	actor := auth.UserFromContext(r.Context())
+	if actor == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err := h.Users.SetStatus(r.Context(), id, model.UserStatusActive, actor.ID); err != nil {
+		slog.Error("approve user", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	// Tell the approved user.
+	if h.Notifications != nil {
+		if _, err := h.Notifications.Create(r.Context(), id, actor.ID, model.NotifApproved, nil); err == nil && h.Hub != nil {
+			count, _ := h.Notifications.UnreadCount(r.Context(), id)
+			h.Hub.PublishToUser(id, Message{
+				Type: "notification_count",
+				Data: map[string]int{"count": count},
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "approved"})
+}
+
+// Reject a pending user. Sets status = rejected and notifies them.
+// The user can still log in but every mutation path is blocked by
+// RequireActiveUser, so effectively they see a read-only ghost.
+func (h *AdminHandler) Reject(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	actor := auth.UserFromContext(r.Context())
+	if actor == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err := h.Users.SetStatus(r.Context(), id, model.UserStatusRejected, actor.ID); err != nil {
+		slog.Error("reject user", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	// Kill any active sessions of the rejected user so they're logged
+	// out immediately.
+	_, _ = h.DB.Exec(r.Context(), `DELETE FROM sessions WHERE user_id = $1`, id)
+
+	if h.Notifications != nil {
+		_, _ = h.Notifications.Create(r.Context(), id, actor.ID, model.NotifRejected, nil)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
+}
+
+// Pending returns the list of users waiting for approval. JSON for
+// the Alpine refresh on the admin dashboard.
+func (h *AdminHandler) Pending(w http.ResponseWriter, r *http.Request) {
+	if h.Users == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"users": []any{}})
+		return
+	}
+	users, err := h.Users.ListPending(r.Context(), 50)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if users == nil {
+		users = []model.User{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+// SetSetting updates a platform-level setting. Whitelisted to a tiny
+// set of known keys so the endpoint can't be abused to write arbitrary
+// rows. Only the Owner (id=1) can change settings.
+type setSettingReq struct {
+	Value string `json:"value"`
+}
+
+var allowedSettings = map[string]bool{
+	"require_approval": true,
+}
+
+func (h *AdminHandler) SetSetting(w http.ResponseWriter, r *http.Request) {
+	actor := auth.UserFromContext(r.Context())
+	if actor == nil || actor.ID != 1 {
+		writeError(w, http.StatusForbidden, "only the platform owner can change settings")
+		return
+	}
+	key := chi.URLParam(r, "key")
+	if !allowedSettings[key] {
+		writeError(w, http.StatusBadRequest, "unknown setting")
+		return
+	}
+	var req setSettingReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if h.Settings == nil {
+		writeError(w, http.StatusInternalServerError, "settings unavailable")
+		return
+	}
+	if err := h.Settings.Set(r.Context(), key, req.Value); err != nil {
+		slog.Error("set setting", "error", err, "key", key)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"key": key, "value": req.Value})
 }
 
 func (h *AdminHandler) SetPower(w http.ResponseWriter, r *http.Request) {

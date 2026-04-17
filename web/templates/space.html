@@ -59,10 +59,16 @@
   <div class="two-col">
     <main>
       {{ if $.User }}
-      {{ template "compose.html" (dict
-        "Spaces" $.Spaces
-        "SelectedSpaceID" $sp.ID
-        "User" $.User) }}
+        {{ if ne $.User.Status "active" }}
+        <div class="compose-pending">
+          Your account is pending approval. You can browse but not post yet.
+        </div>
+        {{ else }}
+        {{ template "compose.html" (dict
+          "Spaces" $.Spaces
+          "SelectedSpaceID" $sp.ID
+          "User" $.User) }}
+        {{ end }}
       {{ end }}
 
       {{ if .Posts }}

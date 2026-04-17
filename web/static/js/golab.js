@@ -934,6 +934,20 @@
     });
   }
 
+  // Hide the pending-approval section when its last card is removed,
+  // and keep the count badge in sync after every approval/rejection.
+  function maybeHidePendingSection() {
+    var section = document.querySelector('.admin-pending');
+    if (!section) return;
+    var remaining = section.querySelectorAll('.admin-pending-card').length;
+    var badge = section.querySelector('.admin-pending-count');
+    if (badge) badge.textContent = remaining;
+    if (remaining === 0) {
+      section.classList.add('collapse-height');
+      setTimeout(function () { section.remove(); }, 240);
+    }
+  }
+
   // ---------- click-action delegation ----------
 
   function bindActions() {
@@ -1028,6 +1042,66 @@
           apiJSON('/api/admin/users/' + id + '/unban', 'POST', null).then(function (res) {
             if (res.ok) { toast('success', 'User unbanned'); setTimeout(function () { window.location.reload(); }, 250); }
           });
+        });
+      }
+
+      if (action === 'admin-approve') {
+        el.addEventListener('click', function () {
+          var id = el.dataset.userId;
+          var card = document.getElementById('pending-user-' + id);
+          el.disabled = true;
+          apiJSON('/api/admin/users/' + id + '/approve', 'POST', null).then(function (res) {
+            if (res.ok) {
+              toast('success', 'User approved');
+              if (card) {
+                card.classList.add('slide-out-left');
+                setTimeout(function () { card.remove(); maybeHidePendingSection(); }, 260);
+              }
+            } else {
+              el.disabled = false;
+              toast('error', (res.data && res.data.error) || 'Could not approve');
+            }
+          });
+        });
+      }
+
+      if (action === 'admin-reject') {
+        el.addEventListener('click', function () {
+          if (!confirm('Reject this user? They will be locked out.')) return;
+          var id = el.dataset.userId;
+          var card = document.getElementById('pending-user-' + id);
+          el.disabled = true;
+          apiJSON('/api/admin/users/' + id + '/reject', 'POST', null).then(function (res) {
+            if (res.ok) {
+              toast('info', 'User rejected');
+              if (card) {
+                card.classList.add('slide-out-left');
+                setTimeout(function () { card.remove(); maybeHidePendingSection(); }, 260);
+              }
+            } else {
+              el.disabled = false;
+              toast('error', (res.data && res.data.error) || 'Could not reject');
+            }
+          });
+        });
+      }
+
+      if (action === 'admin-toggle-setting') {
+        el.addEventListener('change', function () {
+          var key = el.dataset.key;
+          var value = el.checked ? 'true' : 'false';
+          el.disabled = true;
+          apiJSON('/api/admin/settings/' + encodeURIComponent(key), 'PUT', { value: value })
+            .then(function (res) {
+              el.disabled = false;
+              if (res.ok) {
+                toast('success', 'Setting updated');
+              } else {
+                // Revert on failure so the UI mirrors server state.
+                el.checked = !el.checked;
+                toast('error', (res.data && res.data.error) || 'Could not save');
+              }
+            });
         });
       }
 

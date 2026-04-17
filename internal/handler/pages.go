@@ -296,6 +296,20 @@ func (h *PageHandler) ThreadPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ---------- Pending (Sprint 12) ----------
+//
+// Shown after registration when require_approval is on, and any time
+// a pending user hits a mutation path. Read-only pages (feed, spaces,
+// etc.) stay accessible so the user can still explore.
+
+func (h *PageHandler) PendingPage(w http.ResponseWriter, r *http.Request) {
+	data := h.newPageData(r, "Account pending - GoLab")
+	if err := h.Render.Render(w, "pending", data); err != nil {
+		slog.Error("render pending", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}
+}
+
 // ---------- Settings ----------
 
 func (h *PageHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {

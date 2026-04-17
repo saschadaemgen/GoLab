@@ -37,10 +37,16 @@
     </header>
 
     {{ if and $.User .IsMember }}
+      {{ if ne $.User.Status "active" }}
+      <div class="compose-pending">
+        Your account is pending approval. You can browse but not post yet.
+      </div>
+      {{ else }}
       {{ template "compose.html" (dict
         "Spaces" $.Spaces
         "SelectedSpaceID" 0
         "User" $.User) }}
+      {{ end }}
     {{ end }}
 
     <div id="feed-posts" class="stagger-in">

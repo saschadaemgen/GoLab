@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -18,9 +19,12 @@ var (
 )
 
 type AuthHandler struct {
-	Users    *model.UserStore
-	Sessions *auth.SessionStore
-	Secure   bool // true in production (HTTPS)
+	Users         *model.UserStore
+	Sessions      *auth.SessionStore
+	Settings      *model.SettingsStore
+	Notifications *model.NotificationStore
+	Hub           *Hub // optional, used to push notification badges
+	Secure        bool // true in production (HTTPS)
 }
 
 type registerRequest struct {
@@ -172,28 +176,72 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user
-	user, err := h.Users.Create(r.Context(), req.Username, req.Email, hash)
+	// Determine initial status from the platform setting. First user
+	// (id will be 1) always ends up active regardless - Store.Create
+	// enforces that invariant so the platform isn't DOA behind its
+	// own approval gate.
+	status := model.UserStatusActive
+	if h.Settings != nil && h.Settings.GetBool(r.Context(), "require_approval") {
+		status = model.UserStatusPending
+	}
+
+	user, err := h.Users.Create(r.Context(), req.Username, req.Email, hash, status)
 	if err != nil {
 		slog.Error("register: create user", "error", err)
 		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Create session
+	// Session is created either way - pending users can log in and see
+	// a read-only view of the platform until admins approve them.
 	sessionID, err := h.Sessions.Create(r.Context(), user.ID)
 	if err != nil {
 		slog.Error("register: create session", "error", err)
 		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
 		return
 	}
-
 	h.setSessionCookie(w, sessionID)
 
-	slog.Info("user registered", "username", user.Username, "id", user.ID)
-	redirectOrJSON(w, r, "/feed", map[string]any{
-		"user": user,
-	})
+	slog.Info("user registered", "username", user.Username, "id", user.ID, "status", user.Status)
+
+	// If pending, notify every admin so they can review the queue.
+	if user.Status == model.UserStatusPending {
+		h.notifyAdminsOfNewUser(r.Context(), user)
+		redirectOrJSON(w, r, "/pending", map[string]any{"user": user, "status": "pending"})
+		return
+	}
+
+	redirectOrJSON(w, r, "/feed", map[string]any{"user": user})
+}
+
+// notifyAdminsOfNewUser fans out a "new_user" notification (plus a
+// WebSocket count-push when a hub is available) so admins see the
+// pending badge grow in real time.
+func (h *AuthHandler) notifyAdminsOfNewUser(ctx context.Context, newUser *model.User) {
+	if h.Users == nil || h.Notifications == nil {
+		return
+	}
+	admins, err := h.Users.ListAdmins(ctx)
+	if err != nil {
+		slog.Error("register: list admins", "error", err)
+		return
+	}
+	for _, admin := range admins {
+		if admin.ID == newUser.ID {
+			continue // skip self (first user case, though they're active anyway)
+		}
+		if _, err := h.Notifications.Create(ctx, admin.ID, newUser.ID, model.NotifNewUser, nil); err != nil {
+			slog.Warn("register: create admin notif", "admin", admin.ID, "error", err)
+			continue
+		}
+		if h.Hub != nil {
+			count, _ := h.Notifications.UnreadCount(ctx, admin.ID)
+			h.Hub.PublishToUser(admin.ID, Message{
+				Type: "notification_count",
+				Data: map[string]int{"count": count},
+			})
+		}
+	}
 }
 
 // validatePassword enforces the NIST SP 800-63B recommendation of length

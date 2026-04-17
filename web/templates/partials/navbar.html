@@ -9,7 +9,7 @@
       {{ if .User }}
       <a href="/feed" class="{{ isActive .CurrentPath "/feed" }}">Feed</a>
       <a href="/explore" class="{{ isActive .CurrentPath "/explore" }}">Explore</a>
-      {{ if ge .User.PowerLevel 100 }}
+      {{ if ge .User.PowerLevel 75 }}
       <a href="/admin" class="{{ isActive .CurrentPath "/admin" }}">Admin</a>
       {{ end }}
       {{ else }}
@@ -159,7 +159,7 @@
           <div class="menu-header">Signed in as {{ .User.Username }}</div>
           <a href="/u/{{ .User.Username }}" hx-boost="true">My profile</a>
           <a href="/settings" hx-boost="true">Settings</a>
-          {{ if ge .User.PowerLevel 100 }}
+          {{ if ge .User.PowerLevel 75 }}
           <a href="/admin" hx-boost="true">Admin</a>
           {{ end }}
           <div class="menu-divider"></div>
@@ -179,72 +179,130 @@
   </div>
 </nav>
 
-<!-- Fullscreen mobile menu overlay. Only visible at <=768px. Slides
-     in from the right with a 250ms cubic-bezier(0.4,0,0.2,1) curve.
-     Background is solid var(--bg-base), no translucency, no
-     horizontal overflow. Every tap target is >= 48px. The overlay
-     sits above the fixed navbar so the X-close covers everything. -->
+<!-- Fullscreen mobile menu overlay (Sprint 12 redesign).
+     Monochrome dark/cyan theme, branded header, staggered slide-in,
+     user footer with avatar. -->
 <div id="mobile-menu" class="mobile-menu" aria-hidden="true" role="dialog" aria-modal="true">
-  <button type="button" class="mobile-menu-close" id="mobile-menu-close"
-          aria-label="Close menu">
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
-         stroke="currentColor" stroke-width="2" stroke-linecap="round"
-         stroke-linejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18"/>
-      <line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
-  </button>
 
-  <nav class="mobile-menu-nav" aria-label="Mobile navigation">
-    {{ if .User }}
-    <a href="/feed" class="mobile-menu-link{{ if eq .CurrentPath "/feed" }} active{{ end }}" hx-boost="true">Feed</a>
-    {{ end }}
-    <a href="/explore" class="mobile-menu-link{{ if eq .CurrentPath "/explore" }} active{{ end }}" hx-boost="true">Explore</a>
-    {{ if and .User (ge .User.PowerLevel 100) }}
-    <a href="/admin" class="mobile-menu-link{{ if eq .CurrentPath "/admin" }} active{{ end }}" hx-boost="true">Admin</a>
-    {{ end }}
-
-    {{ if .User }}
-    <form class="mobile-menu-search" onsubmit="return false" role="search">
-      <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none"
-           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"/>
-        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  <!-- Branded header with close button -->
+  <div class="mobile-menu-header">
+    <span class="mobile-menu-brand">Go<span>Lab</span></span>
+    <button type="button" class="mobile-menu-close" id="mobile-menu-close"
+            aria-label="Close menu">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
-      <input type="search" class="mobile-menu-search-input"
-             placeholder="Search posts, users, tags..."
-             data-mobile-search-input>
-    </form>
-    {{ end }}
+    </button>
+  </div>
 
-    {{ if .Spaces }}
-    <div class="mobile-menu-section">
-      <h4 class="mobile-menu-section-title">Spaces</h4>
-      {{ range .Spaces }}
-      <a href="/s/{{ .Slug }}"
-         class="mobile-menu-link mobile-menu-space{{ if eq $.CurrentSpace .Slug }} active{{ end }}"
-         style="--space-color: {{ .Color }};"
-         hx-boost="true">
-        <span class="mobile-menu-space-icon" aria-hidden="true">{{ if .Icon }}{{ .Icon }}{{ else }}#{{ end }}</span>
-        <span class="mobile-menu-space-name">{{ .Name }}</span>
-        {{ if gt .PostCount 0 }}
-        <span class="mobile-menu-space-count">{{ .PostCount }}</span>
-        {{ end }}
-      </a>
-      {{ end }}
-    </div>
-    {{ end }}
-
-    <div class="mobile-menu-divider"></div>
-
+  <!-- Main nav section -->
+  <div class="mobile-menu-section">
     {{ if .User }}
-    <a href="/u/{{ .User.Username }}" class="mobile-menu-link" hx-boost="true">Profile</a>
-    <a href="/settings" class="mobile-menu-link{{ if eq .CurrentPath "/settings" }} active{{ end }}" hx-boost="true">Settings</a>
-    <button type="button" class="mobile-menu-link mobile-menu-logout" data-action="logout">Log out</button>
-    {{ else }}
+    <a href="/feed" class="mobile-menu-link{{ if eq .CurrentPath "/feed" }} active{{ end }}" hx-boost="true">
+      <span class="mobile-menu-link-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+      </span>
+      Feed
+    </a>
+    {{ end }}
+    <a href="/explore" class="mobile-menu-link{{ if eq .CurrentPath "/explore" }} active{{ end }}" hx-boost="true">
+      <span class="mobile-menu-link-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88"/>
+        </svg>
+      </span>
+      Explore
+    </a>
+    {{ if and .User (ge .User.PowerLevel 75) }}
+    <a href="/admin" class="mobile-menu-link{{ if eq .CurrentPath "/admin" }} active{{ end }}" hx-boost="true">
+      <span class="mobile-menu-link-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </span>
+      Admin
+    </a>
+    {{ end }}
+  </div>
+
+  <!-- Search -->
+  {{ if .User }}
+  <div class="mobile-menu-search">
+    <input type="search" placeholder="Search posts, users, tags..."
+           data-mobile-search-input>
+  </div>
+  {{ end }}
+
+  <!-- Spaces -->
+  {{ if .Spaces }}
+  <div class="mobile-menu-section">
+    <h3 class="mobile-menu-section-title">Spaces</h3>
+    {{ range .Spaces }}
+    <a href="/s/{{ .Slug }}"
+       class="mobile-menu-link{{ if eq $.CurrentSpace .Slug }} active{{ end }}"
+       hx-boost="true">
+      <span class="mobile-menu-link-icon" aria-hidden="true">{{ if .Icon }}{{ .Icon }}{{ else }}#{{ end }}</span>
+      {{ .Name }}
+      {{ if gt .PostCount 0 }}
+      <span class="mobile-menu-link-count">{{ .PostCount }}</span>
+      {{ end }}
+    </a>
+    {{ end }}
+  </div>
+  {{ end }}
+
+  {{ if .User }}
+  <!-- User footer pinned to bottom -->
+  <div class="mobile-menu-user">
+    {{ template "avatar" (dict "URL" .User.AvatarURL "Username" .User.Username "Size" "md") }}
+    <div class="mobile-menu-user-text">
+      <div class="mobile-menu-username">{{ if .User.DisplayName }}{{ .User.DisplayName }}{{ else }}{{ .User.Username }}{{ end }}</div>
+      <div class="mobile-menu-handle">@{{ .User.Username }}</div>
+    </div>
+  </div>
+
+  <div class="mobile-menu-section">
+    <a href="/u/{{ .User.Username }}" class="mobile-menu-link" hx-boost="true">
+      <span class="mobile-menu-link-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </span>
+      Profile
+    </a>
+    <a href="/settings" class="mobile-menu-link{{ if eq .CurrentPath "/settings" }} active{{ end }}" hx-boost="true">
+      <span class="mobile-menu-link-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </span>
+      Settings
+    </a>
+    <button type="button" class="mobile-menu-link logout" data-action="logout">
+      <span class="mobile-menu-link-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </span>
+      Log out
+    </button>
+  </div>
+  {{ else }}
+  <div class="mobile-menu-section">
     <a href="/login" class="mobile-menu-link" hx-boost="true">Log in</a>
     <a href="/register" class="mobile-menu-link" hx-boost="true">Create account</a>
-    {{ end }}
-  </nav>
+  </div>
+  {{ end }}
 </div>
 {{ end }}

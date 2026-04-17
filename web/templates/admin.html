@@ -6,6 +6,53 @@
   </header>
 
   {{ with .Content }}
+
+  {{ if .PendingUsers }}
+  <section class="admin-pending">
+    <h3 class="admin-section-title">
+      Pending approval
+      <span class="admin-pending-count">{{ len .PendingUsers }}</span>
+    </h3>
+    {{ range .PendingUsers }}
+    <div class="admin-pending-card" id="pending-user-{{ .ID }}">
+      <div class="admin-pending-info">
+        <strong>{{ .Username }}</strong>
+        <span class="admin-pending-email">{{ .Email }}</span>
+        <span class="admin-pending-time">Registered {{ timeAgo .CreatedAt }}</span>
+      </div>
+      <div class="admin-pending-actions">
+        <button type="button" class="btn btn-primary btn-sm press-effect"
+                data-action="admin-approve" data-user-id="{{ .ID }}">Approve</button>
+        <button type="button" class="btn btn-danger btn-sm press-effect"
+                data-action="admin-reject" data-user-id="{{ .ID }}">Reject</button>
+      </div>
+    </div>
+    {{ end }}
+  </section>
+  {{ end }}
+
+  <!-- Require-approval toggle (only meaningful to Owner, but visible
+       to every admin so they know the current state). -->
+  {{ if $.User }}{{ if eq $.User.ID 1 }}
+  <div class="admin-setting">
+    <label class="admin-setting-label">
+      <span>Require approval for new users</span>
+      <span class="admin-setting-hint">
+        When enabled, new registrations must be approved by an admin
+        before they can post, react or comment.
+      </span>
+    </label>
+    <label class="toggle">
+      <input type="checkbox" id="require-approval-toggle"
+             {{ if .RequireApproval }}checked{{ end }}
+             data-action="admin-toggle-setting" data-key="require_approval">
+      <span class="toggle-track">
+        <span class="toggle-thumb"></span>
+      </span>
+    </label>
+  </div>
+  {{ end }}{{ end }}
+
   {{ with .Stats }}
   <div class="admin-stats stagger-in">
     <div class="admin-stat-card hover-lift">

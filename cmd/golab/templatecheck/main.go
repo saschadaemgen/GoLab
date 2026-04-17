@@ -143,6 +143,11 @@ func main() {
 				"Posts": []model.Post{dummyPost},
 			},
 		},
+		"pending": map[string]any{
+			"Title": "Account pending", "SiteName": "GoLab",
+			"User": &model.User{ID: 5, Username: "newbie", DisplayName: "Newbie", Status: "pending"},
+			"CurrentPath": "/pending",
+		},
 	}
 
 	for name, data := range pages {

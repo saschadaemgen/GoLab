@@ -398,157 +398,238 @@ code, pre, .mono {
 .nav-toggle.active span:nth-child(2) { opacity: 0; }
 .nav-toggle.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
-/* Sprint 10.5 mobile menu: fullscreen overlay replaces the old
-   slide-in .nav-links panel. Triggered by #nav-toggle. */
+/* Sprint 12 mobile menu: fullscreen overlay, dark + cyan only, no
+   rainbow. Branded header, monochrome icons, active links with a
+   left-edge accent border, user footer pinned to the bottom. */
 
 .mobile-menu {
   position: fixed;
   inset: 0;
   width: 100%;
-  /* 100dvh avoids the iOS URL-bar jitter; fallback to vh for older
-     browsers. Both keep the overlay exactly one viewport tall so no
-     outer scrollbar can appear. */
   height: 100vh;
   height: 100dvh;
   z-index: 10500; /* above util-bar (10001), navbar (10000), space-bar (500) */
   background: var(--bg-base);
   transform: translateX(100%);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   display: none;
   flex-direction: column;
-  padding: calc(var(--space-10) + env(safe-area-inset-top, 0)) var(--content-padding) calc(var(--space-10) + env(safe-area-inset-bottom, 0));
+  padding: 0;
 }
 .mobile-menu.open { transform: translateX(0); }
 
+/* Header with brand + close button. Fixed at the top of the overlay. */
+.mobile-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--space-4) + env(safe-area-inset-top, 0)) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mobile-menu-brand {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 1.3rem;
+  font-weight: var(--weight-extrabold);
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+.mobile-menu-brand span {
+  color: var(--accent);
+}
+
 .mobile-menu-close {
-  position: absolute;
-  top: calc(var(--space-4) + env(safe-area-inset-top, 0));
-  right: var(--space-4);
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-bright);
+  background: transparent;
+  color: var(--text-dim);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.1s ease;
 }
-.mobile-menu-close:hover { background: var(--bg-card-hover); }
+.mobile-menu-close:hover,
+.mobile-menu-close:active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
 .mobile-menu-close:active { transform: scale(0.95); }
 
-.mobile-menu-nav {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin-top: var(--space-8);
-}
-
-.mobile-menu-link {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 48px;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius);
-  color: var(--text-bright);
-  text-decoration: none;
-  font-size: var(--font-md);
-  font-weight: var(--weight-medium);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  width: 100%;
-  transition: background 0.15s ease;
-}
-.mobile-menu-link:hover { background: var(--bg-card); }
-.mobile-menu-link:active { background: var(--bg-card-hover); }
-.mobile-menu-link.active {
-  background: var(--bg-card);
-  color: var(--accent);
-  font-weight: var(--weight-semibold);
-}
-.mobile-menu-logout { color: var(--danger); }
-
-.mobile-menu-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 48px;
-  padding: 0 var(--space-4);
-  margin: var(--space-3) 0;
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-}
-.mobile-menu-search .search-icon {
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-.mobile-menu-search-input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-bright);
-  font-size: var(--font-base);
-  padding: var(--space-3) 0;
-  font-family: inherit;
-}
-
+/* Section: thin divider around a group. Last section has no divider
+   so it flows into the bottom safe-area. */
 .mobile-menu-section {
-  margin: var(--space-4) 0;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
 }
+.mobile-menu-section:last-child {
+  border-bottom: none;
+  padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0));
+}
+
 .mobile-menu-section-title {
   font-family: 'JetBrains Mono', monospace;
   font-size: var(--font-xs);
   font-weight: var(--weight-bold);
   color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding: var(--space-2) var(--space-4);
-  margin: 0 0 var(--space-1);
+  letter-spacing: 0.12em;
+  padding: var(--space-2) var(--space-5);
+  margin: 0;
 }
 
-.mobile-menu-space {
+/* Nav link: left-border accent when active, subtle hover/active bg.
+   Everything monochrome; the accent colour is the ONLY chromatic
+   highlight. Icons inherit current colour (text-dim by default, accent
+   when the link is active). */
+.mobile-menu-link {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  font-size: var(--font-md);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  text-decoration: none;
+  border: none;
+  border-left: 3px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.mobile-menu-space-icon {
+.mobile-menu-link:hover,
+.mobile-menu-link:active {
+  background: var(--accent-subtle);
+}
+.mobile-menu-link.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--accent-subtle);
+}
+.mobile-menu-link.logout {
+  color: var(--danger);
+}
+.mobile-menu-link.logout:hover,
+.mobile-menu-link.logout:active {
+  background: rgba(248, 81, 73, 0.08);
+}
+
+.mobile-menu-link-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 20px;
   flex-shrink: 0;
+  color: var(--text-dim);
   font-family: 'JetBrains Mono', monospace;
   font-weight: var(--weight-bold);
-  color: var(--space-color);
+  font-size: 0.9rem;
+  transition: color 0.15s ease;
 }
-.mobile-menu-space-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mobile-menu-space-count {
+.mobile-menu-link.active .mobile-menu-link-icon,
+.mobile-menu-link:hover .mobile-menu-link-icon {
+  color: var(--accent);
+}
+.mobile-menu-link.logout .mobile-menu-link-icon {
+  color: var(--danger);
+}
+
+.mobile-menu-link-count {
+  margin-left: auto;
   font-family: 'JetBrains Mono', monospace;
   font-size: var(--font-xs);
-  color: var(--text-dim);
-  padding: 0 var(--space-1);
+  color: var(--text-muted);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background: var(--bg-deep);
 }
-.mobile-menu-space.active {
-  background: var(--bg-card);
-  color: var(--space-color);
-}
-.mobile-menu-space.active .mobile-menu-space-icon { color: var(--space-color); }
 
-.mobile-menu-divider {
-  height: 1px;
-  background: var(--border);
-  margin: var(--space-4) 0;
+/* Search input lives in a section strip, no surrounding card. */
+.mobile-menu-search {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+.mobile-menu-search input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.mobile-menu-search input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+/* User footer: avatar + display name + handle, pushed to the bottom
+   by margin-top: auto if there is slack. If the content is longer
+   than the viewport the footer just follows the content. */
+.mobile-menu-user {
+  margin-top: auto;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.mobile-menu-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mobile-menu-username {
+  font-weight: var(--weight-semibold);
+  color: var(--text-bright);
+  font-size: var(--font-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-menu-handle {
+  font-size: var(--font-sm);
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Staggered slide-in for every link once the overlay opens. Each link
+   comes in with a small translateX + opacity ramp so the menu feels
+   alive without being loud. */
+.mobile-menu.open .mobile-menu-link {
+  opacity: 0;
+  transform: translateX(20px);
+  animation: menuItemSlide 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.mobile-menu.open .mobile-menu-link:nth-child(1)    { animation-delay: 0.05s; }
+.mobile-menu.open .mobile-menu-link:nth-child(2)    { animation-delay: 0.08s; }
+.mobile-menu.open .mobile-menu-link:nth-child(3)    { animation-delay: 0.11s; }
+.mobile-menu.open .mobile-menu-link:nth-child(4)    { animation-delay: 0.14s; }
+.mobile-menu.open .mobile-menu-link:nth-child(5)    { animation-delay: 0.17s; }
+.mobile-menu.open .mobile-menu-link:nth-child(6)    { animation-delay: 0.20s; }
+.mobile-menu.open .mobile-menu-link:nth-child(7)    { animation-delay: 0.23s; }
+.mobile-menu.open .mobile-menu-link:nth-child(8)    { animation-delay: 0.26s; }
+.mobile-menu.open .mobile-menu-link:nth-child(n+9)  { animation-delay: 0.29s; }
+
+@keyframes menuItemSlide {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* Swap regime: hamburger + overlay appear on mobile; desktop nav-links
@@ -557,7 +638,7 @@ code, pre, .mono {
 
 @media (max-width: 900px) {
   .nav-toggle { display: flex; }
-  .nav-links { display: none; } /* desktop center nav hidden; use overlay */
+  .nav-links { display: none; }
   .mobile-menu { display: flex; }
   .nav-right { margin-left: auto; }
 }

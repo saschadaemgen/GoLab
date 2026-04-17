@@ -131,6 +131,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	notifs := &model.NotificationStore{DB: pool}
 	spaces := &model.SpaceStore{DB: pool}
 	tags := &model.TagStore{DB: pool}
+	settings := &model.SettingsStore{DB: pool}
 	sessions := &auth.SessionStore{DB: pool}
 
 	// Notification dispatcher (used by post + profile handlers to fan events).
@@ -144,9 +145,12 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	// API handlers
 	home := &handler.HomeHandler{DB: pool}
 	authH := &handler.AuthHandler{
-		Users:    users,
-		Sessions: sessions,
-		Secure:   !cfg.IsDev(),
+		Users:         users,
+		Sessions:      sessions,
+		Settings:      settings,
+		Notifications: notifs,
+		Hub:           hub,
+		Secure:        !cfg.IsDev(),
 	}
 	channelH := &handler.ChannelHandler{Channels: channels, Users: users}
 	postH := &handler.PostHandler{
@@ -162,7 +166,10 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	notifH := &handler.NotifHandler{Store: notifs}
 	avatarH := &handler.AvatarHandler{Users: users, RootDir: "web/static"}
 	searchH := &handler.SearchHandler{DB: pool}
-	adminH := &handler.AdminHandler{DB: pool, Render: tmpls, Users: users}
+	adminH := &handler.AdminHandler{
+		DB: pool, Render: tmpls, Users: users,
+		Settings: settings, Notifications: notifs, Hub: hub,
+	}
 
 	// Page handlers
 	pageH := &handler.PageHandler{
@@ -201,6 +208,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		r.Use(requireAuthRedirect)
 		r.Get("/feed", pageH.FeedPage)
 		r.Get("/settings", pageH.SettingsPage)
+		r.Get("/pending", pageH.PendingPage)
 		// POST /settings is the no-JS fallback for the settings form.
 		// HTML forms can't use PUT, so we expose a POST alias that
 		// reuses the same handler. UpdateMe reads form-encoded bodies
@@ -249,25 +257,35 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Post("/preview", postH.Preview)
 		})
 
-		// Channels
+		// Channels - reads are open, mutations require an active (not
+		// pending / rejected) user.
 		r.Get("/channels", channelH.List)
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
-			r.Post("/channels", channelH.Create)
 			r.Get("/channels/{slug}", channelH.Get)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Use(auth.RequireActiveUser)
+			r.Post("/channels", channelH.Create)
 			r.Post("/channels/{slug}/join", channelH.Join)
 			r.Post("/channels/{slug}/leave", channelH.Leave)
 		})
 
 		// Posts (protected). 30 creates/minute per user is fine for humans;
 		// the limiter stops a runaway script and broken client loops.
+		// Reads (GET /posts/{id}) stay accessible to pending users.
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
+			r.Get("/posts/{id}", postH.Get)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Use(auth.RequireActiveUser)
 			r.With(httprate.Limit(30, time.Minute,
 				httprate.WithKeyFuncs(perUserRate),
 				httprate.WithLimitHandler(handler.RateLimited),
 			)).Post("/posts", postH.Create)
-			r.Get("/posts/{id}", postH.Get)
 			r.Delete("/posts/{id}", postH.Delete)
 			r.Post("/posts/{id}/react", postH.React)
 			r.Delete("/posts/{id}/react", postH.Unreact)
@@ -280,10 +298,12 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Get("/feed", feedH.Get)
 		})
 
-		// Profiles
+		// Profiles: GET is public. Own-profile mutations and follow
+		// actions require an active user.
 		r.Get("/users/{username}", profileH.Get)
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
+			r.Use(auth.RequireActiveUser)
 			r.Put("/users/me", profileH.UpdateMe)
 			r.With(httprate.Limit(10, time.Hour,
 				httprate.WithKeyFuncs(perUserRate),
@@ -298,6 +318,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		// decode+resize; we never want one user to saturate the server.
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
+			r.Use(auth.RequireActiveUser)
 			r.Use(httprate.Limit(10, time.Hour,
 				httprate.WithKeyFuncs(perUserRate),
 				httprate.WithLimitHandler(handler.RateLimited),
@@ -324,7 +345,8 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		r.Get("/spaces", spaceH.List)
 		r.Get("/tags/search", tagH.Search)
 
-		// Admin (power_level >= 100)
+		// Admin (power_level >= 75 via RequireAdmin - Sprint 12 admin
+		// tasks include moderation which is a trust floor below owner).
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
 			r.Use(handler.RequireAdmin)
@@ -333,6 +355,11 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Post("/admin/users/{id}/ban", adminH.Ban)
 			r.Post("/admin/users/{id}/unban", adminH.Unban)
 			r.Put("/admin/users/{id}/power", adminH.SetPower)
+			// Sprint 12 moderation
+			r.Get("/admin/pending", adminH.Pending)
+			r.Post("/admin/users/{id}/approve", adminH.Approve)
+			r.Post("/admin/users/{id}/reject", adminH.Reject)
+			r.Put("/admin/settings/{key}", adminH.SetSetting)
 		})
 	})
 
