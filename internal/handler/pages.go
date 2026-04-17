@@ -125,6 +125,12 @@ type feedContent struct {
 	Posts          []model.Post
 	JoinedChannels []model.Channel
 	Suggested      []model.Channel
+	// Sprint 10.5: the feed's sidebar partial receives feedContent as
+	// its template dot, so $.Spaces inside that partial binds to
+	// feedContent.Spaces (not to the outer PageData). Populate these
+	// here so the sidebar actually gets the space list.
+	Spaces       []model.Space
+	CurrentSpace string
 }
 
 func (h *PageHandler) FeedPage(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +167,8 @@ func (h *PageHandler) FeedPage(w http.ResponseWriter, r *http.Request) {
 		Posts:          posts,
 		JoinedChannels: joined,
 		Suggested:      suggested,
+		Spaces:         data.Spaces, // forward PageData.Spaces into the content dot
+		CurrentSpace:   "",          // feed isn't scoped to a single space
 	}
 	if err := h.Render.Render(w, "feed", data); err != nil {
 		slog.Error("render feed", "error", err)

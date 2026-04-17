@@ -256,25 +256,16 @@
         charCount: 0,
         max: 5000,
         submitting: false,
-        // Sprint 10.5: track the currently selected space slug so we
-        // can gate posting in "announcements" behind power_level >= 75
-        // client-side. The server still enforces this.
-        spaceSlug: '',
         powerLevel: cfg.powerLevel || 0,
 
-        onSpaceChange: function (ev) {
-          var option = ev.target.options[ev.target.selectedIndex];
-          this.spaceSlug = option ? (option.dataset.slug || '') : '';
-        },
-
-        canPostToAnnouncements: function () {
-          return this.powerLevel >= 75;
-        },
+        // onSpaceChange is retained as a hook for the future in case
+        // we ever gate spaces client-side again. For now it's a no-op
+        // so the template's @change still works without errors.
+        onSpaceChange: function () {},
 
         canSubmit: function () {
           if (this.submitting) return false;
           if (this.charCount < 1 || this.charCount > this.max) return false;
-          if (this.spaceSlug === 'announcements' && !this.canPostToAnnouncements()) return false;
           return true;
         },
 
@@ -734,7 +725,7 @@
     }
   }
 
-  // ---------- navbar scroll + mobile ----------
+  // ---------- navbar scroll + mobile overlay ----------
 
   function initNavbar() {
     var nav = document.getElementById('navbar');
@@ -745,22 +736,52 @@
       window.addEventListener('scroll', onScroll, { passive: true });
       onScroll();
     }
+
+    // Sprint 10.5: fullscreen #mobile-menu overlay replaces the old
+    // .nav-links slide-in. Hamburger opens, X button / backdrop /
+    // ESC / link-click all close. Body scroll is locked while open.
     var toggle = document.getElementById('nav-toggle');
-    var navLinks = document.getElementById('nav-links');
-    if (toggle && navLinks) {
-      toggle.addEventListener('click', function () {
-        navLinks.classList.toggle('open');
-        toggle.classList.toggle('active');
-        document.body.style.overflow = navLinks.classList.contains('open') ? 'hidden' : '';
-      });
-      navLinks.querySelectorAll('a').forEach(function (a) {
-        a.addEventListener('click', function () {
-          navLinks.classList.remove('open');
-          toggle.classList.remove('active');
-          document.body.style.overflow = '';
-        });
-      });
+    var menu   = document.getElementById('mobile-menu');
+    if (!toggle || !menu) return;
+    var closeBtn = document.getElementById('mobile-menu-close');
+
+    function open() {
+      menu.classList.add('open');
+      toggle.classList.add('active');
+      toggle.setAttribute('aria-expanded', 'true');
+      menu.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
     }
+    function close() {
+      menu.classList.remove('open');
+      toggle.classList.remove('active');
+      toggle.setAttribute('aria-expanded', 'false');
+      menu.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+    toggle.addEventListener('click', function () {
+      if (menu.classList.contains('open')) close(); else open();
+    });
+    if (closeBtn) closeBtn.addEventListener('click', close);
+
+    // Clicking any link inside the menu auto-closes. Logout button is
+    // a button, not an <a>, so include [data-action="logout"] too.
+    menu.querySelectorAll('a, [data-action=logout]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        setTimeout(close, 0); // let the link's own handler run first
+      });
+    });
+
+    // Escape closes the overlay from anywhere.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && menu.classList.contains('open')) close();
+    });
+
+    // If the viewport grows back to desktop while the overlay is open
+    // (orientation change, dev-tools resize), close it cleanly.
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 900 && menu.classList.contains('open')) close();
+    });
   }
 
   // ---------- register / login / settings / create-channel forms ----------

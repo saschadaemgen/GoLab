@@ -15,7 +15,9 @@
        by composeEditor.init() in golab.js. -->
   <div x-ref="editor" class="compose-editor"></div>
 
-  <!-- Row: post type radio pills -->
+  <!-- Row: post type radio pills. Announcement appears only for admins
+       (power_level >= 75) since it's an admin-only post type across
+       every space. -->
   <div class="compose-type-row" role="radiogroup" aria-label="Post type">
     <label class="type-radio">
       <input type="radio" name="post_type" value="discussion" checked>
@@ -41,6 +43,12 @@
       <input type="radio" name="post_type" value="link">
       <span class="type-radio-pill">Link</span>
     </label>
+    {{ if ge $powerLevel 75 }}
+    <label class="type-radio">
+      <input type="radio" name="post_type" value="announcement">
+      <span class="type-radio-pill type-radio-pill-admin">Announcement</span>
+    </label>
+    {{ end }}
   </div>
 
   <!-- Row: tag input with autocomplete -->
@@ -121,11 +129,8 @@
     </button>
   </div>
 
-  <!-- Inline notice when user picks announcements but has power < 75 -->
-  <div class="compose-notice"
-       x-show="spaceSlug === 'announcements' && powerLevel < 75"
-       x-cloak>
-    Only admins (power level 75+) can post to Announcements.
-  </div>
+  {{/* Announcement is now a post_type. Server enforces admin-only;
+       the radio pill is only rendered for admins so there is no
+       client-side notice needed. */}}
 </form>
 {{ end }}

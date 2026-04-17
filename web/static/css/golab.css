@@ -1034,6 +1034,23 @@ img.avatar {
   color: #fff;
 }
 
+/* Admin-only Announcement pill: distinct warning tone so it's
+   visually clear this is a high-signal post type. */
+.type-radio-pill-admin {
+  border-color: #d29922;
+  color: #d29922;
+}
+.type-radio-pill-admin:hover {
+  background: rgba(210, 153, 34, 0.08);
+  border-color: #d29922;
+  color: #d29922;
+}
+.type-radio input:checked + .type-radio-pill-admin {
+  background: #d29922;
+  border-color: #d29922;
+  color: #fff;
+}
+
 /* Tag input row (chips + autocomplete) */
 .compose-tags {
   display: flex;
@@ -1343,17 +1360,50 @@ img.avatar {
   color: #fff;
 }
 
+/* Mobile swap: hide the pill bar and show a native <select>. Avoids
+   horizontal scrolling entirely, which users consistently hate. The
+   select is a real form control so keyboard + screen readers just
+   work. */
+.space-dropdown-mobile {
+  display: none;
+  padding: var(--space-3) var(--content-padding);
+  background: rgba(var(--bg-card-rgb), 0.88);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: var(--header-total);
+  z-index: 500;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.space-dropdown-mobile select {
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-bright);
+  font-size: var(--font-base);
+  font-family: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  /* Caret indicator rendered as a CSS background so we don't have to
+     ship another SVG asset. */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'><path d='M1 1l5 5 5-5' stroke='%2345BDD1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right var(--space-4) center;
+  padding-right: var(--space-8);
+}
+.space-dropdown-mobile select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
 @media (max-width: 768px) {
-  .space-bar {
-    padding: var(--space-2) var(--content-padding);
-    gap: var(--space-1);
-  }
-  .space-pill {
-    padding: var(--space-1) var(--space-3);
-    font-size: var(--font-xs);
-  }
-  /* Hide count badges on mobile - room for more pills instead. */
-  .space-count { display: none; }
+  .space-bar { display: none; }
+  .space-dropdown-mobile { display: block; }
 }
 
 /* ================================================================

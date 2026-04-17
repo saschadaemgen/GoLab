@@ -1,7 +1,11 @@
 {{ define "space-bar.html" }}
 {{ if .Spaces }}
+{{ $currentPath := .CurrentPath }}
+{{ $currentSpace := .CurrentSpace }}
+
+<!-- Desktop: horizontal pill bar (>= 768px) -->
 <nav class="space-bar" aria-label="Spaces">
-  <a href="/feed" class="space-pill{{ if eq .CurrentPath "/feed" }} active{{ end }}"
+  <a href="/feed" class="space-pill{{ if eq $currentPath "/feed" }} active{{ end }}"
      style="--space-color: var(--accent);"
      hx-boost="true">
     <span class="space-icon" aria-hidden="true">*</span>
@@ -10,7 +14,7 @@
 
   {{ range .Spaces }}
   <a href="/s/{{ .Slug }}"
-     class="space-pill{{ if eq $.CurrentSpace .Slug }} active{{ end }}"
+     class="space-pill{{ if eq $currentSpace .Slug }} active{{ end }}"
      style="--space-color: {{ .Color }};"
      hx-boost="true">
     <span class="space-icon" aria-hidden="true">{{ if .Icon }}{{ .Icon }}{{ else }}#{{ end }}</span>
@@ -21,12 +25,28 @@
   </a>
   {{ end }}
 
-  <a href="/explore" class="space-pill{{ if eq .CurrentPath "/explore" }} active{{ end }}"
+  <a href="/explore" class="space-pill{{ if eq $currentPath "/explore" }} active{{ end }}"
      style="--space-color: var(--text-dim);"
      hx-boost="true">
     <span class="space-icon" aria-hidden="true">~</span>
     <span class="space-name">Explore</span>
   </a>
 </nav>
+
+<!-- Mobile: native <select> dropdown (< 768px). No horizontal scrolling.
+     `onchange` navigates directly so the element stays accessible and
+     keyboard-friendly even if JS is stripped. -->
+<div class="space-dropdown-mobile" aria-label="Spaces">
+  <select onchange="if(this.value) window.location.href=this.value">
+    <option value="/feed"{{ if eq $currentPath "/feed" }} selected{{ end }}>* Feed</option>
+    {{ range .Spaces }}
+    <option value="/s/{{ .Slug }}"{{ if eq $currentSpace .Slug }} selected{{ end }}>
+      {{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}{{ if gt .PostCount 0 }} ({{ .PostCount }}){{ end }}
+    </option>
+    {{ end }}
+    <option value="/explore"{{ if eq $currentPath "/explore" }} selected{{ end }}>~ Explore</option>
+  </select>
+</div>
+
 {{ end }}
 {{ end }}

@@ -24,10 +24,6 @@ type PostHandler struct {
 	Notifs    *NotifDispatch // optional; used to create notifications on react/reply
 }
 
-// minPowerToPostInAnnouncements is the admin threshold. Only users at
-// or above this level can post to the "announcements" space. Sprint 10.5
-// rule.
-const minPowerToPostInAnnouncements = 75
 
 type createPostRequest struct {
 	Content   string   `json:"content"`
@@ -43,15 +39,24 @@ type createPostRequest struct {
 const maxTagsPerPost = 5
 
 // validPostTypes are the post_type values the server accepts. Anything
-// else falls back to "discussion".
+// else falls back to "discussion". The set now includes "announcement"
+// because announcements cross every thematic space - they're an axis
+// on posts, not a space of their own (Sprint 10.5 revision).
 var validPostTypes = map[string]bool{
-	"discussion": true,
-	"question":   true,
-	"tutorial":   true,
-	"code":       true,
-	"showcase":   true,
-	"link":       true,
+	"discussion":   true,
+	"question":     true,
+	"tutorial":     true,
+	"code":         true,
+	"showcase":     true,
+	"link":         true,
+	"announcement": true,
 }
+
+// minPowerToPostAnnouncement guards the announcement post type. Only
+// users at or above this level can mark a post as an announcement,
+// regardless of which space it lives in. Matches the same threshold
+// the UI enforces client-side.
+const minPowerToPostAnnouncement = 75
 
 type reactRequest struct {
 	ReactionType string `json:"reaction_type"`
@@ -127,16 +132,11 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Announcements space: admin-only posting (power_level >= 75).
-	// Look up the space by ID; if the client picked announcements and
-	// the user doesn't have the power, reject.
-	if req.SpaceID != nil && h.Spaces != nil {
-		if sp, err := h.Spaces.FindByID(r.Context(), *req.SpaceID); err == nil && sp != nil {
-			if sp.Slug == "announcements" && user.PowerLevel < minPowerToPostInAnnouncements {
-				writeError(w, http.StatusForbidden, "only admins can post to Announcements")
-				return
-			}
-		}
+	// Announcement post type is admin-only (power_level >= 75),
+	// regardless of which space the post lives in.
+	if req.PostType == "announcement" && user.PowerLevel < minPowerToPostAnnouncement {
+		writeError(w, http.StatusForbidden, "only admins can publish announcements")
+		return
 	}
 
 	// Validate parent exists if replying

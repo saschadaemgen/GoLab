@@ -398,23 +398,167 @@ code, pre, .mono {
 .nav-toggle.active span:nth-child(2) { opacity: 0; }
 .nav-toggle.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
+/* Sprint 10.5 mobile menu: fullscreen overlay replaces the old
+   slide-in .nav-links panel. Triggered by #nav-toggle. */
+
+.mobile-menu {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  /* 100dvh avoids the iOS URL-bar jitter; fallback to vh for older
+     browsers. Both keep the overlay exactly one viewport tall so no
+     outer scrollbar can appear. */
+  height: 100vh;
+  height: 100dvh;
+  z-index: 10500; /* above util-bar (10001), navbar (10000), space-bar (500) */
+  background: var(--bg-base);
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  display: none;
+  flex-direction: column;
+  padding: calc(var(--space-10) + env(safe-area-inset-top, 0)) var(--content-padding) calc(var(--space-10) + env(safe-area-inset-bottom, 0));
+}
+.mobile-menu.open { transform: translateX(0); }
+
+.mobile-menu-close {
+  position: absolute;
+  top: calc(var(--space-4) + env(safe-area-inset-top, 0));
+  right: var(--space-4);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.mobile-menu-close:hover { background: var(--bg-card-hover); }
+.mobile-menu-close:active { transform: scale(0.95); }
+
+.mobile-menu-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-8);
+}
+
+.mobile-menu-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  color: var(--text-bright);
+  text-decoration: none;
+  font-size: var(--font-md);
+  font-weight: var(--weight-medium);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  transition: background 0.15s ease;
+}
+.mobile-menu-link:hover { background: var(--bg-card); }
+.mobile-menu-link:active { background: var(--bg-card-hover); }
+.mobile-menu-link.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+}
+.mobile-menu-logout { color: var(--danger); }
+
+.mobile-menu-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  margin: var(--space-3) 0;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.mobile-menu-search .search-icon {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.mobile-menu-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-bright);
+  font-size: var(--font-base);
+  padding: var(--space-3) 0;
+  font-family: inherit;
+}
+
+.mobile-menu-section {
+  margin: var(--space-4) 0;
+}
+.mobile-menu-section-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-1);
+}
+
+.mobile-menu-space {
+  gap: var(--space-3);
+}
+.mobile-menu-space-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: var(--weight-bold);
+  color: var(--space-color);
+}
+.mobile-menu-space-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-menu-space-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--font-xs);
+  color: var(--text-dim);
+  padding: 0 var(--space-1);
+}
+.mobile-menu-space.active {
+  background: var(--bg-card);
+  color: var(--space-color);
+}
+.mobile-menu-space.active .mobile-menu-space-icon { color: var(--space-color); }
+
+.mobile-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-4) 0;
+}
+
+/* Swap regime: hamburger + overlay appear on mobile; desktop nav-links
+   take over above 900px. */
+.nav-toggle { display: none; }
+
 @media (max-width: 900px) {
   .nav-toggle { display: flex; }
-  .nav-links {
-    position: fixed;
-    top: var(--header-total); left: 0; right: 0; bottom: 0;
-    background: var(--bg-base);
-    flex-direction: column;
-    justify-content: flex-start;
-    padding: var(--space-10) var(--space-6);
-    gap: var(--space-5);
-    transform: translateX(100%);
-    transition: transform var(--transition);
-    z-index: 9999;
-    overflow-y: auto;
-  }
-  .nav-links.open { transform: translateX(0); }
-  .nav-links a { font-size: var(--font-md); }
+  .nav-links { display: none; } /* desktop center nav hidden; use overlay */
+  .mobile-menu { display: flex; }
   .nav-right { margin-left: auto; }
 }
 

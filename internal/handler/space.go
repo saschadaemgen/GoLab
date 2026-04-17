@@ -24,7 +24,7 @@ type SpaceHandler struct {
 // compose box plus "" for no filter.
 func isKnownPostType(s string) bool {
 	switch s {
-	case "discussion", "question", "tutorial", "code", "showcase", "link":
+	case "discussion", "question", "tutorial", "code", "showcase", "link", "announcement":
 		return true
 	}
 	return false
