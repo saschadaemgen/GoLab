@@ -54,13 +54,30 @@
     <img id="img-lightbox-img" alt="">
   </div>
 
+  <!--
+    Script loading order matters. The rules:
+
+    1. HTMX + Quill + highlight.js load synchronously (non-defer) so
+       `window.Quill` and `window.hljs` are defined before any code that
+       references them runs.
+
+    2. All defer scripts execute in document order AFTER HTML parsing
+       and BEFORE DOMContentLoaded. golab.js MUST come before
+       alpine.min.js so its `alpine:init` listener is registered before
+       Alpine fires the event. Otherwise every Alpine.data() registration
+       lands on no-one and x-data="composeEditor()" etc. crash with
+       "not defined".
+
+    3. Alpine v3 auto-starts on DOMContentLoaded; by that time golab.js's
+       listener is in place and components get registered synchronously
+       in the `alpine:init` handler before Alpine walks the DOM.
+  -->
   <script src="/static/js/htmx.min.js"></script>
-  <!-- Quill must load before golab.js so the composeEditor init can see it. -->
   <script src="/static/js/quill.min.js"></script>
   <script src="/static/js/highlight.min.js"></script>
-  <script defer src="/static/js/alpine.min.js"></script>
   <script defer src="/static/js/particles.js"></script>
   <script defer src="/static/js/theme.js"></script>
   <script defer src="/static/js/golab.js"></script>
+  <script defer src="/static/js/alpine.min.js"></script>
 </body>
 </html>{{ end }}

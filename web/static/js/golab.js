@@ -91,16 +91,27 @@
         },
         upload: function (file) {
           var self = this;
-          if (!file.type.startsWith('image/')) {
+          if (!file || !file.type || !file.type.startsWith('image/')) {
             toast('error', 'Please select an image');
             return;
           }
           if (self.uploading) return; // prevent double submissions
           self.uploading = true;
 
-          // Local preview immediately while the server-side resize runs.
+          // Race guard: both FileReader.onload (local preview) and fetch
+          // (real server URL) race to set `preview`. Without this flag,
+          // FileReader's local data URL could arrive AFTER the fetch
+          // response and silently overwrite the real avatar URL, leaving
+          // the settings page showing the pre-upload image while the
+          // server already has the new one. Once the server answers (ok
+          // or error), FileReader must not touch preview anymore.
+          var serverResolved = false;
+
           var reader = new FileReader();
-          reader.onload = function (e) { self.preview = e.target.result; };
+          reader.onload = function (e) {
+            if (serverResolved) return;
+            self.preview = e.target.result;
+          };
           reader.readAsDataURL(file);
 
           var form = new FormData();
@@ -110,10 +121,12 @@
             body: form,
             credentials: 'same-origin'
           }).then(function (r) {
-            return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+            return r.json().then(function (d) { return { ok: r.ok, data: d }; })
+              .catch(function () { return { ok: r.ok, data: {} }; });
           }).then(function (res) {
+            serverResolved = true;
             self.uploading = false;
-            if (res.ok) {
+            if (res.ok && res.data && res.data.avatar_url) {
               self.preview = res.data.avatar_url;
               var hidden = document.getElementById('st-avatar-url');
               if (hidden) hidden.value = res.data.avatar_url;
@@ -124,9 +137,10 @@
               }
               toast('success', 'Avatar uploaded');
             } else {
-              toast('error', res.data.error || 'Upload failed');
+              toast('error', (res.data && res.data.error) || 'Upload failed');
             }
           }).catch(function () {
+            serverResolved = true;
             self.uploading = false;
             toast('error', 'Upload failed');
           });
@@ -239,6 +253,25 @@
         init: function () {
           var self = this;
           var container = this.$refs.editor;
+
+          // Guard against double-mount. Two ways this can happen:
+          //   1. A template accidentally has both x-data="composeEditor()"
+          //      AND x-init="init()" - Alpine auto-calls init() once and
+          //      the explicit x-init calls it again.
+          //   2. HTMX hx-boost page swaps leave a stale Quill instance on
+          //      a container that Alpine then tries to re-mount.
+          // In both cases Quill adds a second toolbar and editor. We check
+          // container state and the stashed Quill reference, and bail out
+          // early if either indicates an existing mount.
+          if (container.__quillMounted || container.classList.contains('ql-container')) {
+            return;
+          }
+          // Also: if Alpine re-runs init on the same component data, this.quill
+          // is already set from the first pass. Skip.
+          if (this.quill) {
+            return;
+          }
+
           if (!window.Quill) {
             // Graceful fallback: plain editable div
             container.setAttribute('contenteditable', 'true');
@@ -246,6 +279,7 @@
             container.addEventListener('input', function () {
               self.charCount = (container.innerText || '').trim().length;
             });
+            container.__quillMounted = true;
             return;
           }
           this.quill = new window.Quill(container, {
@@ -267,9 +301,21 @@
               }
             }
           });
+          container.__quillMounted = true;
           this.quill.on('text-change', function () {
             self.charCount = self.textLength();
           });
+        },
+
+        // Alpine calls destroy() when the component is torn down (element
+        // removed from DOM, HTMX swap, etc). Clearing the mount flag lets
+        // the next incarnation mount a fresh Quill.
+        destroy: function () {
+          var container = this.$refs && this.$refs.editor;
+          if (container) {
+            delete container.__quillMounted;
+          }
+          this.quill = null;
         },
 
         textLength: function () {
