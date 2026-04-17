@@ -36,6 +36,24 @@ func main() {
 		AuthorDisplayName: "Der Prinz",
 	}
 
+	dummySpaces := []model.Space{
+		{ID: 1, Slug: "simplex", Name: "SimpleX Protocol", Color: "#45BDD1", Icon: "*", SortOrder: 1, PostCount: 12},
+		{ID: 2, Slug: "matrix", Name: "Matrix / Element", Color: "#0DBD8B", Icon: "#", SortOrder: 2, PostCount: 3},
+		{ID: 8, Slug: "meta", Name: "Off-Topic / Meta", Color: "#95A5A6", Icon: "-", SortOrder: 8, PostCount: 5},
+	}
+
+	// withBase injects the fields base.html needs on every page so the
+	// space-bar and navbar render without {{nil}} errors.
+	withBase := func(page map[string]any, currentSpace string) map[string]any {
+		if _, ok := page["Spaces"]; !ok {
+			page["Spaces"] = dummySpaces
+		}
+		if _, ok := page["CurrentSpace"]; !ok {
+			page["CurrentSpace"] = currentSpace
+		}
+		return page
+	}
+
 	pages := map[string]any{
 		"home": map[string]any{
 			"Title": "Home", "SiteName": "GoLab", "User": nil, "CurrentPath": "/",
@@ -120,6 +138,14 @@ func main() {
 	}
 
 	for name, data := range pages {
+		// Make sure every page has the space-bar data base.html reads.
+		if m, ok := data.(map[string]any); ok {
+			current := ""
+			if name == "space" {
+				current = "simplex"
+			}
+			withBase(m, current)
+		}
 		var buf bytes.Buffer
 		rw := &bufWriter{buf: &buf, headers: make(http.Header)}
 		if err := eng.Render(rw, name, data); err != nil {

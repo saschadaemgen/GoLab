@@ -1,10 +1,95 @@
 {{ define "content" }}
 {{ with .Content }}
-<div class="fade-in" style="max-width:1040px;margin:1.5rem auto;padding:0 1.5rem;">
-  <h1>{{ .Space.Name }}</h1>
-  <p class="muted">{{ .Space.Description }}</p>
-  <p class="muted mono">{{ .Space.PostCount }} posts{{ if .ActiveType }} - type: {{ .ActiveType }}{{ end }}{{ if .ActiveTag }} - tag: #{{ .ActiveTag }}{{ end }}</p>
-  <p class="muted mono" style="font-size:0.8rem;">(Stop Point 2 will add the space bar, filter tabs, posts list and tag sidebar.)</p>
+{{ $sp := .Space }}
+<div class="space-page fade-in">
+  <!-- Header: icon, name, description, stats -->
+  <header class="space-header">
+    <div class="space-header-info">
+      <div class="space-header-icon" style="color: {{ $sp.Color }}; border-color: {{ $sp.Color }};">
+        {{ if $sp.Icon }}{{ $sp.Icon }}{{ else }}#{{ end }}
+      </div>
+      <div>
+        <h1 class="space-title">{{ $sp.Name }}</h1>
+        {{ if $sp.Description }}
+        <p class="space-description">{{ $sp.Description }}</p>
+        {{ end }}
+      </div>
+    </div>
+    <div class="space-stats">
+      <span class="space-stat"><strong>{{ $sp.PostCount }}</strong> posts</span>
+    </div>
+  </header>
+
+  <!-- Post type filter tabs (SP3 will wire the links; SP2 renders them) -->
+  <nav class="type-tabs" aria-label="Filter by post type">
+    <a href="/s/{{ $sp.Slug }}"
+       class="type-tab{{ if eq .ActiveType "" }} active{{ end }}"
+       hx-boost="true">All</a>
+    <a href="/s/{{ $sp.Slug }}?type=discussion"
+       class="type-tab{{ if eq .ActiveType "discussion" }} active{{ end }}"
+       hx-boost="true">Discussions</a>
+    <a href="/s/{{ $sp.Slug }}?type=question"
+       class="type-tab{{ if eq .ActiveType "question" }} active{{ end }}"
+       hx-boost="true">Questions</a>
+    <a href="/s/{{ $sp.Slug }}?type=tutorial"
+       class="type-tab{{ if eq .ActiveType "tutorial" }} active{{ end }}"
+       hx-boost="true">Tutorials</a>
+    <a href="/s/{{ $sp.Slug }}?type=code"
+       class="type-tab{{ if eq .ActiveType "code" }} active{{ end }}"
+       hx-boost="true">Code</a>
+    <a href="/s/{{ $sp.Slug }}?type=showcase"
+       class="type-tab{{ if eq .ActiveType "showcase" }} active{{ end }}"
+       hx-boost="true">Showcases</a>
+    <a href="/s/{{ $sp.Slug }}?type=link"
+       class="type-tab{{ if eq .ActiveType "link" }} active{{ end }}"
+       hx-boost="true">Links</a>
+  </nav>
+
+  <!-- Body: posts + sidebar -->
+  <div class="space-body">
+    <main>
+      <!-- SP5 will replace this with the Quill compose partial pre-seeded
+           with this space's ID so users post straight into the space. -->
+
+      {{ if .Posts }}
+      <div class="stagger-in">
+        {{ range .Posts }}
+          {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+        {{ end }}
+      </div>
+      {{ else }}
+      <div class="empty-state">
+        <h3>No {{ if .ActiveType }}{{ .ActiveType }}s{{ else }}posts{{ end }} yet{{ if .ActiveTag }} tagged #{{ .ActiveTag }}{{ end }}</h3>
+        <p>Be the first to post in {{ $sp.Name }}.</p>
+      </div>
+      {{ end }}
+    </main>
+
+    <aside class="space-sidebar">
+      {{ if .PopularTags }}
+      <section class="sidebar-card">
+        <h4 class="sidebar-title">Popular tags</h4>
+        <div class="tag-cloud">
+          {{ range .PopularTags }}
+          <a href="/s/{{ $sp.Slug }}?tag={{ .Slug }}"
+             class="tag-pill{{ if eq $.Content.ActiveTag .Slug }} active{{ end }}"
+             hx-boost="true">
+            #{{ .Name }}
+            <span class="tag-count">{{ .UseCount }}</span>
+          </a>
+          {{ end }}
+        </div>
+      </section>
+      {{ end }}
+
+      <section class="sidebar-card">
+        <h4 class="sidebar-title">About</h4>
+        <p class="sidebar-text">
+          {{ if $sp.Description }}{{ $sp.Description }}{{ else }}A space for discussion.{{ end }}
+        </p>
+      </section>
+    </aside>
+  </div>
 </div>
 {{ end }}
 {{ end }}

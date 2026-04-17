@@ -84,7 +84,7 @@ func (h *SpaceHandler) SpacePage(w http.ResponseWriter, r *http.Request) {
 		popular = []model.Tag{}
 	}
 
-	data := newPageData(r, sp.Name+" - GoLab")
+	data := h.newPageData(r, sp.Name+" - GoLab", sp.Slug)
 	data["Content"] = map[string]any{
 		"Space":       sp,
 		"Posts":       posts,
@@ -116,6 +116,7 @@ type TagHandler struct {
 	Render *render.Engine
 	Tags   *model.TagStore
 	Posts  *model.PostStore
+	Spaces *model.SpaceStore // used by newPageData to populate the space bar
 }
 
 func (h *TagHandler) TagPage(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +141,7 @@ func (h *TagHandler) TagPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data := newPageData(r, "#"+tag.Name+" - GoLab")
+	data := h.newPageData(r, "#"+tag.Name+" - GoLab")
 	data["Content"] = map[string]any{
 		"Tag":   tag,
 		"Posts": posts,
@@ -173,14 +174,43 @@ func (h *TagHandler) Search(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tags)
 }
 
-// newPageData is a thin helper that mirrors the PageHandler's envelope
-// but without pulling PageHandler into these new handlers. The page
-// handler still owns the User / CurrentPath / SiteName base data.
-func newPageData(r *http.Request, title string) map[string]any {
-	return map[string]any{
-		"Title":       title,
-		"SiteName":    "GoLab",
-		"User":        auth.UserFromContext(r.Context()),
-		"CurrentPath": r.URL.Path,
+// newPageData mirrors the PageHandler's envelope. It populates the same
+// keys (Spaces + CurrentSpace) that base.html's space-bar reads, so
+// pages served by SpaceHandler and TagHandler render identically to
+// pages served by PageHandler.
+//
+// The optional `spaces` store can be nil (tests, early boot) - the
+// space bar then just renders empty.
+func (h *SpaceHandler) newPageData(r *http.Request, title string, currentSlug string) map[string]any {
+	data := map[string]any{
+		"Title":        title,
+		"SiteName":     "GoLab",
+		"User":         auth.UserFromContext(r.Context()),
+		"CurrentPath":  r.URL.Path,
+		"CurrentSpace": currentSlug,
 	}
+	if h.Spaces != nil {
+		if spaces, err := h.Spaces.List(r.Context()); err == nil {
+			data["Spaces"] = spaces
+		}
+	}
+	return data
+}
+
+// TagHandler's equivalent. Tags don't belong to a single space, so
+// CurrentSpace is always empty here.
+func (h *TagHandler) newPageData(r *http.Request, title string) map[string]any {
+	data := map[string]any{
+		"Title":        title,
+		"SiteName":     "GoLab",
+		"User":         auth.UserFromContext(r.Context()),
+		"CurrentPath":  r.URL.Path,
+		"CurrentSpace": "",
+	}
+	if h.Spaces != nil {
+		if spaces, err := h.Spaces.List(r.Context()); err == nil {
+			data["Spaces"] = spaces
+		}
+	}
+	return data
 }

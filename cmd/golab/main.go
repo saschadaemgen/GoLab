@@ -155,7 +155,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	}
 	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}
 	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags}
-	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts}
+	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts, Spaces: spaces}
 	feedH := &handler.FeedHandler{Posts: posts}
 	profileH := &handler.ProfileHandler{Users: users, Posts: posts, Follows: follows, Notifs: notifDispatch}
 	notifH := &handler.NotifHandler{Store: notifs}
@@ -171,6 +171,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Posts:     posts,
 		Follows:   follows,
 		Reactions: reactions,
+		Spaces:    spaces,
 		SiteName:  cfg.SiteName,
 	}
 

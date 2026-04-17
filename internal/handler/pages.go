@@ -12,12 +12,19 @@ import (
 )
 
 // PageData is the common envelope every page template receives.
+//
+// Spaces + CurrentSpace power the space bar rendered by base.html on
+// every page. Keeping them on PageData means each page handler gets
+// them "for free" via newPageData() instead of every handler having
+// to remember to populate them.
 type PageData struct {
-	Title       string
-	SiteName    string
-	User        *model.User // nil if not logged in
-	CurrentPath string
-	Content     any
+	Title        string
+	SiteName     string
+	User         *model.User // nil if not logged in
+	CurrentPath  string
+	Spaces       []model.Space
+	CurrentSpace string // slug of the active space (empty on /feed, /u/..., etc.)
+	Content      any
 }
 
 type PageHandler struct {
@@ -27,16 +34,23 @@ type PageHandler struct {
 	Posts     *model.PostStore
 	Follows   *model.FollowStore
 	Reactions *model.ReactionStore
+	Spaces    *model.SpaceStore
 	SiteName  string
 }
 
 func (h *PageHandler) newPageData(r *http.Request, title string) PageData {
-	return PageData{
+	data := PageData{
 		Title:       title,
 		SiteName:    h.SiteName,
 		User:        auth.UserFromContext(r.Context()),
 		CurrentPath: r.URL.Path,
 	}
+	if h.Spaces != nil {
+		if spaces, err := h.Spaces.List(r.Context()); err == nil {
+			data.Spaces = spaces
+		}
+	}
+	return data
 }
 
 // ---------- Home ----------

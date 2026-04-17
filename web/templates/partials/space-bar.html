@@ -1,0 +1,32 @@
+{{ define "space-bar.html" }}
+{{ if .Spaces }}
+<nav class="space-bar" aria-label="Spaces">
+  <a href="/feed" class="space-pill{{ if eq .CurrentPath "/feed" }} active{{ end }}"
+     style="--space-color: var(--accent);"
+     hx-boost="true">
+    <span class="space-icon" aria-hidden="true">*</span>
+    <span class="space-name">Feed</span>
+  </a>
+
+  {{ range .Spaces }}
+  <a href="/s/{{ .Slug }}"
+     class="space-pill{{ if eq $.CurrentSpace .Slug }} active{{ end }}"
+     style="--space-color: {{ .Color }};"
+     hx-boost="true">
+    <span class="space-icon" aria-hidden="true">{{ if .Icon }}{{ .Icon }}{{ else }}#{{ end }}</span>
+    <span class="space-name">{{ .Name }}</span>
+    {{ if gt .PostCount 0 }}
+    <span class="space-count">{{ .PostCount }}</span>
+    {{ end }}
+  </a>
+  {{ end }}
+
+  <a href="/explore" class="space-pill{{ if eq .CurrentPath "/explore" }} active{{ end }}"
+     style="--space-color: var(--text-dim);"
+     hx-boost="true">
+    <span class="space-icon" aria-hidden="true">~</span>
+    <span class="space-name">Explore</span>
+  </a>
+</nav>
+{{ end }}
+{{ end }}
