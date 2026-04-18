@@ -13,6 +13,12 @@
       </a>
       <span class="post-handle">@{{ $post.AuthorUsername }}</span>
       <span class="post-time">{{ timeAgo $post.CreatedAt }}</span>
+      {{/* Sprint 15a B6: edited badge. EditedAt is populated by the
+           handler when it attaches PostEditHistoryStore.LastEditAt.
+           Templates that don't attach it simply skip the badge. */}}
+      {{ if $post.EditedAt }}
+      <span class="post-edited" title="Edited {{ timeAgo $post.EditedAt }}">edited</span>
+      {{ end }}
 
       {{ if or $post.SpaceName (and $post.PostType (ne $post.PostType "discussion")) }}
       <div class="post-meta-row">
@@ -42,6 +48,10 @@
            x-transition:leave-start="dropdown-leave"
            x-transition:leave-end="dropdown-leave-active"
            class="dropdown-menu">
+        {{/* Sprint 15a B6: own-post edit. Fires the editPostModal
+             Alpine component via a custom event so the dropdown
+             stays dead-simple (no nested state). */}}
+        <button type="button" data-action="edit-post" data-post-id="{{ $post.ID }}">Edit</button>
         <button type="button" data-action="delete-post" data-post-id="{{ $post.ID }}">Delete</button>
       </div>
     </div>

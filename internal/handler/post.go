@@ -14,17 +14,18 @@ import (
 )
 
 type PostHandler struct {
-	Posts     *model.PostStore
-	Channels  *model.ChannelStore
-	Reactions *model.ReactionStore
-	Tags      *model.TagStore
-	Spaces    *model.SpaceStore
-	Users     *model.UserStore     // Sprint 14: resolve @username -> link on render
-	Mentions  *model.MentionStore  // Sprint 14: record mentions on post create/update
-	Markdown  *render.Markdown
-	Sanitizer *render.Sanitizer
-	Hub       *Hub           // optional; when present, new posts get broadcast
-	Notifs    *NotifDispatch // optional; used to create notifications on react/reply
+	Posts       *model.PostStore
+	Channels    *model.ChannelStore
+	Reactions   *model.ReactionStore
+	Tags        *model.TagStore
+	Spaces      *model.SpaceStore
+	Users       *model.UserStore             // Sprint 14: resolve @username -> link on render
+	Mentions    *model.MentionStore          // Sprint 14: record mentions on post create/update
+	EditHistory *model.PostEditHistoryStore  // Sprint 15a B6: list / count edits
+	Markdown    *render.Markdown
+	Sanitizer   *render.Sanitizer
+	Hub         *Hub           // optional; when present, new posts get broadcast
+	Notifs      *NotifDispatch // optional; used to create notifications on react/reply
 }
 
 
@@ -63,6 +64,14 @@ const minPowerToPostAnnouncement = 75
 
 type reactRequest struct {
 	ReactionType string `json:"reaction_type"`
+}
+
+// updatePostRequest is the body accepted by PATCH /api/posts/{id}.
+// Only content is mutable for author self-edits; post_type, space,
+// tags etc. stay fixed once created to keep the edit window simple
+// and to match every other ActivityStreams-shaped platform.
+type updatePostRequest struct {
+	Content string `json:"content"`
 }
 
 // allowedReactionTypes gates the 6 Sprint 10.5 emoji reactions.
@@ -366,6 +375,123 @@ func (h *PostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Update is the Sprint 15a B6 user-facing edit-post handler. Only
+// the post's author may call it (admins get their own path in
+// Sprint 15c via admin_moderation). The previous content is
+// persisted to post_edit_history in the same transaction as the
+// overwrite so we never lose the pre-edit text; that also drives
+// the "edited" badge on the post card via a MAX(created_at)
+// lookup.
+func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid post id")
+		return
+	}
+
+	var req updatePostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.Content) < 1 || len(req.Content) > 5000 {
+		writeError(w, http.StatusBadRequest, "content must be 1-5000 characters")
+		return
+	}
+
+	existing, err := h.Posts.FindByID(r.Context(), id)
+	if err != nil {
+		slog.Error("update post: find", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, "post not found")
+		return
+	}
+	if existing.AuthorID != user.ID {
+		// Admins don't use this path. Sprint 15c will add
+		// /api/admin/posts/{id} with its own moderation_log hook.
+		writeError(w, http.StatusForbidden, "only the author can edit this post")
+		return
+	}
+
+	// Sanitise exactly like Create does so rich HTML from Quill or
+	// Markdown from legacy clients both end up clean and mention-
+	// linked before they hit the DB.
+	var contentHTML string
+	if render.LooksLikeHTML(req.Content) {
+		if h.Sanitizer != nil {
+			contentHTML = h.Sanitizer.Clean(req.Content)
+		} else {
+			contentHTML = req.Content
+		}
+	} else if h.Markdown != nil {
+		if rendered, err := h.Markdown.Render(req.Content); err == nil {
+			if h.Sanitizer != nil {
+				contentHTML = h.Sanitizer.Clean(rendered)
+			} else {
+				contentHTML = rendered
+			}
+		}
+	}
+	if h.Users != nil {
+		contentHTML = render.LinkMentions(contentHTML, h.mentionResolver(r.Context()))
+	}
+
+	updated, err := h.Posts.UpdateContent(r.Context(), model.UpdateContentParams{
+		PostID:      id,
+		EditorID:    user.ID,
+		Content:     req.Content,
+		ContentHTML: contentHTML,
+		EditKind:    model.PostEditKindAuthor,
+	})
+	if err != nil {
+		slog.Error("update post", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if updated == nil {
+		// UpdateContent had the row a moment ago; a nil here means
+		// it vanished between the snapshot and the re-read. Treat
+		// as 404 rather than leaking a scary 500.
+		writeError(w, http.StatusNotFound, "post disappeared during edit")
+		return
+	}
+
+	// Re-mention hook: new mentions in the edited content should
+	// notify, but existing ones should stay as-is (don't re-notify
+	// on edit). MentionStore.SyncMentions handles the diff.
+	if h.Mentions != nil {
+		usernames := model.ExtractUsernames(req.Content)
+		if added, err := h.Mentions.SyncMentions(r.Context(), id, usernames); err != nil {
+			slog.Warn("update post: sync mentions", "post", id, "error", err)
+		} else if h.Notifs != nil {
+			pid := id
+			for _, uid := range added {
+				if uid == user.ID {
+					continue
+				}
+				h.Notifs.Notify(r.Context(), uid, user.ID, model.NotifMention, &pid)
+			}
+		}
+	}
+
+	// Populate the EditedAt field so the fragment re-render picks
+	// up the "edited" badge without a second roundtrip.
+	if h.EditHistory != nil {
+		if t, err := h.EditHistory.LastEditAt(r.Context(), id); err == nil && !t.IsZero() {
+			updated.EditedAt = &t
+		}
+	}
+
+	slog.Info("post edited", "id", id, "author", user.Username)
+
+	writeJSON(w, http.StatusOK, map[string]any{"post": updated})
 }
 
 // React toggles one (post, user, emoji) triple and returns the

@@ -145,6 +145,10 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	sessions := &auth.SessionStore{DB: pool}
 	// Sprint 14: MentionStore borrows UserStore for resolution.
 	mentions := &model.MentionStore{DB: pool, Users: users}
+	// Sprint 15a B6: per-post edit history persisted on every
+	// author self-edit (and, from Sprint 15c onward, every admin
+	// moderation edit).
+	editHistory := &model.PostEditHistoryStore{DB: pool}
 
 	// Notification dispatcher (used by post + profile handlers to fan events).
 	notifDispatch := &handler.NotifDispatch{Store: notifs, Hub: hub}
@@ -167,15 +171,16 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	channelH := &handler.ChannelHandler{Channels: channels, Users: users}
 	postH := &handler.PostHandler{
 		Posts: posts, Channels: channels, Reactions: reactions, Tags: tags,
-		Spaces:   spaces,
-		Users:    users,    // Sprint 14: needed to resolve @mentions -> profile links
-		Mentions: mentions, // Sprint 14: record mention rows on Create
-		Markdown: md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
+		Spaces:      spaces,
+		Users:       users,       // Sprint 14: resolve @mentions -> profile links
+		Mentions:    mentions,    // Sprint 14: record mention rows on Create / Update
+		EditHistory: editHistory, // Sprint 15a B6: LastEditAt for the edited badge
+		Markdown:    md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
 	}
 	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}
-	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags, Reactions: reactions}
-	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts, Spaces: spaces, Reactions: reactions}
-	feedH := &handler.FeedHandler{Posts: posts, Reactions: reactions}
+	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags, Reactions: reactions, EditHistory: editHistory}
+	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts, Spaces: spaces, Reactions: reactions, EditHistory: editHistory}
+	feedH := &handler.FeedHandler{Posts: posts, Reactions: reactions, EditHistory: editHistory}
 	profileH := &handler.ProfileHandler{
 		Users:    users,
 		Posts:    posts,
@@ -200,15 +205,16 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 
 	// Page handlers
 	pageH := &handler.PageHandler{
-		Render:    tmpls,
-		Users:     users,
-		Channels:  channels,
-		Posts:     posts,
-		Follows:   follows,
-		Reactions: reactions,
-		Spaces:    spaces,
-		Settings:  settings,
-		SiteName:  cfg.SiteName,
+		Render:      tmpls,
+		Users:       users,
+		Channels:    channels,
+		Posts:       posts,
+		Follows:     follows,
+		Reactions:   reactions,
+		Spaces:      spaces,
+		Settings:    settings,
+		EditHistory: editHistory, // Sprint 15a B6: edited_at on feed/thread/profile
+		SiteName:    cfg.SiteName,
 	}
 
 	// Static files
@@ -317,6 +323,9 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 				httprate.WithKeyFuncs(perUserRate),
 				httprate.WithLimitHandler(handler.RateLimited),
 			)).Post("/posts", postH.Create)
+			// Sprint 15a B6: author self-edit. Admin path will live
+			// under /admin/posts/{id} in Sprint 15c.
+			r.Patch("/posts/{id}", postH.Update)
 			r.Delete("/posts/{id}", postH.Delete)
 			r.Post("/posts/{id}/react", postH.React)
 			r.Delete("/posts/{id}/react", postH.Unreact)

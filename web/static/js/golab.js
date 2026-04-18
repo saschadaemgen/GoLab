@@ -337,6 +337,141 @@
       };
     });
 
+    // Sprint 15a B6: edit-post modal component. Opens in response
+    // to a golab:open-edit-post window event (fired by the
+    // data-action="edit-post" click handler in bindActions), fetches
+    // the post, mounts a fresh Quill instance pre-seeded with the
+    // current content, and PATCHes /api/posts/{id} on save. The
+    // Quill instance is created on each open and destroyed on
+    // close so closing + reopening doesn't stack toolbars.
+    window.Alpine.data('editPostModal', function () {
+      return {
+        open: false,
+        loading: false,
+        saving: false,
+        error: '',
+        postId: 0,
+        quill: null,
+        _initialHTML: '',
+
+        openForPost: function (postId) {
+          if (!postId) return;
+          var self = this;
+          self.postId = postId;
+          self.error = '';
+          self.loading = true;
+          self.open = true;
+          // Fetch the freshest post text (an admin might have
+          // edited since the user's feed loaded).
+          apiJSON('/api/posts/' + postId, 'GET', null).then(function (res) {
+            self.loading = false;
+            if (!res.ok || !res.data || !res.data.post) {
+              self.error = (res.data && res.data.error) || 'Could not load post';
+              return;
+            }
+            self._initialHTML = res.data.post.content || '';
+            // Wait one frame so x-show has painted the editor div
+            // before Quill measures its host.
+            requestAnimationFrame(function () { self._mountQuill(); });
+          });
+        },
+
+        _mountQuill: function () {
+          if (this.quill) return; // already mounted
+          var host = this.$refs.editor;
+          if (!host || !window.Quill) return;
+          this.quill = new window.Quill(host, {
+            theme: 'snow',
+            placeholder: "What do you want to say?",
+            modules: {
+              toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                ['link', 'blockquote', 'code-block'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                ['clean']
+              ]
+            }
+          });
+          // Seed with the current post text. If it looks like HTML
+          // (Quill was the original editor) paste it through the
+          // clipboard pipeline; otherwise drop it in as plain text
+          // so legacy Markdown posts don't render as mangled HTML.
+          if (this._initialHTML) {
+            if (/^\s*</.test(this._initialHTML)) {
+              this.quill.clipboard.dangerouslyPasteHTML(this._initialHTML);
+            } else {
+              this.quill.setText(this._initialHTML);
+            }
+          }
+        },
+
+        hasContent: function () {
+          if (!this.quill) return false;
+          return (this.quill.getText() || '').replace(/\n$/, '').length > 0;
+        },
+
+        save: function () {
+          var self = this;
+          if (!self.quill || self.saving) return;
+          var content = self.quill.root.innerHTML;
+          if (content === '<p><br></p>') {
+            self.error = 'Content cannot be empty';
+            return;
+          }
+          self.saving = true;
+          self.error = '';
+          apiJSON('/api/posts/' + self.postId, 'PATCH', { content: content })
+            .then(function (res) {
+              self.saving = false;
+              if (!res.ok) {
+                self.error = (res.data && res.data.error) || 'Save failed';
+                return;
+              }
+              toast('success', 'Post updated');
+              // Update the card in place if it's visible on the
+              // current page. Full re-render would be cleaner but
+              // also more invasive; this keeps scroll position.
+              var card = document.getElementById('post-' + self.postId);
+              if (card && res.data.post) {
+                var body = card.querySelector('.post-content');
+                if (body) body.innerHTML = res.data.post.content_html || '';
+                var meta = card.querySelector('.post-meta');
+                if (meta && res.data.post.edited_at && !meta.querySelector('.post-edited')) {
+                  var span = document.createElement('span');
+                  span.className = 'post-edited';
+                  span.textContent = 'edited';
+                  meta.appendChild(span);
+                }
+              }
+              self.close();
+            })
+            .catch(function () {
+              self.saving = false;
+              self.error = 'Network error';
+            });
+        },
+
+        close: function () {
+          this.open = false;
+          this.error = '';
+          this.saving = false;
+          this.postId = 0;
+          this._initialHTML = '';
+          // Tear down Quill so the next open starts clean. Quill
+          // doesn't expose a formal destroy, but removing the DOM
+          // children clears its toolbar and editor wrappers.
+          this.quill = null;
+          var host = this.$refs && this.$refs.editor;
+          if (host) host.innerHTML = '';
+          var parent = host && host.parentElement;
+          if (parent) {
+            parent.querySelectorAll('.ql-toolbar').forEach(function (t) { t.remove(); });
+          }
+        }
+      };
+    });
+
     // Sprint 13: admin Database panel. Lists recent backups, creates
     // new ones, drives the import modal (with CONFIRM typing gate),
     // drives the per-row delete confirm, and paginates the list at
@@ -1403,6 +1538,20 @@
               toast('error', res.data.error || 'Could not repost');
             }
           });
+        });
+      }
+
+      if (action === 'edit-post') {
+        // Sprint 15a B6: fire a window CustomEvent instead of poking
+        // the modal DOM directly. editPostModal() in the base
+        // template listens for it, fetches the post, and mounts a
+        // Quill instance pre-filled with the current content.
+        el.addEventListener('click', function () {
+          var id = el.dataset.postId;
+          if (!id) return;
+          window.dispatchEvent(new CustomEvent('golab:open-edit-post', {
+            detail: { postId: parseInt(id, 10) }
+          }));
         });
       }
 

@@ -1,0 +1,61 @@
+{{ define "edit-post-modal.html" }}
+{{/*
+  Sprint 15a B6 edit-post modal. Lives in base.html so every page
+  that renders post-card.html can reuse one instance instead of
+  cloning markup per view. The Alpine component fetches the post
+  on open (never cached - we want the latest server text, including
+  any admin moderation edits), mounts a second Quill instance
+  inside .edit-editor, and PATCHes /api/posts/{id} on save.
+
+  Opening is event-driven: golab.js listens for clicks on
+  [data-action="edit-post"] and dispatches window.CustomEvent
+  "golab:open-edit-post" with the post id. This component listens
+  for that event and populates itself.
+*/}}
+<div id="edit-post-modal"
+     class="edit-post-modal-backdrop"
+     x-data="editPostModal()"
+     x-show="open"
+     x-cloak
+     @golab:open-edit-post.window="openForPost($event.detail && $event.detail.postId)"
+     @click.self="close()"
+     x-transition.opacity>
+  <div class="edit-post-modal">
+    <header class="edit-post-modal-head">
+      <h3>Edit post</h3>
+      <button type="button" class="btn btn-ghost btn-sm press-effect"
+              @click="close()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </header>
+
+    <div x-show="loading" x-cloak class="edit-post-loading muted">Loading post...</div>
+
+    <div x-show="!loading" x-cloak>
+      <!-- Quill mounts here. editPostModal.init() attaches a fresh
+           instance on every open and tears it down on close so the
+           Shadow-DOM-style singletons don't leak across edits. -->
+      <div x-ref="editor" class="edit-post-editor"></div>
+
+      <div class="edit-post-error flash flash-error"
+           x-show="error" x-cloak x-text="error"></div>
+
+      <div class="edit-post-modal-actions">
+        <button type="button" class="btn btn-outline press-effect"
+                @click="close()">Cancel</button>
+        <button type="button" class="btn btn-primary press-effect"
+                @click="save()"
+                :disabled="saving || !hasContent()">
+          <span x-show="!saving" x-cloak>Save changes</span>
+          <span x-show="saving" x-cloak>Saving...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{{ end }}

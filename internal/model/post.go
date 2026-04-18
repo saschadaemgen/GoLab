@@ -44,6 +44,13 @@ type Post struct {
 	// emoji type as key with a zero value when the post has none.
 	ReactionCounts    map[string]int `json:"reaction_counts,omitempty"`
 	UserReactionTypes []string       `json:"user_reaction_types,omitempty"`
+
+	// Sprint 15a B6. Non-zero when the post has at least one row
+	// in post_edit_history. The post-card / thread templates show
+	// an "edited" badge next to CreatedAt when this is set. Never
+	// populated by the default SELECT - handlers attach it on
+	// demand via PostEditHistoryStore.LastEditAt.
+	EditedAt *time.Time `json:"edited_at,omitempty"`
 }
 
 type PostStore struct {
@@ -301,6 +308,86 @@ func (s *PostStore) Delete(ctx context.Context, id, authorID int64) error {
 		return fmt.Errorf("post not found or not owned by user")
 	}
 	return nil
+}
+
+// UpdateContentParams bundles everything PostStore.UpdateContent
+// needs. ContentHTML is the already-sanitised (and mention-linked)
+// HTML; raw Content mirrors the same field on Create - the server
+// keeps the submitted form so future re-sanitisation passes don't
+// lose fidelity. EditKind is PostEditKindAuthor for self-edits and
+// PostEditKindAdmin for moderation edits (Sprint 15c).
+type UpdateContentParams struct {
+	PostID      int64
+	EditorID    int64
+	Content     string
+	ContentHTML string
+	EditKind    string
+	EditReason  string
+}
+
+// UpdateContent writes a post_edit_history row and overwrites the
+// posts row in a single transaction. Returns the updated Post with
+// the caller-visible joined fields populated (so callers don't
+// need a separate FindByID roundtrip). Returns an error if the
+// post does not exist or the editor is neither the author nor an
+// admin-marked caller; authorisation is enforced at the handler,
+// this method only touches rows.
+func (s *PostStore) UpdateContent(ctx context.Context, p UpdateContentParams) (*Post, error) {
+	if p.EditKind == "" {
+		p.EditKind = PostEditKindAuthor
+	}
+
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("update post: begin tx: %w", err)
+	}
+	// Rollback on any non-commit exit. A successful Commit below
+	// renders this Rollback a no-op.
+	defer tx.Rollback(ctx)
+
+	// Snapshot the previous content BEFORE we overwrite. One row
+	// lock here prevents a racing edit from landing a stale
+	// history entry.
+	var prev string
+	if err := tx.QueryRow(ctx,
+		`SELECT content FROM posts WHERE id = $1 FOR UPDATE`, p.PostID,
+	).Scan(&prev); err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("post not found")
+	} else if err != nil {
+		return nil, fmt.Errorf("update post: read previous: %w", err)
+	}
+
+	// Insert the history row with the previous content.
+	hist := &PostEditHistoryStore{}
+	_, err = hist.Record(ctx, tx, PostEditHistory{
+		PostID:          p.PostID,
+		EditorID:        p.EditorID,
+		PreviousContent: prev,
+		EditReason:      p.EditReason,
+		EditKind:        p.EditKind,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Overwrite the posts row.
+	if _, err := tx.Exec(ctx,
+		`UPDATE posts
+		    SET content = $2, content_html = $3, updated_at = NOW()
+		  WHERE id = $1`,
+		p.PostID, p.Content, p.ContentHTML,
+	); err != nil {
+		return nil, fmt.Errorf("update post: exec: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("update post: commit: %w", err)
+	}
+
+	// Re-fetch with joined fields so the handler's response has
+	// everything a re-render needs (author username / display name,
+	// space metadata, etc.).
+	return s.FindByID(ctx, p.PostID)
 }
 
 // scanPostRow reads a single row in the canonical postSelectCols order.
