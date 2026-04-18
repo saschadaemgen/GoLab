@@ -1,7 +1,7 @@
-# GoLab Architecture & Security
+# GoNode Architecture & Security
 
 **Document version:** Season 1 | April 2026
-**Component:** GoLab community platform (application server + browser client)
+**Component:** GoNode decentralised infrastructure network
 **Copyright:** 2026 Sascha Daemgen, IT and More Systems, Recklinghausen
 **License:** AGPL-3.0
 
@@ -9,601 +9,1307 @@
 
 ## Overview
 
-GoLab is a privacy-first developer community platform that combines GitLab-style project collaboration with Twitter-style social features. All communication is transported over SimpleX SMP queues with E2E encryption. Identity is certificate-based via GoUNITY. Moderation is handled by GoBot with optional GoKey hardware security.
+GoNode is a decentralised, Sybil-resistant, economically self-sustaining network of independent nodes that provides relay and file storage infrastructure for the SimpleGo messaging ecosystem. This document specifies the technical architecture, cryptographic pipeline, wire protocols, smart contract interfaces, threat model, and security properties of GoNode.
 
 | Property | Details |
 |:---------|:--------|
-| Application server | Go |
-| Browser client | TypeScript (built on simplex-js + GoChat architecture) |
-| Message format | ActivityStreams 2.0 JSON over SMP |
-| Identity | Ed25519 certificates (GoUNITY) |
-| Transport | SimpleX SMP queues (E2E encrypted) |
-| Relay | GoBot (community relay mode) |
-| Moderation | GoBot commands + GoUNITY certificate enforcement |
-| Hardware identity | GoKey/SimpleGo ESP32-S3 (optional) |
-| Persistence | Application server database (posts, channels, indexes) |
-| Domain | lab.simplego.dev (planned) |
+| Language | Go (service node runtime, client integration) |
+| Smart contract language | Solidity 0.8.24+ (Arbitrum One) |
+| Consensus | Pulse-style BFT appchain (service node layer) + Arbitrum One (economic layer) |
+| Protocol base | SimpleX SMP and XFTP (unchanged) |
+| Message block size | 16 KB padded (inherited from SimpleGo) |
+| File chunk sizes | 256 KB / 1 MB / 4 MB (inherited from XFTP) |
+| Replication factor | 5 (messages), 16 of 10 Reed-Solomon (files) |
+| Transport | TLS 1.3 with SHA-256 key pinning |
+| Routing | 3-hop onion routing (Sphinx-style) |
+| Node stake | 10,000 GoCoin locked on Arbitrum One |
+| Audit frequency | ~10 challenges per hour per node |
+| Epoch duration | 24 hours (swarm reassignment) |
+| Bootstrap | Foundation-operated for first year, then distributed |
+| Deployment | Go binary (Linux / macOS / Windows / BSD) |
 
 ---
 
 ## 1. System architecture
 
-### 1.1 Component overview
+### 1.1 Four-layer design
 
-GoLab consists of four layers, each handled by a separate component:
-
-```
-Layer 4: GoLab Application         Channels, posts, projects, feeds
-Layer 3: GoBot Community Relay     Fan-out, permissions, moderation
-Layer 2: GoUNITY Identity          Certificates, verification, bans
-Layer 1: SMP Transport             E2E encrypted queues (simplex-js)
-```
-
-No single component has access to all data. The SMP server sees only encrypted blocks. GoBot (in GoKey mode) sees only encrypted blocks. GoUNITY sees only certificate registrations, not community activity. Only the end-user client has the complete picture.
-
-### 1.2 Full system diagram
+GoNode's architecture separates concerns across four distinct layers. Each layer has a specific role and communicates with adjacent layers through well-defined interfaces.
 
 ```
-+------------------------------------------------------------------+
-|                                                                  |
-|  GoLab Application Server (Go)          lab.simplego.dev         |
-|                                                                  |
-|  - Channel registry (which channels exist, metadata)             |
-|  - Post persistence (encrypted or plaintext, configurable)       |
-|  - Activity stream aggregation                                   |
-|  - Search index                                                  |
-|  - Project management (issues, MRs, wikis)                       |
-|  - REST/WebSocket API for browser client                         |
-|                                                                  |
-+---------------------------+--------------------------------------+
-                            |
-                    internal API (localhost or mTLS)
-                            |
-+---------------------------v--------------------------------------+
-|                                                                  |
-|  GoBot Community Relay (Go)             VPS service              |
-|                                                                  |
-|  - Holds SMP connections to all subscribers                      |
-|  - Receives posts via SMP queues                                 |
-|  - Fans out to channel subscribers                               |
-|  - Enforces permissions (role checks)                            |
-|  - Executes moderation commands                                  |
-|  - Verifies GoUNITY certificates                                 |
-|  - In GoKey mode: forwards encrypted blocks to ESP32             |
-|                                                                  |
-+---------------------------+--------------------------------------+
-                            |
-              SMP queues (E2E encrypted, per-subscriber)
-                            |
-         +------------------+------------------+
-         |                  |                  |
-+--------v----+   +---------v---+   +----------v--+
-|             |   |             |   |             |
-| Browser     |   | Browser     |   | SimpleGo    |
-| Client A    |   | Client B    |   | Device C    |
-| (simplex-js)|   | (simplex-js)|   | (ESP32)     |
-|             |   |             |   |             |
-+-------------+   +-------------+   +-------------+
-
-+-------------------------------+  +-------------------------------+
-|                               |  |                               |
-|  GoUNITY CA                   |  |  GoKey (optional)             |
-|  id.simplego.dev              |  |  ESP32-S3 at home             |
-|                               |  |                               |
-|  - Certificate issuance       |  |  - Decrypt blocks for GoBot   |
-|  - CRL distribution           |  |  - Hardware identity verify   |
-|  - Challenge-response API     |  |  - Sign moderation commands   |
-|  - Contacted only at          |  |  - Message plaintext never    |
-|    registration + CRL sync    |  |    leaves the device          |
-|                               |  |                               |
-+-------------------------------+  +-------------------------------+
++-------------------------------------------------------------+
+|  Layer 4: Economic Layer (Arbitrum One)                     |
+|  - GoCoin ERC-20 contract                                   |
+|  - Staking contract (10k GoCoin per node)                   |
+|  - Reward distribution contract (monthly emission)          |
+|  - Pro subscription contract (EURC -> burn)                 |
+|  - Slashing contract (misbehaviour evidence submission)     |
+|  - Governance contract (parameter updates)                  |
++-------------------------------------------------------------+
+|  Layer 3: Consensus Layer (Pulse-style BFT appchain)        |
+|  - VRF beacon (epoch randomness for swarm assignment)       |
+|  - Audit challenge coordination                             |
+|  - Fast slashing quorums                                    |
+|  - Node liveness tracking                                   |
+|  - Daily checkpointing to Arbitrum One                      |
++-------------------------------------------------------------+
+|  Layer 2: Service Node Layer (swarm fabric)                 |
+|  - Swarm assignment (5-10 nodes per queue subset)           |
+|  - Message replication (3-5x)                               |
+|  - File erasure coding (Reed-Solomon RS(10,16))             |
+|  - Onion routing (3 hops)                                   |
+|  - Audit response                                           |
+|  - Per-block HMAC verification                              |
++-------------------------------------------------------------+
+|  Layer 1: Protocol Layer (unchanged SimpleX)                |
+|  - SMP (Simplex Messaging Protocol)                         |
+|  - XFTP (Simplex File Transfer Protocol)                    |
+|  - Five-layer encryption (E2E, PQ, per-queue, server,       |
+|    transport)                                               |
+|  - Double Ratchet with post-quantum KEM hybrid              |
++-------------------------------------------------------------+
 ```
 
-### 1.3 GoLab Application Server
+### 1.2 Component responsibilities
 
-The application server is the only new component. It handles community-specific logic that does not belong in GoBot (which remains a general-purpose moderation relay).
+| Component | Responsibility |
+|:----------|:--------------|
+| `gonode-core` | Service node runtime, network I/O, storage management |
+| `gonode-swarm` | Swarm coordination, replication, audit response |
+| `gonode-onion` | Onion routing (Sphinx-style packet forwarding) |
+| `gonode-audit` | Audit challenge distribution and verification |
+| `gonode-consensus` | BFT appchain client (validator or full node) |
+| `gonode-economic` | Arbitrum RPC client, stake and reward operations |
+| `gonode-client` | Client library for integration with SimpleGo apps |
+| `gonode-contracts` | Solidity smart contracts (Arbitrum deployment) |
 
-| Responsibility | Details |
-|:---------------|:--------|
-| Channel registry | Tracks which channels exist, their metadata, and configuration |
-| Post persistence | Stores posts for history and search (encrypted at rest) |
-| Activity streams | Aggregates feeds per user based on subscriptions |
-| Project management | Issues, merge requests, wikis, milestones, labels |
-| Search | Full-text search across posts and projects |
-| API | REST + WebSocket for browser clients |
+### 1.3 Data flow: user sends a message
 
-The application server communicates with GoBot via internal API. It does NOT hold SMP connections directly - all SMP communication goes through GoBot.
+```
+1. Alice composes message "Hello Bob" in her SimpleGo app
+2. App client-side encrypts message with fresh random AEAD key
+   using XChaCha20-Poly1305 (SimpleX protocol layer)
+3. App wraps ciphertext in SMP protocol frame
+4. App determines target swarm from Bob's queue identifier
+   (deterministic hash function, no directory needed)
+5. App opens 3-hop onion route to swarm member
+6. Onion packet travels through 3 random service nodes
+7. Final swarm member receives ciphertext
+8. Swarm member replicates ciphertext to 4 other swarm members
+9. Each swarm member stores ciphertext in local SMP queue
+10. Bob's SimpleGo app polls the swarm, finds new message
+11. Bob's app retrieves ciphertext from any responsive swarm member
+12. Bob's app decrypts using Double Ratchet state
+13. Message displayed to Bob
+```
 
-### 1.4 GoBot as community relay
+Key property: between steps 3 and 12, no single entity sees both sender and recipient information, and no entity can decrypt the ciphertext.
 
-GoBot receives new community relay responsibilities in addition to its existing moderation role:
+### 1.4 Data flow: user sends a file
 
-| Existing (moderation) | New (community relay) |
-|:----------------------|:----------------------|
-| !kick, !ban, !mute | Channel create/delete/configure |
-| !verify (GoUNITY) | Subscribe/unsubscribe management |
-| Permission checks | Fan-out posts to subscribers |
-| CRL enforcement | Forward posts to application server |
-| GoKey integration | Activity stream events |
-
-GoBot manages the SMP queue pairs. When a user subscribes to a channel, GoBot establishes an SMP queue pair between itself and the user's client. When a post arrives, GoBot fans it out to all subscriber queues.
+```
+1. Alice selects a 50 MB file to send
+2. App splits file into 50 chunks of 1 MB each (XFTP chunking)
+3. App encrypts each chunk with fresh random AEAD key
+4. App Reed-Solomon codes each chunk: 10 data + 6 parity = 16 shards
+   per chunk, shards ~100 KB each
+5. App selects 16 service nodes (one per shard, from a diverse
+   swarm pool for redundancy)
+6. App uploads one shard to each node via onion route
+7. App creates a "file description" containing:
+   - 50 chunk manifests, each with 16 shard locations and hashes
+   - Per-chunk AEAD keys (encrypted for Bob's keys)
+   - Total file hash for integrity verification
+8. App sends file description to Bob via SMP queue
+9. Bob's app fetches any 10 of 16 shards per chunk
+10. Bob's app reconstructs each chunk using Reed-Solomon decoding
+11. Bob's app decrypts each chunk and assembles the file
+12. Bob sees the file
+```
 
 ---
 
-## 2. Message protocol
+## 2. Service node architecture
 
-### 2.1 ActivityStreams 2.0 over SMP
+### 2.1 Node runtime structure
 
-All GoLab messages follow the [W3C ActivityStreams 2.0](https://www.w3.org/TR/activitystreams-core/) specification. The transport changes from HTTP (as in ActivityPub) to SMP queues, but the message format remains standard ActivityStreams JSON.
+A GoNode service node is a single Go binary running three goroutine pools:
 
-Every message has three layers:
+```go
+// Simplified goroutine structure
 
-```
-Layer 1: SMP envelope (16 KB padded, encrypted)
-  Layer 2: GoLab routing header (channel, message type)
-    Layer 3: ActivityStreams payload (signed JSON)
-```
+type ServiceNode struct {
+    // Network I/O
+    tlsListener    net.Listener        // incoming TLS connections
+    onionRouter    *OnionRouter        // Sphinx packet handling
+    clientHandler  *ClientHandler      // user client connections
 
-### 2.2 GoLab routing header
+    // Swarm coordination
+    swarmMgr       *SwarmManager       // current swarm memberships
+    replicator     *Replicator         // replication to peers
+    auditResponder *AuditResponder     // respond to challenges
 
-```json
-{
-  "golab_version": 1,
-  "channel_id": "golab:channel:gochat-dev",
-  "msg_type": "activity",
-  "timestamp": "2026-04-16T10:30:00.000Z",
-  "payload": { ... ActivityStreams object ... }
+    // Storage
+    messageStore   *BadgerDB           // 16 KB message blocks
+    shardStore     *BadgerDB           // file shards
+    stateStore     *BadgerDB           // ratchet state, metadata
+
+    // Consensus
+    bftClient      *BFTClient          // Pulse appchain client
+    arbitrumClient *ArbitrumClient     // Arbitrum RPC
+    stakeManager   *StakeManager       // monitor stake, rewards
 }
 ```
 
-| Field | Type | Required | Description |
-|:------|:-----|:---------|:------------|
-| golab_version | integer | yes | Protocol version (1) |
-| channel_id | string | yes | Target channel or user DM |
-| msg_type | string | yes | activity, subscribe, unsubscribe, system |
-| timestamp | string | yes | ISO 8601 with milliseconds |
-| payload | object | yes | ActivityStreams 2.0 object |
+### 2.2 Storage layout
 
-### 2.3 Message types
+GoNode uses BadgerDB (pure Go, embedded key-value store) for all persistent storage. Three separate databases:
 
-#### Social messages (Twitter-style)
-
-**Post (Create + Note)**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Create",
-  "id": "golab:activity:sha256-content-hash",
-  "actor": "did:key:z6Mkf5rGMoatr...",
-  "published": "2026-04-16T10:30:00Z",
-  "to": ["golab:channel:gochat-dev"],
-  "object": {
-    "type": "Note",
-    "content": "Fixed the memory leak in the WebSocket handler",
-    "tag": [
-      {"type": "Hashtag", "name": "#bugfix"},
-      {"type": "Mention", "href": "did:key:z6Mkother..."}
-    ]
-  },
-  "proof": {
-    "type": "Ed25519Signature2020",
-    "verificationMethod": "did:key:z6Mkf5rGMoatr...",
-    "proofValue": "z..."
-  }
-}
+```
+~/.gonode/
+├── messages.db/           # SMP message queue contents
+│   ├── key: queue_id || message_index
+│   └── value: 16 KB ciphertext
+├── shards.db/             # XFTP file shards
+│   ├── key: shard_id (SHA-256 of shard content)
+│   └── value: shard bytes (~256 KB to ~400 KB)
+└── state.db/              # metadata and state
+    ├── current_swarms: []SwarmID
+    ├── peer_connections: map[NodeID]ConnState
+    ├── audit_challenges_pending: []Challenge
+    ├── rewards_earned: map[epoch]uint256
+    └── operator_identity: ed25519.PrivateKey
 ```
 
-**Repost (Announce)**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Announce",
-  "actor": "did:key:z6Mkf5rGMoatr...",
-  "object": "golab:activity:sha256-original-hash",
-  "to": ["golab:channel:general"],
-  "proof": { ... }
-}
+**Storage capacity requirements** (at target network scale):
+
+| Role | Minimum | Recommended |
+|:-----|:--------|:------------|
+| Entry-level node | 100 GB | 500 GB SSD |
+| Standard node | 500 GB | 2 TB SSD |
+| Heavy storage node | 2 TB | 10 TB SSD |
+
+### 2.3 Network configuration
+
+```
+Inbound connections (server mode):
+  - Port 7000: TLS 1.3 for peer-to-peer (node-to-node)
+  - Port 7001: TLS 1.3 for client connections
+  - Port 7002: HTTPS for audit response (internal Foundation only)
+
+Outbound connections (client mode):
+  - Arbitrum One RPC (HTTPS)
+  - Pulse BFT appchain RPC
+  - Peer nodes (TLS 1.3 on port 7000)
+  - Bootstrap nodes (on first start)
+
+Bandwidth requirements:
+  - Minimum: 50 Mbps symmetric
+  - Recommended: 100 Mbps symmetric
+  - Heavy operator: 1 Gbps symmetric
 ```
 
-**Reaction (Like)**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Like",
-  "actor": "did:key:z6Mkf5rGMoatr...",
-  "object": "golab:activity:sha256-target-hash",
-  "proof": { ... }
-}
+### 2.4 Hardware identity (optional GoKey integration)
+
+Operators can optionally bind their node identity to a GoKey ESP32-S3 device. This provides hardware-backed proof that a specific physical device controls the operator identity.
+
+```
+Software-only operator identity:
+  Ed25519 keypair stored in ~/.gonode/state.db (encrypted at rest
+  with operating system keychain)
+
+Hardware operator identity (with GoKey):
+  Ed25519 keypair burned into ESP32-S3 eFuse (irreversible)
+  GoNode runtime sends operations to GoKey via WSS/mTLS
+  GoKey signs operations, returns signatures
+  Private key never leaves the hardware
 ```
 
-**Follow**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Follow",
-  "actor": "did:key:z6Mkf5rGMoatr...",
-  "object": "did:key:z6Mkother...",
-  "proof": { ... }
-}
-```
-
-#### Collaboration messages (GitLab-style)
-
-**Create Issue**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Create",
-  "actor": "did:key:z6Mkf5rGMoatr...",
-  "to": ["golab:project:gochat"],
-  "object": {
-    "type": "Note",
-    "golab:objectType": "Issue",
-    "name": "WebSocket disconnects after 30 minutes idle",
-    "content": "Steps to reproduce: ...",
-    "golab:labels": ["bug", "websocket"],
-    "golab:milestone": "v1.1.0",
-    "golab:assignee": "did:key:z6Mkother..."
-  },
-  "proof": { ... }
-}
-```
-
-**Close Issue (Update)**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Update",
-  "actor": "did:key:z6Mkf5rGMoatr...",
-  "object": {
-    "id": "golab:issue:gochat-42",
-    "golab:status": "closed",
-    "golab:resolution": "fixed"
-  },
-  "proof": { ... }
-}
-```
-
-**Merge Request**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Create",
-  "actor": "did:key:z6Mkf5rGMoatr...",
-  "to": ["golab:project:gochat"],
-  "object": {
-    "type": "Note",
-    "golab:objectType": "MergeRequest",
-    "name": "fix: resolve WebSocket idle timeout",
-    "content": "This MR fixes #42 by implementing keepalive pings...",
-    "golab:sourceBranch": "fix/ws-timeout",
-    "golab:targetBranch": "main",
-    "golab:reviewers": ["did:key:z6Mkreviewer..."]
-  },
-  "proof": { ... }
-}
-```
-
-#### Moderation messages
-
-**Ban (via GoBot)**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Block",
-  "actor": "golab:bot:gobot-instance-1",
-  "object": "did:key:z6Mkbanned...",
-  "target": "golab:channel:general",
-  "summary": "Spam",
-  "golab:certificate_username": "SpamUser42",
-  "golab:ban_type": "permanent",
-  "proof": { ... }
-}
-```
-
-### 2.4 Message signing
-
-Every GoLab message is signed with the sender's Ed25519 private key (from their GoUNITY certificate).
-
-**Signed data:** Canonical JSON of the ActivityStreams object (keys sorted alphabetically, no whitespace, UTF-8).
-
-**Verification:** Any recipient can verify the signature using the sender's public key from their GoUNITY certificate. No server interaction needed.
-
-**Integrity chain:** Each message includes a content-addressed ID (`sha256` hash of the canonical payload). Replies reference parent IDs, creating a verifiable thread structure.
+Benefits of hardware identity:
+- Private key cannot be extracted by software exploits
+- Operator theft requires physical access to the GoKey
+- "Hardware verified" badge in operator directory
+- Required for highest-tier enterprise SLA contracts
 
 ---
 
-## 3. Channel architecture
+## 3. Cryptographic pipeline
 
-### 3.1 Channel types
+### 3.1 Five-layer encryption (inherited from SimpleGo)
 
-| Type | Description | Visibility | Who can post |
-|:-----|:-----------|:-----------|:-------------|
-| Public | Open to all, discoverable | Everyone | Verified members |
-| Private | Invite-only, hidden | Members only | Members only |
-| Project | Tied to a project | Project team | Project team |
-| DM | Direct message (1:1) | Two parties | Two parties |
-| Announce | Read-only broadcast | Everyone | Admins only |
+GoNode inherits the SimpleGo/SimpleX five-layer encryption stack without modification. Every message and file passes through all five layers before leaving the client.
 
-### 3.2 Channel lifecycle
+| Layer | Algorithm | Key Derivation | Protects Against |
+|:------|:----------|:--------------|:-----------------|
+| 1. End-to-End | XChaCha20-Poly1305 AEAD | Double Ratchet (X3DH + Curve25519) | Message content interception |
+| 2. Post-Quantum | ML-KEM-768 hybrid with X25519 | CRYSTALS-Kyber hybrid KEM | Future quantum computers on recorded traffic |
+| 3. Per-Queue | XSalsa20-Poly1305 | X25519 per queue | Traffic correlation across queues |
+| 4. Server-to-Recipient | NaCl cryptobox | X25519 | Server correlating in/out traffic |
+| 5. Transport | TLS 1.3 AES-256-GCM or ChaCha20-Poly1305 | ECDHE-ECDSA | Network attackers, MITM, downgrade |
 
-```
-Create:
-  1. Admin sends Create+Group activity to GoBot
-  2. GoBot registers channel in application server
-  3. GoBot creates SMP queue pair for the channel
-  4. Channel appears in discovery (if public)
+Note: GoNode uses ML-KEM-768 in Layer 2 rather than sntrup761 used in SimpleGo firmware. Both are NIST-approved post-quantum KEMs. Server-side ML-KEM has broader library support and better performance characteristics on x86 servers.
 
-Subscribe:
-  1. User sends Follow activity targeting channel
-  2. GoBot verifies: user has valid GoUNITY certificate
-  3. GoBot checks: channel allows this user (public/invite)
-  4. GoBot establishes SMP queue pair with user's client
-  5. User receives confirmation + channel history
+### 3.2 Onion routing (Layer 6 for GoNode)
 
-Post:
-  1. User sends Create+Note to channel via SMP
-  2. GoBot receives, verifies certificate + permissions
-  3. GoBot forwards to application server (persistence)
-  4. GoBot fans out to all subscriber queues
-  5. Subscribers receive, verify signature, display
+GoNode adds a sixth layer above the SimpleX stack: 3-hop onion routing for all message delivery and file shard transfers. This prevents any single service node from seeing both sender and recipient.
 
-Unsubscribe:
-  1. User sends Undo+Follow activity
-  2. GoBot removes SMP queue pair
-  3. User no longer receives channel messages
-```
-
-### 3.3 Fan-out architecture
-
-GoBot acts as a relay node. Instead of SimpleX's client-side fan-out (every member sends to every other member), GoBot handles distribution:
+**Sphinx packet format** (following the Sphinx paper by Danezis and Goldberg):
 
 ```
-Client-side fan-out (SimpleX groups):
-  N members = N*(N-1)/2 queue pairs = O(n^2)
-  100 members = 4,950 queue pairs
-  Each message sent N-1 times by the sender
++-------------------+----------------+----------------+
+|   Header (300B)   |  Payload (n B) |  MAC (32 B)    |
++-------------------+----------------+----------------+
 
-GoBot relay fan-out (GoLab channels):
-  N members = N queue pairs to GoBot = O(n)
-  100 members = 100 queue pairs
-  Each message sent once by sender, GoBot copies to N-1 queues
-  10,000 members = 10,000 queue pairs (still manageable)
+Header structure:
+- Ephemeral Curve25519 public key (32 bytes)
+- Routing information encrypted per-hop (256 bytes)
+- Header MAC per-hop (32 bytes per hop × 3 = 96 total)
+
+Payload:
+- Inner encrypted message
+- Padding to constant size
+- Size: 16 KB for message packets, 400 KB for file shard packets
 ```
 
-This is the same pattern that SimpleX itself plans with "super-peers", but formalized and managed by GoBot.
+Each hop:
+1. Verifies the header MAC
+2. Decrypts one layer using ECDH with its own private key
+3. Extracts the next hop address
+4. Forwards the packet to the next hop
+5. Waits a random delay (50-200ms) to prevent timing correlation
 
-### 3.4 Unlinkability across channels
+The final hop delivers the inner message to the target swarm. Only the final hop knows the destination. Only the first hop knows the sender's IP. No hop knows both.
 
-Each channel subscription creates a separate SMP queue pair between the user and GoBot. This means:
+### 3.3 Random-key AEAD encryption for storage
 
-- GoBot knows Queue-A is subscribed to #gochat-dev
-- GoBot knows Queue-B is subscribed to #simplego-hardware
-- GoBot does NOT know Queue-A and Queue-B belong to the same person
-- The SMP server sees even less - only encrypted block deliveries
+GoNode uses client-side random-key AEAD for all stored data. Each message and file shard is encrypted with a fresh random key, never reused.
 
-Users who want maximum privacy use a separate SMP connection per channel. Users who prefer convenience can multiplex channels over fewer connections (reduced privacy but still E2E encrypted).
+```
+// Encryption (client side)
+message_plaintext := "Hello Bob"
+encryption_key := random_bytes(32)           // fresh per message
+nonce := random_bytes(24)
+ciphertext, tag := XChaCha20_Poly1305_Encrypt(
+    key: encryption_key,
+    nonce: nonce,
+    plaintext: message_plaintext,
+    aad: queue_id || message_index,
+)
+
+// The key is transmitted separately through the double ratchet
+// mechanism, never alongside the ciphertext
+
+// Storage (service node side)
+node_stores(queue_id, message_index, ciphertext || nonce || tag)
+
+// Service node sees: random-looking bytes. Cannot decrypt.
+```
+
+**Why NOT convergent encryption:** Convergent encryption uses a deterministic key derived from the plaintext itself, enabling deduplication. This creates a devastating "confirmation-of-a-file" attack where an attacker with a candidate plaintext can encrypt it and check whether the resulting ciphertext exists in the network. For small, partially predictable messages (common chat patterns, timestamps, user names), this attack succeeds. Random-key encryption prevents it completely.
+
+### 3.4 Reed-Solomon erasure coding (files only)
+
+XFTP file chunks are erasure-coded with Reed-Solomon RS(10, 16) before distribution.
+
+**Parameters:**
+- k = 10 (data shards)
+- n = 16 (total shards, so 6 parity shards)
+- Any 10 of 16 shards reconstruct the original
+- Storage overhead: 16/10 = 1.6x
+- Durability at 20 percent node failure rate: 99.99999999% (10 nines)
+- Durability at 10 percent node failure rate: 99.999999999% (11 nines)
+
+**Implementation:** `klauspost/reedsolomon` (production-proven Go library used by Minio, Cloudflare).
+
+```go
+// File shard generation
+chunk_size := 4 * 1024 * 1024  // 4 MB
+chunk := read_file_chunk(file, offset, chunk_size)
+
+rs, _ := reedsolomon.New(10, 6)
+shards := make([][]byte, 16)
+for i := 0; i < 10; i++ {
+    shards[i] = chunk[i*chunk_size/10 : (i+1)*chunk_size/10]
+}
+rs.Encode(shards)
+
+// Now shards[0..9] are data, shards[10..15] are parity
+// Each shard is ~400 KB
+// Any 10 of 16 can reconstruct the original 4 MB chunk
+```
+
+### 3.5 Ed25519 signatures for operator identity
+
+Every service node has an Ed25519 keypair that identifies the operator across the network. This key signs:
+
+- Audit challenge responses
+- Stake deposit transactions
+- Reward withdrawal transactions
+- Governance votes
+- Swarm coordination messages
+
+Ed25519 was chosen over ECDSA because:
+- Deterministic signing (no RNG required, no nonce-reuse bugs)
+- Constant-time by design (resistant to timing side-channels)
+- 32-byte public keys (compact for swarm membership lists)
+- 64-byte signatures (compact for audit proofs)
+- Fast on commodity hardware (tens of thousands of sig/sec)
+
+### 3.6 VRF for epoch randomness
+
+Swarm assignment uses a Verifiable Random Function (VRF) computed by a rotating committee of service nodes every 24 hours. The VRF output is cryptographically unpredictable, publicly verifiable, and deterministic given the inputs.
+
+**VRF construction:** ECVRF-EDWARDS25519-SHA512-ELL2 (RFC 9381).
+
+```
+Epoch N begins:
+  1. A committee of 20 randomly-selected service nodes runs
+     a threshold VRF protocol
+  2. Each committee member submits a VRF proof based on
+     their Ed25519 key and the block hash of Arbitrum block
+     corresponding to epoch N start
+  3. The aggregated VRF output is the "epoch randomness"
+  4. All service nodes use this randomness to compute swarm
+     assignments for epoch N
+
+Swarm assignment:
+  For each queue_id Q:
+    swarm_index = Hash(epoch_randomness || Q) mod num_swarms
+    Q is assigned to swarm at swarm_index for epoch N
+
+  For each node N:
+    N's swarms for epoch N = { S : N's node_id is in the
+                                   5-10 nodes nearest to hash(S) }
+```
+
+This ensures swarm assignment is:
+- Unpredictable before the epoch starts (resistant to preparation attacks)
+- Verifiable by anyone (can't be manipulated by a subset of nodes)
+- Uniform over the queue space (no swarm is overloaded)
+- Stable within an epoch (no churning during active sessions)
 
 ---
 
-## 4. Permission system
+## 4. Swarm protocol
 
-### 4.1 Power levels
+### 4.1 Swarm assignment
 
-GoLab uses a numeric power level system inspired by Matrix, enforced via GoUNITY certificates and GoBot:
+The network partitions queue identifier space into a number of swarms. At launch, the network supports 256 swarms. As the network grows, swarms are split to maintain an average of 50,000 queues per swarm.
 
-| Level | Role | Permissions |
-|:------|:-----|:------------|
-| 100 | Owner | All actions, transfer ownership, delete community |
-| 75 | Admin | Manage channels, manage members, configure settings |
-| 50 | Moderator | Kick, ban, mute, delete posts, review reports |
-| 25 | Contributor | Post, create issues, submit MRs, comment |
-| 10 | Member | Post in open channels, react, follow |
-| 0 | Guest | Read public channels only |
+```
+Initial configuration:
+  - 256 swarms
+  - 5-10 service nodes per swarm
+  - Maximum 2,560 active service nodes
 
-### 4.2 Permission enforcement
+Growth configuration (year 2):
+  - 1,024 swarms
+  - 5-10 service nodes per swarm
+  - Maximum 10,240 active service nodes
 
-Permissions are checked at two points:
+Mature configuration (year 5+):
+  - 4,096+ swarms dynamically split/merged based on load
+  - Swarm split when queue count > 100,000
+  - Swarm merge when queue count < 10,000 for 30 days
+```
 
-**GoBot (relay layer):** Checks sender's certificate and role before accepting a message for fan-out. Rejects unauthorized messages immediately - they never reach subscribers.
+### 4.2 Swarm membership protocol
 
-**Client (display layer):** Verifies signatures and certificates locally. Even if GoBot is compromised and forwards an unauthorized message, the client rejects it because the signature does not match the required permission level.
+When a service node starts operating:
 
-### 4.3 Role assignment
+```
+1. Node submits 10,000 GoCoin stake to Arbitrum staking contract
+2. Stake confirmation triggers emission of `NodeRegistered` event
+3. Node listens to Pulse BFT appchain for next epoch boundary
+4. At next epoch:
+   - Node fetches current VRF randomness
+   - Node computes which swarms it is assigned to
+     (typically 5-15 swarms for a typical node)
+5. Node connects to other members of each assigned swarm
+6. Node announces availability to swarm peers via BFT gossip
+7. Node begins accepting and replicating messages/shards
+```
 
-Roles are stored as signed statements by community administrators:
+When a service node exits gracefully:
 
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Add",
-  "actor": "did:key:z6Mkadmin...",
-  "object": "did:key:z6Mknewmod...",
-  "target": "golab:channel:general",
-  "golab:role": "moderator",
-  "golab:power_level": 50,
-  "proof": { ... }
+```
+1. Node submits `NodeExitRequested` transaction on Arbitrum
+2. Node continues serving current swarm for 48 hours
+3. New swarm members are assigned to replace exiting node
+4. Exiting node transfers relevant data to replacements
+5. After 48 hours, node's stake becomes unlockable (9-month
+   cooldown for held-back rewards)
+```
+
+### 4.3 Message replication protocol
+
+When a swarm receives a new message:
+
+```
+Protocol: SWARM_REPLICATE
+
+Node A receives message M from client:
+  1. Verify: M is valid 16 KB SMP frame (syntactically correct)
+  2. Verify: target queue Q is assigned to this swarm in epoch E
+  3. Generate replication_id = SHA-256(M || timestamp)
+  4. Store: message_store.put(Q || M.index, M)
+  5. Broadcast REPLICATE(Q, M, replication_id) to all swarm peers
+  6. Wait for 3 ACKs (quorum out of 5-10 peers)
+  7. Return ACK to client
+
+Node B receives REPLICATE(Q, M, replication_id) from peer A:
+  1. Verify: peer A is swarm member in current epoch
+  2. Verify: Q is assigned to this swarm
+  3. Verify: message not already stored (idempotency via replication_id)
+  4. Store: message_store.put(Q || M.index, M)
+  5. Return ACK(replication_id) to A
+```
+
+### 4.4 File shard distribution protocol
+
+When a client uploads a file:
+
+```
+Protocol: XFTP_SHARD_UPLOAD
+
+Client splits file into chunks, each chunk into 16 Reed-Solomon shards:
+
+For each shard S_i (i = 0..15):
+  1. Client queries directory for available service nodes
+  2. Client selects diverse nodes for shard placement:
+     - Different ASN if possible
+     - Different geographic regions if possible
+     - Prefer high-reputation operators
+  3. Client establishes onion route to selected node
+  4. Client uploads shard via TLS within onion:
+     UPLOAD(shard_id, shard_bytes, retention_hours)
+  5. Service node stores shard, returns receipt:
+     ACK(shard_id, signed_receipt)
+
+Client records all shard locations and receipts in
+file description. File description is sent to recipient
+via SMP queue.
+```
+
+---
+
+## 5. Audit protocol
+
+### 5.1 Challenge distribution
+
+Every hour, each service node receives approximately 10 random audit challenges from the network. Challenges test whether the node still holds the data it claims to have.
+
+**Challenge source:** A rotating committee of 7 audit coordinator nodes (selected by VRF each epoch) generates challenges by:
+
+```
+1. Committee member samples a random subset of stored blocks
+   from the network's metadata (which blocks should be where)
+2. Committee member generates challenges:
+   - For messages: "Compute HMAC-SHA256(your_operator_key, block_id)"
+   - For shards: "Compute SHA-256 of bytes at offset X, length Y"
+3. Committee aggregates challenges (threshold signature)
+4. Challenges are gossiped through the BFT appchain
+5. Each target node receives its challenges
+```
+
+### 5.2 Challenge response
+
+Node receives a challenge:
+
+```go
+// Challenge format
+type Challenge struct {
+    ChallengeID  [32]byte
+    NodeID       [32]byte
+    BlockID      [32]byte
+    ChallengeType uint8  // 0 = HMAC, 1 = partial hash, 2 = Merkle path
+    ExtraData    []byte  // offset/length for partial hash, etc.
+    Deadline     uint64  // unix timestamp
+    CommitteeSig []byte  // threshold signature
+}
+
+func (n *Node) HandleChallenge(c Challenge) Response {
+    // Verify challenge is validly signed
+    if !verifyCommitteeSig(c) {
+        return Response{Error: "invalid signature"}
+    }
+
+    // Verify challenge is for this node
+    if c.NodeID != n.operatorPubKey {
+        return Response{Error: "wrong node"}
+    }
+
+    // Respond based on challenge type
+    switch c.ChallengeType {
+    case ChallengeTypeHMAC:
+        block := n.messageStore.Get(c.BlockID)
+        if block == nil {
+            return Response{Error: "block not found"}
+        }
+        hmac := computeHMAC(n.operatorPrivKey, c.BlockID)
+        signature := ed25519.Sign(n.operatorPrivKey, hmac)
+        return Response{HMAC: hmac, Signature: signature}
+
+    case ChallengeTypePartialHash:
+        // Similar, but returns SHA-256 of bytes at specified range
+        ...
+    }
 }
 ```
 
-Role changes are ActivityStreams Add/Remove activities, signed by an actor with sufficient power level. They are distributed like any other message and stored by the application server.
+### 5.3 Response verification and scoring
+
+Audit coordinators collect responses and score each node:
+
+```
+Response scoring:
+  Correct + on time: +1 reputation point
+  Correct + late (>2 sec):   +0.5 reputation point
+  Incorrect:   -10 reputation points
+  Missing:  -20 reputation points
+
+Node status transitions:
+  Reputation > 100: Healthy (full rewards)
+  Reputation 50-100: Warning (80% rewards)
+  Reputation 20-50: Probation (50% rewards, more audits)
+  Reputation 0-20: Deregistration pending (no new assignments)
+  Reputation below 0: Disqualification (stake slashed 5%, held-back burned)
+
+Reputation decay:
+  Daily decay rate: -0.5 points (encourages consistent response)
+  Maximum reputation: 500 (caps the advantage of long tenure)
+```
+
+### 5.4 Anti-gaming measures
+
+**Why nodes can't fake responses:** Challenges require access to actual block content. HMAC challenges require the block bytes to compute. Partial hash challenges require specific byte ranges. Nodes that deleted data cannot answer correctly.
+
+**Why operators can't run multiple instances on one machine:** The VRF-based audit load is roughly proportional to the number of registered nodes. An operator running N instances on one machine receives N × the audit load, and a single machine cannot typically keep up with concurrent audit responses. Timing-based anomaly detection flags suspicious patterns.
+
+**Why large operators can't evade:** Audit challenges are weighted toward recently-inactive nodes. A node that responds to 100% of challenges gets few new ones; a node that misses challenges gets many more. This makes it hard to free-ride.
 
 ---
 
-## 5. Identity integration
+## 6. Smart contract design
 
-### 5.1 GoUNITY certificate usage
+### 6.1 Contract architecture
 
-GoLab uses GoUNITY certificates at three points:
-
-| Point | What happens |
-|:------|:-------------|
-| Registration | User presents GoUNITY certificate to GoBot via DM |
-| Every message | Message signed with certificate's private key |
-| Moderation | Bans linked to certificate username, not SMP queue |
-
-GoUNITY is contacted ONLY during initial certificate issuance (id.simplego.dev) and daily CRL sync. GoUNITY never knows which communities a user joins.
-
-### 5.2 DID:key identifiers
-
-User identities in GoLab messages use the W3C [DID:key](https://w3c-ccg.github.io/did-method-key/) format:
+GoNode deploys five main smart contracts on Arbitrum One, plus auxiliary contracts:
 
 ```
-did:key:z6Mkf5rGMoatrSj1f4CyvuHBeXJELe9RPdzo2PKGNCKVtZxP
-        ^^^^ Ed25519 multicodec prefix + 32-byte public key
+GoCoin Token (ERC-20)
+   ^
+   | references
+   |
++--+-------------------+-------------------+--------------------+
+|                      |                   |                    |
+| StakingContract      | RewardsContract   | SubscriptionContract
+|                      |                   |                    |
+| - deposit stake      | - emit monthly    | - receive EURC     |
+| - withdraw stake     | - distribute      | - buy GoCoin       |
+| - slash stake        | - held-back logic | - burn GoCoin      |
+|                      |                   | - activate Pro     |
++----------------------+-------------------+--------------------+
+                           ^
+                           |
+                       SlashingContract
+                           |
+                       - submit evidence
+                       - slash stake
+                       - burn held-back
+
+                       GovernanceContract
+                           |
+                       - DAO parameter votes
+                       - foundation multisig
+                       - key burn at Phase 4
 ```
 
-This is a self-describing identifier derived directly from the Ed25519 public key. No resolution service needed - the public key IS the identifier.
+### 6.2 GoCoin ERC-20 contract
 
-### 5.3 Hardware identity (optional)
+Standard OpenZeppelin ERC-20 with minor extensions:
 
-Users with a GoKey or SimpleGo device can bind their GoUNITY certificate to physical hardware:
+```solidity
+// SPDX-License-Identifier: AGPL-3.0
+pragma solidity 0.8.24;
 
-```
-1. Device certificate signed by GoUNITY CA
-   Contains: device Ed25519 public key (from eFuse)
-   Linked to: user's GoUNITY identity certificate
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-2. Challenge-response verification
-   GoBot sends random 32-byte nonce
-   Device signs nonce (private key never leaves hardware)
-   GoBot verifies: signature matches device certificate
-   Proof: user has physical possession of the device
+contract GoCoin is ERC20, Ownable {
+    uint256 public constant MAX_SUPPLY = 100_000_000 * 10**18;
 
-3. Display in GoLab
-   "CryptoNinja42" [verified] [hardware] 
-   Other users see: this identity is backed by physical hardware
-```
+    address public burnAddress = 0x000000000000000000000000000000000000dEaD;
 
-Hardware verification is always optional. It provides stronger identity guarantees for high-trust communities but is not required for basic participation.
+    event TokensBurned(address indexed from, uint256 amount, bytes32 reason);
 
-### 5.4 Profile data
+    constructor() ERC20("GoCoin", "GC") Ownable(msg.sender) {
+        _mint(msg.sender, 30_000_000 * 10**18);
+        // Remaining 70M minted to reward/treasury/team vesting contracts
+    }
 
-Profiles are NOT stored on the server. They are ActivityStreams Actor objects distributed via SMP:
+    function burn(uint256 amount, bytes32 reason) external {
+        _transfer(msg.sender, burnAddress, amount);
+        emit TokensBurned(msg.sender, amount, reason);
+    }
 
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Person",
-  "id": "did:key:z6Mkf5rGMoatr...",
-  "name": "CryptoNinja42",
-  "summary": "GoChat contributor. Privacy advocate.",
-  "golab:verification": "gounity-verified",
-  "golab:hardware": true,
-  "golab:joined": "2026-04-01",
-  "proof": { ... }
+    function burnFrom(address from, uint256 amount, bytes32 reason) external {
+        _spendAllowance(from, msg.sender, amount);
+        _transfer(from, burnAddress, amount);
+        emit TokensBurned(from, amount, reason);
+    }
 }
 ```
 
-Profile updates are signed Update activities. Any recipient can cache the latest profile, but the authoritative version always comes from the user's own signed messages.
+### 6.3 Staking contract
+
+```solidity
+contract NodeStaking is Ownable {
+    IERC20 public immutable goCoin;
+    uint256 public constant STAKE_AMOUNT = 10_000 * 10**18;
+    uint256 public constant EXIT_COOLDOWN = 48 hours;
+    uint256 public constant HELDBACK_COOLDOWN = 270 days; // 9 months
+
+    struct StakeInfo {
+        uint256 amount;
+        uint256 exitRequestedAt;
+        bytes32 operatorPubKey;  // Ed25519 key, 32 bytes
+        uint32 registeredEpoch;
+        bool active;
+    }
+
+    mapping(address => StakeInfo) public stakes;
+
+    event NodeRegistered(address indexed operator, bytes32 pubKey, uint32 epoch);
+    event NodeExitRequested(address indexed operator, uint256 withdrawableAt);
+    event NodeExited(address indexed operator);
+    event StakeSlashed(address indexed operator, uint256 amount, bytes32 reason);
+
+    function registerNode(bytes32 operatorPubKey) external {
+        require(stakes[msg.sender].amount == 0, "already staked");
+        goCoin.transferFrom(msg.sender, address(this), STAKE_AMOUNT);
+        stakes[msg.sender] = StakeInfo({
+            amount: STAKE_AMOUNT,
+            exitRequestedAt: 0,
+            operatorPubKey: operatorPubKey,
+            registeredEpoch: getCurrentEpoch(),
+            active: true
+        });
+        emit NodeRegistered(msg.sender, operatorPubKey, getCurrentEpoch());
+    }
+
+    function requestExit() external {
+        require(stakes[msg.sender].active, "not active");
+        stakes[msg.sender].exitRequestedAt = block.timestamp;
+        stakes[msg.sender].active = false;
+        emit NodeExitRequested(msg.sender, block.timestamp + EXIT_COOLDOWN);
+    }
+
+    function withdrawStake() external {
+        StakeInfo storage info = stakes[msg.sender];
+        require(info.exitRequestedAt > 0, "exit not requested");
+        require(block.timestamp >= info.exitRequestedAt + EXIT_COOLDOWN, "cooldown active");
+        uint256 amount = info.amount;
+        delete stakes[msg.sender];
+        goCoin.transfer(msg.sender, amount);
+        emit NodeExited(msg.sender);
+    }
+
+    function slash(address operator, uint256 amount, bytes32 reason)
+        external onlySlashingContract
+    {
+        require(stakes[operator].amount >= amount, "insufficient stake");
+        stakes[operator].amount -= amount;
+        GoCoin(address(goCoin)).burn(amount, reason);
+        emit StakeSlashed(operator, amount, reason);
+    }
+}
+```
+
+### 6.4 Subscription contract (burn-and-mint core)
+
+This is the critical contract that implements the burn-and-mint mechanism.
+
+```solidity
+contract GoNodeSubscription {
+    IERC20 public immutable eurc;
+    IERC20 public immutable goCoin;
+    IUniswapV3Router public immutable uniswap;
+    uint24 public constant POOL_FEE = 3000; // 0.3% pool
+
+    uint256 public constant MONTHLY_PRICE_EURC = 5 * 10**6; // 5 EURC (6 decimals)
+    uint256 public constant SUBSCRIPTION_DURATION = 30 days;
+
+    mapping(address => uint256) public proExpires;
+    uint256 public totalBurned;
+    uint256 public totalSubscriptions;
+
+    event ProActivated(address indexed user, uint256 expiresAt, uint256 goCoinBurned);
+
+    function subscribe() external {
+        // Pull EURC from user
+        eurc.transferFrom(msg.sender, address(this), MONTHLY_PRICE_EURC);
+
+        // Approve Uniswap to spend EURC
+        eurc.approve(address(uniswap), MONTHLY_PRICE_EURC);
+
+        // Buy GoCoin on Uniswap
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(eurc),
+            tokenOut: address(goCoin),
+            fee: POOL_FEE,
+            recipient: address(this),
+            deadline: block.timestamp + 300,
+            amountIn: MONTHLY_PRICE_EURC,
+            amountOutMinimum: 0,  // accept any amount (MEV protection via private mempool)
+            sqrtPriceLimitX96: 0
+        });
+        uint256 goCoinBought = uniswap.exactInputSingle(params);
+
+        // Burn all the GoCoin
+        GoCoin(address(goCoin)).burn(goCoinBought, bytes32("SUB"));
+        totalBurned += goCoinBought;
+        totalSubscriptions += 1;
+
+        // Activate or extend Pro subscription
+        uint256 currentExpiry = proExpires[msg.sender];
+        uint256 newExpiry = currentExpiry > block.timestamp
+            ? currentExpiry + SUBSCRIPTION_DURATION
+            : block.timestamp + SUBSCRIPTION_DURATION;
+        proExpires[msg.sender] = newExpiry;
+
+        emit ProActivated(msg.sender, newExpiry, goCoinBought);
+    }
+
+    function isProUser(address user) external view returns (bool) {
+        return proExpires[user] > block.timestamp;
+    }
+}
+```
+
+### 6.5 Rewards contract
+
+```solidity
+contract NodeRewards {
+    IERC20 public immutable goCoin;
+    NodeStaking public immutable staking;
+
+    // 40M GoCoin reward pool, emitted on halving curve
+    uint256 public constant INITIAL_MONTHLY_EMISSION = 400_000 * 10**18;
+
+    // Month -> emission amount (precomputed)
+    mapping(uint32 => uint256) public monthlyEmissions;
+
+    // Node -> month -> amount earned
+    mapping(address => mapping(uint32 => uint256)) public earnings;
+
+    // Node -> amount held back
+    mapping(address => uint256) public heldBack;
+
+    // Node -> month when next held-back release happens
+    mapping(address => uint32) public nextHeldBackRelease;
+
+    function distributeRewards(uint32 month, address[] calldata nodes, uint256[] calldata weights)
+        external onlyRewardDistributor
+    {
+        require(nodes.length == weights.length, "length mismatch");
+        uint256 totalWeight = 0;
+        for (uint i = 0; i < weights.length; i++) totalWeight += weights[i];
+
+        uint256 monthlyEmission = monthlyEmissions[month];
+        for (uint i = 0; i < nodes.length; i++) {
+            uint256 earned = (monthlyEmission * weights[i]) / totalWeight;
+            earnings[nodes[i]][month] = earned;
+
+            // Split between immediate payout and held-back
+            uint256 monthsActive = getMonthsActive(nodes[i]);
+            (uint256 payout, uint256 held) = splitPayout(earned, monthsActive);
+
+            goCoin.transfer(nodes[i], payout);
+            heldBack[nodes[i]] += held;
+        }
+    }
+
+    function splitPayout(uint256 earned, uint256 monthsActive)
+        internal pure returns (uint256 payout, uint256 held)
+    {
+        if (monthsActive < 4) { // months 1-3: 50/50
+            return (earned / 2, earned / 2);
+        } else if (monthsActive < 7) { // months 4-6: 75/25
+            return (earned * 3 / 4, earned / 4);
+        } else { // month 7+: 100/0
+            return (earned, 0);
+        }
+    }
+
+    function claimHeldBack() external {
+        require(block.timestamp >= getMonthStart(nextHeldBackRelease[msg.sender]), "too early");
+        uint256 amount = heldBack[msg.sender];
+        heldBack[msg.sender] = 0;
+        nextHeldBackRelease[msg.sender] = uint32(getCurrentMonth()) + 1;
+        goCoin.transfer(msg.sender, amount);
+    }
+}
+```
+
+### 6.6 Slashing contract
+
+```solidity
+contract Slashing {
+    NodeStaking public immutable staking;
+    NodeRewards public immutable rewards;
+
+    enum OffenseType {
+        Equivocation,        // 5% slash
+        CorruptedData,       // 5% slash
+        Censorship,          // 10% slash
+        MaliciousAudit       // 20% slash
+    }
+
+    event OffenseSubmitted(address indexed accuser, address indexed accused, OffenseType ot);
+    event OffenseConfirmed(address indexed accused, OffenseType ot, uint256 slashed);
+
+    // Evidence-based slashing with validator quorum confirmation
+    function submitEvidence(
+        address accused,
+        OffenseType ot,
+        bytes calldata evidence,
+        bytes[] calldata validatorSigs
+    ) external {
+        // Verify evidence is cryptographically valid for the claim
+        require(verifyEvidence(accused, ot, evidence), "invalid evidence");
+
+        // Verify 2/3+ validator quorum signed off on this slashing
+        require(validatorSigs.length >= getQuorumSize(), "insufficient quorum");
+        require(verifyValidatorSigs(evidence, validatorSigs), "invalid sigs");
+
+        // Slash amount
+        uint256 stakeAmount = staking.getStakeAmount(accused);
+        uint256 slashPercent;
+        if (ot == OffenseType.Equivocation) slashPercent = 5;
+        else if (ot == OffenseType.CorruptedData) slashPercent = 5;
+        else if (ot == OffenseType.Censorship) slashPercent = 10;
+        else slashPercent = 20;
+
+        uint256 slashAmount = stakeAmount * slashPercent / 100;
+
+        staking.slash(accused, slashAmount, bytes32("SLASH"));
+
+        // Also burn all held-back rewards
+        uint256 held = rewards.heldBackOf(accused);
+        rewards.burnHeldBack(accused);
+
+        emit OffenseConfirmed(accused, ot, slashAmount + held);
+    }
+}
+```
+
+### 6.7 Gas costs (Arbitrum One)
+
+Typical operation costs at current Arbitrum gas prices:
+
+| Operation | Estimated Gas | Cost at 0.1 gwei |
+|:----------|:--------------|:-----------------|
+| Register node (stake 10k GoCoin) | ~150,000 | ~$0.003 |
+| Request exit | ~50,000 | ~$0.001 |
+| Withdraw stake | ~60,000 | ~$0.001 |
+| Subscribe to Pro (includes Uniswap swap + burn) | ~250,000 | ~$0.005 |
+| Claim held-back rewards | ~70,000 | ~$0.002 |
+| Submit slashing evidence (with sigs) | ~400,000 | ~$0.008 |
+| Distribute monthly rewards (100 nodes) | ~3,000,000 | ~$0.06 |
+
+These costs are negligible compared to the service value and do not affect unit economics.
 
 ---
 
-## 6. Persistence and search
+## 7. Threat model
 
-### 6.1 Storage model
+### 7.1 Trust assumptions
 
-The GoLab application server stores community data for history and search. Three storage modes are planned:
+| Entity | Trust Level | Justification |
+|:-------|:------------|:--------------|
+| Any single service node | Untrusted | Could be malicious or compromised |
+| Any single swarm | Partially trusted | Require 3 of 5-10 quorum for actions |
+| Arbitrum One validators | Trusted (via Ethereum L1) | Ethereum's security model |
+| Pulse BFT appchain | Trusted if 2/3+ honest | Standard BFT assumption |
+| Foundation | Trusted initially, reduced over time | Admin keys burned at Phase 4 |
+| GoKey hardware | Trusted if not physically compromised | Side-channel attacks require lab equipment |
+| Client software | Trusted (user's device) | Not defensible if compromised |
 
-| Mode | Content on server | Who can read | Use case |
-|:-----|:-----------------|:-------------|:---------|
-| **Plaintext** | Posts stored in cleartext | Server operator | Public channels, maximum searchability |
-| **Encrypted at rest** | Posts encrypted with server key | Server operator with key | Default for most channels |
-| **E2E persistent** | Posts encrypted with channel key | Channel members only | Maximum privacy channels |
+### 7.2 Attack scenarios
 
-For E2E persistent mode, the channel key is distributed to members via SMP and never touches the server. The server stores ciphertext it cannot read. Search is only possible client-side.
+#### 7.2.1 Malicious individual node
 
-### 6.2 Search architecture
+**Attack:** A single compromised service node attempts to read message content, inject false messages, drop messages, or serve corrupted data.
 
-| Storage mode | Server search | Client search |
-|:-------------|:-------------|:-------------|
-| Plaintext | Full-text index | Also available |
-| Encrypted at rest | Full-text index (server decrypts) | Also available |
-| E2E persistent | NOT possible | Client-side only |
+**Defences:**
+- Messages are client-side encrypted with random keys; node cannot decrypt
+- Onion routing means node sees only one hop of the route
+- Replication across swarm means dropped messages still reach recipient
+- Audit challenges detect corrupted data (wrong HMAC response)
+- Swarm consensus rejects forged messages (signatures don't verify)
+
+**Outcome:** Attacker sees only ciphertext metadata. Cannot decrypt, forge, or effectively disrupt service.
+
+#### 7.2.2 Sybil attack: one operator, many nodes
+
+**Attack:** A single operator registers many nodes to dominate a swarm and censor messages or disrupt service.
+
+**Defences:**
+- 10,000 GoCoin stake per node (economic cost)
+- VRF-based deterministic swarm assignment (can't choose target swarm)
+- Random swarm reshuffling every 24 hours (can't camp on target)
+- Audit challenges detect multi-instance fraud (can't respond fast enough on one machine)
+- Geographic and ASN diversity weighted in operator ranking
+- Taking 33% of the network requires ~2.8M GoCoin (~$280k at $0.10/token, ~$2.8M at $1.00/token)
+
+**Outcome:** Sybil attack is economically prohibitive and technically detectable.
+
+#### 7.2.3 Eclipse attack on a specific user
+
+**Attack:** Attacker surrounds a target user's swarm with malicious nodes to isolate them from the network.
+
+**Defences:**
+- VRF swarm assignment is unpredictable before epoch starts
+- User does not control swarm assignment (deterministic from queue ID)
+- User's onion routes go through random nodes not in the target swarm
+- 3-hop onion means attacker needs to control multiple hops, not just the swarm
+- Required attacker capability: N-1 of N swarm members plus 2 of 3 onion hops, computationally infeasible
+
+**Outcome:** Eclipse attacks on specific users are impractical.
+
+#### 7.2.4 Traffic analysis
+
+**Attack:** Network observer attempts to correlate sender and recipient traffic patterns.
+
+**Defences:**
+- All packets are constant size (16 KB for messages, 400 KB for file shards)
+- Random delays per hop (50-200ms)
+- Onion encryption means packet contents differ at each hop
+- Mix-net-like delays prevent direct timing correlation
+- Cover traffic (optional, for high-threat users): continuous dummy messages
+
+**Outcome:** Passive traffic analysis requires state-level resources and is still probabilistic, not certain.
+
+#### 7.2.5 Slashing attack (false evidence)
+
+**Attack:** Attacker submits false evidence of misbehaviour against an honest node to trigger slashing.
+
+**Defences:**
+- Evidence must be cryptographically valid (signatures, Merkle proofs)
+- Evidence must be confirmed by 2/3 validator quorum
+- Validators face their own slashing for submitting false confirmations
+- Accused node has a grace period to submit counter-evidence
+- Audit log on BFT appchain allows public verification
+
+**Outcome:** False slashing requires colluding with 2/3+ of validators, which is a failure of the whole consensus layer.
+
+#### 7.2.6 Smart contract exploit
+
+**Attack:** Attacker exploits a bug in GoNode's smart contracts to steal funds or disrupt the economic layer.
+
+**Defences:**
+- OpenZeppelin battle-tested contract primitives
+- Multiple independent security audits (pre-launch)
+- Bug bounty program (post-launch)
+- Timelocks on privileged operations (24h minimum)
+- Emergency pause function (multisig, burned at Phase 4)
+- Gradual deployment (testnet, then small mainnet, then full scale)
+
+**Outcome:** Risk is non-zero but mitigated through standard DeFi security practices.
+
+#### 7.2.7 Foundation compromise or capture
+
+**Attack:** Foundation is compromised (keys stolen) or captured (regulatory pressure, insider threat).
+
+**Defences:**
+- Multisig governance (3 of 5) for Foundation operations
+- Admin keys burned at Phase 4 (24+ months post-launch)
+- After key burn, protocol is immutable - even Foundation cannot modify
+- Swiss Stiftung structure has strong protection against hostile state action
+- AGPL-3.0 code means anyone can fork if Foundation is corrupted
+
+**Outcome:** Compromise during Phase 0-3 is significant risk (primary mitigation is operational security). Post-Phase 4, compromise has limited effect.
+
+#### 7.2.8 Regulatory shutdown
+
+**Attack:** A regulator orders Foundation to shut down the network, reveal user data, or install backdoors.
+
+**Defences:**
+- Zero-knowledge architecture: Foundation genuinely cannot reveal user data
+- Swiss domicile: constitutional protection of financial privacy
+- Decentralised node operators: Foundation cannot force node operators to comply
+- Open-source code: network continues to operate even if Foundation is ordered offline
+- Jurisdictional diversity: operators worldwide cannot all be ordered
+
+**Outcome:** Partial operations might be restricted in specific jurisdictions, but the global network continues.
+
+### 7.3 Security disclosure
+
+Vulnerabilities should be reported to `security@gonode.dev` with GPG encryption. Acknowledgment within 48 hours, initial assessment within 7 days, fix and disclosure coordination within 90 days (standard industry practice).
+
+Bug bounty program will be published before Phase 3 (TGE), with rewards scaled to severity:
+
+| Severity | Reward (USD equivalent) |
+|:---------|:------------------------|
+| Critical (fund loss, key exposure, network-wide) | $10,000 - $250,000 |
+| High (significant disruption, slashing bypass) | $2,500 - $25,000 |
+| Medium (specific user impact, recovery possible) | $500 - $5,000 |
+| Low (minor protocol deviation, self-limiting) | $100 - $1,000 |
 
 ---
 
-## 7. Security analysis
+## 8. Known limitations
 
-### 7.1 Threat model
-
-| Attacker | What they get | What they cannot get |
-|:---------|:-------------|:--------------------|
-| SMP server operator | Encrypted blocks, queue addresses, timing | Content, identities, channel membership |
-| GoBot VPS compromise (with GoKey) | Encrypted blocks, queue addresses | Content, keys, identities |
-| GoBot VPS compromise (standalone) | Message content, queue mappings | GoUNITY private keys |
-| GoLab app server compromise | Stored posts (mode-dependent), channel registry | User private keys, SMP queue mappings |
-| GoUNITY compromise | Certificate database, usernames, emails | Private keys (not stored), community activity |
-| Network observer | Encrypted traffic, IP addresses | Content, identities (with SMP padding) |
-| Malicious channel member | Channel content they are subscribed to | Other channels, other users' identities |
-
-### 7.2 Security properties
-
-| Property | Guaranteed by |
-|:---------|:-------------|
-| Message confidentiality | SMP E2E encryption (NaCl + Double Ratchet) |
-| Message integrity | Ed25519 signatures on every message |
-| Message authenticity | GoUNITY certificate chain verification |
-| Sender anonymity (transport) | SMP pairwise queues, no user IDs |
-| Sender pseudonymity (application) | GoUNITY certificates, DID:key identifiers |
-| Channel unlinkability | Separate SMP queue pairs per channel |
-| Forward secrecy | Double Ratchet key derivation |
-| Ban enforcement | GoUNITY CRL + certificate-based identity |
-| Hardware trust (optional) | GoKey/SimpleGo eFuse-bound keys |
-
-### 7.3 Comparison with other platforms
-
-| Threat | GitHub/GitLab | Mastodon | Nostr | GoLab |
-|:-------|:-------------|:---------|:------|:------|
-| Server reads all content | Yes | Yes | Yes (relay) | No (E2E) |
-| Server knows social graph | Yes | Yes | Yes | No (pairwise queues) |
-| Server knows real identity | Yes (account) | Yes (account) | No (pubkey) | No (certificate) |
-| Admin can surveil users | Yes | Yes | Relay can | No (GoKey mode) |
-| Ban evasion easy | Medium | Medium | Very easy | Hard (certificate cost) |
-| Metadata protection | None | None | None | SMP queue isolation |
-
-### 7.4 Known weaknesses
-
-| ID | Severity | Description | Status |
-|:---|:---------|:------------|:-------|
-| GL-SEC-01 | HIGH | GoBot standalone mode: VPS sees all content | By design - GoKey mode resolves |
-| GL-SEC-02 | MEDIUM | Application server stores posts (mode-dependent) | Configurable - E2E mode available |
-| GL-SEC-03 | MEDIUM | GoBot relay can selectively drop messages | Mitigated by sequence monitoring |
-| GL-SEC-04 | MEDIUM | Channel key distribution for E2E persistent mode | Sender-key rotation protocol needed |
-| GL-SEC-05 | LOW | Search not available in E2E persistent mode | By design - privacy tradeoff |
-| GL-SEC-06 | LOW | GoUNITY registration requires email + payment | By design - anti-spam barrier |
-| GL-SEC-07 | LOW | CRL propagation delay (up to 24h) | Configurable sync interval |
+| ID | Severity | Description | Mitigation / Status |
+|:---|:---------|:------------|:-------------------|
+| GN-SEC-01 | Low | 24-hour CRL propagation window for revoked GoUNITY certs | Accepted, configurable in critical deployments |
+| GN-SEC-02 | Low | Cover traffic is optional, not mandatory | Deliberate - balances anonymity vs bandwidth costs |
+| GN-SEC-03 | Medium | Phase 0-3 Foundation compromise could modify protocol | Mitigated by multisig and timelock; fully resolved at Phase 4 key burn |
+| GN-SEC-04 | Low | Pulse BFT appchain has its own consensus assumptions | Checkpoints to Arbitrum daily limit blast radius |
+| GN-SEC-05 | Medium | Quantum computers could break X25519 in Layer 6 onion | ML-KEM upgrade path planned for Phase 5 |
+| GN-SEC-06 | Low | Uniswap pool manipulation could affect burn efficiency | Mitigated by pool depth, multiple routing, circuit breakers |
+| GN-PERF-01 | Low | Onion routing adds latency (~200-500ms typical) | Acceptable for messaging; bypassed for real-time calls (future) |
+| GN-PERF-02 | Medium | File retrieval requires 10 of 16 shards from diverse nodes | Parallelisable, typical latency 2-5 seconds for 1 GB file |
+| GN-OP-01 | Medium | New operators may abandon after 1-3 months (Storj data) | Held-back payment structure aligns with abandonment data |
+| GN-OP-02 | Low | Geographic concentration risk in early network | Weighted rewards incentivise diversity |
 
 ---
 
-## 8. Technology decisions
+## 9. Deployment
 
-| Decision | Choice | Reason |
-|:---------|:-------|:-------|
-| Message format | ActivityStreams 2.0 | W3C standard, proven by Fediverse, extensible |
-| Identity format | DID:key (Ed25519) | Self-describing, no resolution service, W3C compatible |
-| Transport | SMP via simplex-js | Proven E2E, no user IDs, metadata resistant |
-| Relay | GoBot (extended) | Already handles SMP connections and moderation |
-| Certificate authority | GoUNITY (step-ca fork) | Production-grade, Ed25519 native, HSM support |
-| Application server | Go | Same as GoBot and GoRelay, single binary, fast |
-| Browser client | TypeScript | Built on simplex-js and GoChat widget proven architecture |
-| Permission model | Power levels (Matrix-style) | Most mature permission system, certificate-enforced |
-| Post signatures | Ed25519Signature2020 | W3C linked data proof standard |
-| Channel scaling | Relay fan-out via GoBot | O(n) vs O(n^2), proven pattern |
+### 9.1 Single-node deployment
+
+Minimum viable setup for a home operator:
+
+```bash
+# Download pre-built binary (Phase 1+)
+wget https://github.com/saschadaemgen/GoNode/releases/latest/gonode-linux-amd64
+chmod +x gonode-linux-amd64
+
+# Generate operator identity
+./gonode-linux-amd64 keygen --output ~/.gonode/keystore
+
+# Fund operator address with 10,000 GoCoin + gas
+# (via exchange to the address shown by keygen)
+
+# Configure
+cat > ~/.gonode/config.yaml << EOF
+arbitrum_rpc: https://arb1.arbitrum.io/rpc
+storage_path: /var/lib/gonode
+bandwidth_limit: unlimited
+ports:
+  peer: 7000
+  client: 7001
+EOF
+
+# Register as node (stakes 10k GoCoin)
+./gonode-linux-amd64 register
+
+# Start service node
+./gonode-linux-amd64 serve --config ~/.gonode/config.yaml
+
+# Monitor earnings
+./gonode-linux-amd64 earnings
+```
+
+### 9.2 Enterprise deployment
+
+For enterprise SLA customers, GoNode can be deployed in a private cluster:
+
+```yaml
+# docker-compose.yml for enterprise deployment
+services:
+  gonode-1:
+    image: gonode:latest
+    environment:
+      - NODE_ROLE=primary
+      - CLUSTER_ID=enterprise-acme-001
+    volumes:
+      - ./data-1:/var/lib/gonode
+
+  gonode-2:
+    image: gonode:latest
+    environment:
+      - NODE_ROLE=secondary
+      - CLUSTER_ID=enterprise-acme-001
+    volumes:
+      - ./data-2:/var/lib/gonode
+
+  gonode-3:
+    image: gonode:latest
+    environment:
+      - NODE_ROLE=secondary
+      - CLUSTER_ID=enterprise-acme-001
+    volumes:
+      - ./data-3:/var/lib/gonode
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    ports: ["3000:3000"]
+```
+
+Enterprise deployments do not require GoCoin staking - they are billed in fiat via SLA contracts. Private clusters communicate with the public GoNode network for interoperability but provide dedicated capacity and SLA guarantees to the enterprise customer.
+
+### 9.3 Monitoring
+
+GoNode exports Prometheus metrics on port 9100 by default:
+
+```
+gonode_messages_stored_total
+gonode_messages_replicated_total
+gonode_shards_stored_bytes
+gonode_audit_challenges_received_total
+gonode_audit_challenges_correct_total
+gonode_audit_challenges_incorrect_total
+gonode_reputation_score
+gonode_earned_gocoin_current_month
+gonode_held_back_gocoin_total
+gonode_bandwidth_used_bytes
+gonode_peer_connections_active
+gonode_swarm_memberships_current
+```
+
+Example alert rules:
+
+```yaml
+- alert: GoNodeLowReputation
+  expr: gonode_reputation_score < 50
+  for: 1h
+  annotations:
+    summary: Node reputation degrading, potential disqualification risk
+
+- alert: GoNodeAuditFailures
+  expr: rate(gonode_audit_challenges_incorrect_total[1h]) > 0
+  annotations:
+    summary: Node failing audit challenges, data may be corrupted
+```
 
 ---
 
-## 9. Related components
+## 10. System integration
 
-| Component | Role in GoLab | Documentation |
-|:----------|:-------------|:-------------|
-| [GoBot](https://github.com/saschadaemgen/GoBot) | Community relay + moderation | [System Architecture](https://github.com/saschadaemgen/GoBot/blob/main/docs/SYSTEM-ARCHITECTURE.md) |
-| [GoKey](https://github.com/saschadaemgen/SimpleGo) | Hardware crypto for GoBot | [Wire Protocol](https://github.com/saschadaemgen/GoBot/blob/main/docs/GOKEY-WIRE-PROTOCOL.md) |
-| [GoUNITY](https://github.com/saschadaemgen/GoUNITY) | Certificate authority | [Architecture](https://github.com/saschadaemgen/GoUNITY/blob/main/docs/ARCHITECTURE_AND_SECURITY.md) |
-| [GoChat](https://github.com/saschadaemgen/GoChat) | Browser SMP foundation | [GoChat repo](https://github.com/saschadaemgen/GoChat) |
-| [simplex-js](https://www.npmjs.com/package/simplex-js) | SMP transport library | [npm package](https://www.npmjs.com/package/simplex-js) |
+### 10.1 Integration with SimpleGo hardware
+
+```
+SimpleGo T-Deck Plus (ESP32-S3)
+  |
+  | SMP protocol messages (via WiFi + TLS)
+  v
+GoNode service node (anywhere on network)
+  |
+  | Replicates across swarm
+  v
+GoNode swarm members (5-10 nodes globally)
+  |
+  | Stored as ciphertext
+  v
+Recipient fetches via their SimpleGo device
+```
+
+SimpleGo hardware uses GoNode transparently - it connects to the nearest GoNode service node as its SMP relay, replacing the current centralised SimpleX Chat relay infrastructure.
+
+### 10.2 Integration with GoBot
+
+```
+GoBot (VPS)
+  |
+  | Routes group messages via GoNode
+  v
+GoNode swarms handle SMP queues for groups
+  |
+  | GoBot performs moderation actions (kick, ban)
+  v
+GoNode distributes moderation decisions to group members
+```
+
+GoBot uses GoNode as its relay infrastructure, replacing current dependence on SimpleX Chat's centralised relays.
+
+### 10.3 Integration with GoKey
+
+Operator identity binding (optional but recommended):
+
+```
+GoKey device (ESP32-S3)
+  |
+  | Holds operator Ed25519 key in eFuse
+  |
+  | WSS/mTLS connection
+  v
+GoNode service node
+  |
+  | Uses GoKey for all signing operations
+  |
+  | Key never leaves hardware
+  v
+Arbitrum One
+  |
+  | GoKey-signed stake deposit, reward claims
+  v
+Network
+```
+
+### 10.4 Integration with GoUNITY
+
+GoUNITY provides user identity certificates that are independent of GoNode. GoNode only handles operator identity, not user identity.
+
+```
+User identity (GoUNITY):
+  Ed25519 certificate for username "Alice"
+  Used in GoBot-moderated groups, GoLab community channels
+  GoNode has no awareness of this
+
+Operator identity (GoNode):
+  Ed25519 key for service node operator
+  Used for staking, audits, rewards
+  GoUNITY has no awareness of this
+
+Shared infrastructure:
+  GoUNITY's certificates are transmitted through GoNode swarms
+  as ciphertext (same as any other message)
+  GoNode cannot decrypt or inspect them
+```
+
+### 10.5 Integration with GoLab
+
+GoLab uses GoNode swarms for channel fan-out:
+
+```
+GoLab user posts in a channel
+  |
+  | ActivityStreams message signed with GoUNITY cert
+  v
+Message enters GoBot
+  |
+  | GoBot fans out to all channel subscribers
+  v
+Each subscriber's SMP queue lives on a GoNode swarm
+  |
+  | GoNode swarms replicate across 5-10 nodes each
+  v
+Subscribers fetch and decrypt messages
+```
+
+At scale, GoLab communities with thousands of members depend on GoNode's swarm infrastructure for efficient fan-out.
 
 ---
 
-*GoLab Architecture & Security v1 - April 2026*
+## 11. Related components
+
+| Component | Role | Documentation |
+|:----------|:-----|:-------------|
+| [SimpleGo](https://github.com/saschadaemgen/SimpleGo) | Hardware messenger, protocol foundation | [SimpleGo repo](https://github.com/saschadaemgen/SimpleGo) |
+| [GoBot](https://github.com/saschadaemgen/GoBot) | Moderation layer using GoNode infrastructure | [Architecture](https://github.com/saschadaemgen/GoBot/blob/main/docs/ARCHITECTURE_AND_SECURITY.md) |
+| [GoKey](https://github.com/saschadaemgen/SimpleGo) | Hardware operator identity anchor | [Architecture](https://github.com/saschadaemgen/SimpleGo/blob/main/templates/gokey/docs/ARCHITECTURE_AND_SECURITY.md) |
+| [GoUNITY](https://github.com/saschadaemgen/GoUNITY) | User identity certificates (separate from operator identity) | [Architecture](https://github.com/saschadaemgen/GoUNITY/blob/main/docs/ARCHITECTURE_AND_SECURITY.md) |
+| [GoLab](https://github.com/saschadaemgen/GoLab) | Community platform using GoNode for channel fan-out | [Architecture](https://github.com/saschadaemgen/GoLab/blob/main/docs/ARCHITECTURE_AND_SECURITY.md) |
+
+---
+
+*GoNode Architecture & Security v1 - April 2026*
 *IT and More Systems, Recklinghausen, Germany*
