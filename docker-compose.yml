@@ -13,6 +13,12 @@ services:
       - GOLAB_DB_PASSWORD=golab-dev
       - GOLAB_DB_SSLMODE=disable
       - GOLAB_SECRET=dev-secret-change-in-production
+      # AES-256 key (base64, 32 bytes) for /opt/backups encryption.
+      # Leave empty on first start: the app generates a key and
+      # prints it once in the container logs. Copy that value here
+      # and restart. Losing this key means losing every encrypted
+      # backup - it cannot be reconstructed from the files alone.
+      - GOLAB_BACKUP_KEY=
     # Persist uploads across `docker-compose build` rebuilds. Without
     # this volume, every rebuild destroyed user avatars and post
     # images because they lived inside the ephemeral container fs.

@@ -3261,6 +3261,27 @@ img.avatar {
   word-break: break-all;
   color: var(--text);
 }
+
+/* Encryption badge: small inline icon sitting just before the
+   backup filename. Green lock for .sql.enc (encrypted at rest),
+   amber triangle for the pre-encryption .sql legacy files that
+   still live on disk. Color is set on the <span> so the SVG
+   inherits via stroke="currentColor". */
+.admin-db-enc-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.45rem;
+  vertical-align: -2px;
+}
+.admin-db-enc-badge svg {
+  display: block;
+}
+.admin-db-enc-badge.enc-secure {
+  color: var(--success, #3fa46a);
+}
+.admin-db-enc-badge.enc-legacy {
+  color: #e0a030;
+}
 .admin-db-th-size {
   width: 6.5rem;
 }

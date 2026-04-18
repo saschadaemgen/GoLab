@@ -14,6 +14,11 @@ type Config struct {
 	DB       DBConfig
 	SiteURL  string
 	SiteName string
+	// BackupKey is the base64-encoded AES-256 key for /opt/backups
+	// encryption. Empty at startup triggers a one-shot auto-
+	// generation that's logged once so the admin can copy it into
+	// docker-compose.yml. See handler.NewBackupCrypto.
+	BackupKey string
 }
 
 type DBConfig struct {
@@ -46,8 +51,9 @@ func Load() *Config {
 			Password: envOrDefault("GOLAB_DB_PASSWORD", "golab-dev"),
 			SSLMode:  envOrDefault("GOLAB_DB_SSLMODE", "disable"),
 		},
-		SiteURL:  envOrDefault("GOLAB_SITE_URL", "http://localhost:3000"),
-		SiteName: envOrDefault("GOLAB_SITE_NAME", "GoLab"),
+		SiteURL:   envOrDefault("GOLAB_SITE_URL", "http://localhost:3000"),
+		SiteName:  envOrDefault("GOLAB_SITE_NAME", "GoLab"),
+		BackupKey: envOrDefault("GOLAB_BACKUP_KEY", ""),
 	}
 }
 

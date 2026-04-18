@@ -1,30 +1,42 @@
 package handler
 
-// Sprint 13 admin database management. Six endpoints:
+// Sprint 13 admin database management. Seven endpoints:
 //
-//   POST   /api/admin/db/backup                       - run pg_dump, save to /opt/backups/
-//   GET    /api/admin/db/export                       - run pg_dump, stream as .sql download
-//   POST   /api/admin/db/import                       - multipart upload, auto-backup, psql < file
-//   GET    /api/admin/db/backups                      - list existing backups
-//   GET    /api/admin/db/backups/{filename}/download  - download one saved backup
+//   POST   /api/admin/db/backup                       - pg_dump, encrypted .sql.enc written to /opt/backups/
+//   GET    /api/admin/db/export                       - pg_dump, streamed as plaintext .sql download
+//   POST   /api/admin/db/import                       - multipart upload (.sql or .sql.enc), auto pre-import backup, psql
+//   GET    /api/admin/db/backups                      - list existing backups (both .sql legacy and .sql.enc)
+//   GET    /api/admin/db/backups/{filename}/download  - download one saved backup (decrypts .sql.enc on-the-fly)
 //   DELETE /api/admin/db/backups/{filename}           - delete one saved backup
 //
-// All six require admin (RequireAdmin middleware in the router).
+// All endpoints require admin (RequireAdmin middleware in the router).
 // Import additionally requires Owner (power_level == 100, id == 1).
 //
+// Encryption (follow-up to the initial Sprint 13 commits):
+//   - Every new backup is written as golab-*.sql.enc containing
+//     12-byte random nonce + AES-256-GCM ciphertext + 16-byte tag.
+//   - The key lives in GOLAB_BACKUP_KEY env var (base64, 32 bytes).
+//   - Unencrypted legacy .sql files written before this feature
+//     landed are still listed + downloadable + deletable; they
+//     just carry a warning icon in the UI. Import accepts both.
+//   - Plaintext never touches disk during backup: pg_dump streams
+//     into a memory buffer which is immediately encrypted and
+//     atomically written to the final .sql.enc file (0o600).
+//   - After every successful new backup, cleanupOld() trims the
+//     backup dir to the 20 most recent files.
+//
 // Security notes:
-//   - pg_dump and psql are invoked via exec.Command with separate
-//     args (never shell). No user input flows into the arg list.
-//   - PGPASSWORD is passed via the process env, not on the command
-//     line, so it doesn't appear in `ps`.
-//   - Backup file names are generated server-side from a timestamp
-//     and sanitized before being sent to the client. Listing is
-//     restricted to files matching "golab-*.sql" in BackupDir;
-//     there's no path traversal surface.
-//   - Import always creates a pre-import backup BEFORE running psql,
-//     and deletes the uploaded temp file when done.
+//   - pg_dump / psql invoked via exec.Command with separate args.
+//     No user input flows into the arg list.
+//   - PGPASSWORD passed via process env, not command line.
+//   - Backup file names generated server-side from a timestamp.
+//   - isSafeBackupName gates the {filename} URL param against
+//     path traversal / reserved characters / weird suffixes.
+//   - Plaintext buffers (pg_dump output, decrypted import body)
+//     are zeroed via ZeroBytes before dropping out of scope.
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -43,18 +55,29 @@ import (
 	"github.com/saschadaemgen/GoLab/internal/config"
 )
 
+// maxBackups is the upper bound on files kept in BackupDir. After
+// every successful new backup the oldest files above this count
+// are deleted. Pre-import backups are counted together with manual
+// backups - one shared retention pool.
+const maxBackups = 20
+
 // DBHandler runs pg_dump / psql against the Postgres container for
-// manual backup, export and import from the admin dashboard.
+// manual backup, export and import from the admin dashboard. Crypto
+// is required and must be non-nil when the handler is constructed.
 type DBHandler struct {
 	Cfg       *config.Config
+	Crypto    *BackupCrypto
 	BackupDir string // default "/opt/backups"
 }
 
 // backupFile describes one backup entry returned by ListBackups.
+// Encrypted tells the UI whether to show a lock icon (true,
+// .sql.enc) or a warning icon (false, legacy .sql plaintext).
 type backupFile struct {
 	Name      string    `json:"name"`
 	Size      int64     `json:"size"`
 	CreatedAt time.Time `json:"created_at"`
+	Encrypted bool      `json:"encrypted"`
 }
 
 // backupDir returns the configured backup directory, defaulting to
@@ -76,8 +99,8 @@ func (h *DBHandler) pgEnv() []string {
 	return env
 }
 
-// ListBackups returns every golab-*.sql file in BackupDir, newest
-// first, capped at the 50 most recent entries.
+// ListBackups returns every golab-*.sql and golab-*.sql.enc file in
+// BackupDir, newest first, capped at the 50 most recent entries.
 func (h *DBHandler) ListBackups(w http.ResponseWriter, r *http.Request) {
 	files, err := h.scanBackups()
 	if err != nil {
@@ -103,9 +126,15 @@ func (h *DBHandler) scanBackups() ([]backupFile, error) {
 			continue
 		}
 		name := e.Name()
-		// Only list our own dumps. Anything else in /opt/backups is
-		// foreign and not our business.
-		if !strings.HasPrefix(name, "golab-") || !strings.HasSuffix(name, ".sql") {
+		if !strings.HasPrefix(name, "golab-") {
+			continue
+		}
+		// Accept both the new .sql.enc format and the pre-encryption
+		// .sql legacy files. The .sql.enc check comes first so the
+		// boolean below is right.
+		encrypted := strings.HasSuffix(name, ".sql.enc")
+		plaintext := strings.HasSuffix(name, ".sql")
+		if !encrypted && !plaintext {
 			continue
 		}
 		info, err := e.Info()
@@ -116,6 +145,7 @@ func (h *DBHandler) scanBackups() ([]backupFile, error) {
 			Name:      name,
 			Size:      info.Size(),
 			CreatedAt: info.ModTime(),
+			Encrypted: encrypted,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -127,11 +157,11 @@ func (h *DBHandler) scanBackups() ([]backupFile, error) {
 	return out, nil
 }
 
-// Backup creates a new pg_dump file in BackupDir named
-// golab-manual-YYYYMMDD-HHMMSS.sql. Owner and every admin can use
-// this, since it's non-destructive.
+// Backup creates a new encrypted pg_dump file in BackupDir named
+// golab-manual-YYYYMMDD-HHMMSS.sql.enc. Owner and every admin can
+// use this, since it's non-destructive.
 func (h *DBHandler) Backup(w http.ResponseWriter, r *http.Request) {
-	name := fmt.Sprintf("golab-manual-%s.sql", time.Now().UTC().Format("20060102-150405"))
+	name := fmt.Sprintf("golab-manual-%s.sql.enc", time.Now().UTC().Format("20060102-150405"))
 	path := filepath.Join(h.backupDir(), name)
 
 	if err := os.MkdirAll(h.backupDir(), 0o750); err != nil {
@@ -142,11 +172,11 @@ func (h *DBHandler) Backup(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	if err := h.pgDumpToFile(ctx, path); err != nil {
-		slog.Error("backup: pg_dump", "error", err)
+	if err := h.pgDumpEncrypted(ctx, path); err != nil {
+		slog.Error("backup: pg_dump encrypted", "error", err)
 		// Remove a half-written file so the listing stays clean.
 		_ = os.Remove(path)
-		writeError(w, http.StatusInternalServerError, "pg_dump failed: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "backup failed: "+err.Error())
 		return
 	}
 
@@ -157,30 +187,30 @@ func (h *DBHandler) Backup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.cleanupOld()
+
 	writeJSON(w, http.StatusOK, backupFile{
 		Name:      name,
 		Size:      info.Size(),
 		CreatedAt: info.ModTime(),
+		Encrypted: true,
 	})
 }
 
 // Export runs pg_dump and streams the SQL directly to the client as
-// a file download. Nothing is persisted server-side.
+// a plaintext file download. Nothing is persisted server-side, so
+// this endpoint does NOT go through the encrypted-at-rest pipeline.
+// It's intended for "give me a dump I can take to another host",
+// where encrypting with a key the destination doesn't have would
+// defeat the point.
 //
 // Headers must be set BEFORE any byte of the dump body is written,
 // otherwise WriteHeader implicitly commits status 200 with text/html
 // defaults and the browser opens the dump inline instead of saving
-// it. application/octet-stream is the safest Content-Type for a
-// file download; browsers never render it and Nginx won't add a
-// charset directive. If Nginx sits in front and strips the
-// Content-Disposition, add `proxy_pass_header Content-Disposition;`
-// and `proxy_pass_header Content-Type;` to the /api/admin location
-// block.
+// it.
 func (h *DBHandler) Export(w http.ResponseWriter, r *http.Request) {
 	filename := fmt.Sprintf("golab-export-%s.sql", time.Now().UTC().Format("2006-01-02"))
 
-	// 1) Lock the pg_dump call down with a context + timeout first so
-	//    we never flush headers and then fail to even start pg_dump.
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "pg_dump",
@@ -193,8 +223,6 @@ func (h *DBHandler) Export(w http.ResponseWriter, r *http.Request) {
 	cmd.Env = h.pgEnv()
 	cmd.Stderr = os.Stderr
 
-	// 2) Wire pg_dump's stdout into a pipe so we can decide to emit
-	//    headers only once we're sure the process actually started.
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		slog.Error("export: stdout pipe", "error", err)
@@ -207,20 +235,12 @@ func (h *DBHandler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3) Headers committed BEFORE we touch the body. Once the first
-	//    Copy byte flies, these cannot be changed.
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	// Tell proxies not to buffer the stream so large dumps flow
-	// through instead of filling Nginx memory.
 	w.Header().Set("X-Accel-Buffering", "no")
-	// We don't know the size up front; omit Content-Length and let
-	// the client read until EOF.
 	w.WriteHeader(http.StatusOK)
 
-	// 4) Stream the dump. Errors here are unrecoverable (headers
-	//    already sent) - log and let the client see a short file.
 	if _, err := io.Copy(w, stdout); err != nil {
 		slog.Error("export: stream", "error", err)
 	}
@@ -229,15 +249,15 @@ func (h *DBHandler) Export(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// pgDumpToFile runs pg_dump against the configured database and
-// writes the result to path. Used by Backup directly and by Import
-// for the pre-import safety backup.
-func (h *DBHandler) pgDumpToFile(ctx context.Context, path string) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("create backup file: %w", err)
+// pgDumpEncrypted runs pg_dump, encrypts the output in memory, and
+// writes the ciphertext atomically to path with 0o600 permissions.
+// The plaintext dump NEVER touches disk: pg_dump stdout goes into
+// a bytes.Buffer, the buffer is encrypted, the plaintext is zeroed,
+// and the encrypted blob is written via tmp-and-rename.
+func (h *DBHandler) pgDumpEncrypted(ctx context.Context, path string) error {
+	if h.Crypto == nil {
+		return fmt.Errorf("backup crypto not configured")
 	}
-	defer f.Close()
 
 	cmd := exec.CommandContext(ctx, "pg_dump",
 		"--clean", "--if-exists", "--no-owner", "--no-privileges",
@@ -247,14 +267,69 @@ func (h *DBHandler) pgDumpToFile(ctx context.Context, path string) error {
 		"-d", h.Cfg.DB.Name,
 	)
 	cmd.Env = h.pgEnv()
-	cmd.Stdout = f
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	if err := cmd.Run(); err != nil {
+		// Scrub any partial output that may already be in the buffer.
+		ZeroBytes(buf.Bytes())
+		return fmt.Errorf("pg_dump: %w", err)
+	}
+
+	plaintext := buf.Bytes()
+	ciphertext, err := h.Crypto.Encrypt(plaintext)
+	// Wipe plaintext immediately regardless of encryption result.
+	ZeroBytes(plaintext)
+	if err != nil {
+		return fmt.Errorf("encrypt: %w", err)
+	}
+
+	// Atomic write: .tmp then rename. 0o600 so only the app user
+	// can read the ciphertext (belt and suspenders - the key is
+	// separate, but reducing the file's reach is free security).
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, ciphertext, 0o600); err != nil {
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("rename: %w", err)
+	}
+	// Re-chmod defensively: some filesystems preserve mode on
+	// rename, others don't. Explicit 0o600 is the intent.
+	if err := os.Chmod(path, 0o600); err != nil {
+		slog.Warn("pg_dump encrypted: chmod", "path", path, "error", err)
+	}
+	return nil
 }
 
-// Import accepts a multipart file upload and replays it via psql.
-// Owner-only (id == 1). Always creates a pre-import backup first so
-// the admin can roll back by re-uploading that file.
+// cleanupOld keeps the backup directory at no more than maxBackups
+// files (both .sql and .sql.enc count toward the cap). The oldest
+// files above the cap are removed. Errors are logged but do not
+// surface to the user - cleanup is best-effort.
+func (h *DBHandler) cleanupOld() {
+	files, err := h.scanBackups()
+	if err != nil || len(files) <= maxBackups {
+		return
+	}
+	// scanBackups sorts newest-first, so the tail of the slice
+	// holds the oldest entries.
+	for _, f := range files[maxBackups:] {
+		path := filepath.Join(h.backupDir(), f.Name)
+		if err := os.Remove(path); err != nil {
+			slog.Warn("cleanup: remove old backup", "name", f.Name, "error", err)
+			continue
+		}
+		slog.Info("cleanup: removed old backup",
+			"name", f.Name, "size", f.Size, "age", time.Since(f.CreatedAt).Round(time.Second))
+	}
+}
+
+// Import accepts a multipart upload (.sql or .sql.enc), verifies
+// it, creates a pre-import backup, then replays the SQL via psql.
+// Owner-only (id == 1). Plaintext of the upload never hits disk -
+// everything flows through memory and into psql via stdin.
 func (h *DBHandler) Import(w http.ResponseWriter, r *http.Request) {
 	actor := auth.UserFromContext(r.Context())
 	if actor == nil || actor.ID != 1 {
@@ -262,8 +337,6 @@ func (h *DBHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 100 MiB cap on the upload - bigger than any realistic GoLab
-	// dump for years and small enough to reject a runaway request.
 	const maxUpload = 100 << 20
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid upload: "+err.Error())
@@ -276,10 +349,12 @@ func (h *DBHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Basic extension check. We don't trust the client-provided name
-	// for anything else - the import path is server-generated.
-	if !strings.HasSuffix(strings.ToLower(header.Filename), ".sql") {
-		writeError(w, http.StatusBadRequest, "only .sql files are accepted")
+	// Accept .sql (legacy plaintext) and .sql.enc (Sprint 13+).
+	lowerName := strings.ToLower(header.Filename)
+	isEnc := strings.HasSuffix(lowerName, ".sql.enc") || strings.HasSuffix(lowerName, ".enc")
+	isSQL := strings.HasSuffix(lowerName, ".sql")
+	if !isEnc && !isSQL {
+		writeError(w, http.StatusBadRequest, "only .sql or .sql.enc files are accepted")
 		return
 	}
 
@@ -289,36 +364,54 @@ func (h *DBHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 1: save the upload to a temp file so psql can read it via
-	// stdin (streaming straight through would lose retry ability and
-	// make psql errors harder to debug).
-	ts := time.Now().UTC().Format("20060102-150405")
-	uploadPath := filepath.Join(os.TempDir(), "golab-import-"+ts+".sql")
-	uploaded, err := os.OpenFile(uploadPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	// Step 1: read the upload fully into memory, cap-enforced. The
+	// ParseMultipartForm cap above limits this; io.LimitReader is
+	// a second defence in case the header was malformed.
+	uploaded, err := io.ReadAll(io.LimitReader(file, maxUpload+1))
 	if err != nil {
-		slog.Error("import: tempfile", "error", err)
+		slog.Error("import: read upload", "error", err)
 		writeError(w, http.StatusInternalServerError, "could not buffer upload")
 		return
 	}
-	if _, err := io.Copy(uploaded, file); err != nil {
-		uploaded.Close()
-		_ = os.Remove(uploadPath)
-		slog.Error("import: copy upload", "error", err)
-		writeError(w, http.StatusInternalServerError, "could not buffer upload")
+	if len(uploaded) > maxUpload {
+		ZeroBytes(uploaded)
+		writeError(w, http.StatusBadRequest, "upload exceeds 100 MiB")
 		return
 	}
-	uploaded.Close()
-	// Clean up the temp file whatever happens next.
-	defer os.Remove(uploadPath)
+	// Make sure the upload bytes are scrubbed even if the decrypt
+	// path replaces `plaintext` with a new slice.
+	defer ZeroBytes(uploaded)
 
-	// Step 2: auto-backup BEFORE touching the live DB. If this step
+	// Step 2: decrypt if encrypted, else use as-is. Tampered or
+	// wrong-key .enc files get rejected here BEFORE we touch the
+	// live DB.
+	var plaintext []byte
+	if isEnc {
+		if h.Crypto == nil {
+			writeError(w, http.StatusInternalServerError, "backup crypto not configured")
+			return
+		}
+		pt, err := h.Crypto.Decrypt(uploaded)
+		if err != nil {
+			slog.Error("import: decrypt upload", "error", err)
+			writeError(w, http.StatusBadRequest, "decryption failed - wrong key or tampered file")
+			return
+		}
+		plaintext = pt
+		defer ZeroBytes(plaintext)
+	} else {
+		plaintext = uploaded
+	}
+
+	// Step 3: auto-backup BEFORE touching the live DB. If this step
 	// fails we abort and tell the admin - never import without a
 	// known-good safety net.
-	preBackupName := fmt.Sprintf("golab-pre-import-%s.sql", ts)
+	ts := time.Now().UTC().Format("20060102-150405")
+	preBackupName := fmt.Sprintf("golab-pre-import-%s.sql.enc", ts)
 	preBackupPath := filepath.Join(h.backupDir(), preBackupName)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
-	if err := h.pgDumpToFile(ctx, preBackupPath); err != nil {
+	if err := h.pgDumpEncrypted(ctx, preBackupPath); err != nil {
 		slog.Error("import: pre-backup", "error", err)
 		_ = os.Remove(preBackupPath)
 		writeError(w, http.StatusInternalServerError,
@@ -326,18 +419,9 @@ func (h *DBHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 3: replay the uploaded SQL via psql. `--set ON_ERROR_STOP=1`
-	// means the first error aborts the whole file, avoiding partial
-	// imports where half the tables got truncated but the restore
-	// failed.
-	uploadedFile, err := os.Open(uploadPath)
-	if err != nil {
-		slog.Error("import: reopen upload", "error", err)
-		writeError(w, http.StatusInternalServerError, "could not re-open upload")
-		return
-	}
-	defer uploadedFile.Close()
-
+	// Step 4: replay the plaintext SQL via psql, piped in on stdin.
+	// --set ON_ERROR_STOP=1 aborts the whole file on the first
+	// error, avoiding partial imports.
 	cmd := exec.CommandContext(ctx, "psql",
 		"--set", "ON_ERROR_STOP=1",
 		"-h", h.Cfg.DB.Host,
@@ -346,15 +430,13 @@ func (h *DBHandler) Import(w http.ResponseWriter, r *http.Request) {
 		"-d", h.Cfg.DB.Name,
 	)
 	cmd.Env = h.pgEnv()
-	cmd.Stdin = uploadedFile
-	// Collect stderr so we can surface the actual psql error to the
-	// admin if replay fails (mysterious 500s here are unacceptable).
+	cmd.Stdin = bytes.NewReader(plaintext)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 
 	slog.Warn("admin database import started",
 		"actor_id", actor.ID, "pre_backup", preBackupName,
-		"upload_bytes", header.Size)
+		"upload_bytes", header.Size, "encrypted_upload", isEnc)
 
 	if err := cmd.Run(); err != nil {
 		slog.Error("import: psql", "error", err, "stderr", stderr.String())
@@ -366,6 +448,10 @@ func (h *DBHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	slog.Warn("admin database import completed",
 		"actor_id", actor.ID, "pre_backup", preBackupName)
+
+	// Cleanup runs AFTER success so a failed import leaves the
+	// pre-backup and previous set intact for manual recovery.
+	h.cleanupOld()
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":     "imported",
@@ -385,22 +471,24 @@ func firstLine(s string) string {
 	return "unknown error"
 }
 
-// isSafeBackupName is the path-traversal gate for DownloadBackup.
-// It allows only filenames that:
-//   - start with the "golab-" prefix (so unrelated files in
-//     /opt/backups stay invisible),
-//   - end with ".sql",
+// isSafeBackupName is the path-traversal gate for DownloadBackup /
+// DeleteBackup. Allows only filenames that:
+//   - start with the "golab-" prefix,
+//   - end with ".sql" (legacy plaintext) or ".sql.enc" (encrypted),
 //   - contain no path separators ('/' or '\\') or ".." segments,
-//   - contain no NUL bytes (defence in depth against weird locales).
+//   - contain no NUL bytes,
+//   - contain no Windows reserved / shell-meta characters.
 //
 // The frontend only ever sends names that came from ListBackups,
-// but the server NEVER trusts that - the whole point of this
-// check is to reject a manually crafted URL.
+// but the server NEVER trusts that - this check is the whole point.
 func isSafeBackupName(name string) bool {
 	if name == "" {
 		return false
 	}
-	if !strings.HasPrefix(name, "golab-") || !strings.HasSuffix(name, ".sql") {
+	if !strings.HasPrefix(name, "golab-") {
+		return false
+	}
+	if !strings.HasSuffix(name, ".sql") && !strings.HasSuffix(name, ".sql.enc") {
 		return false
 	}
 	if strings.ContainsAny(name, "/\\\x00") {
@@ -409,24 +497,20 @@ func isSafeBackupName(name string) bool {
 	if strings.Contains(name, "..") {
 		return false
 	}
-	// Reject Windows-ish reserved characters / shell chars while we
-	// are at it. None of our generated names ever contain these.
 	if strings.ContainsAny(name, ":*?\"<>|") {
 		return false
 	}
-	// Confirm the name filepath.Base normalises to itself - anything
-	// that collapses differently is suspicious.
 	if filepath.Base(name) != name {
 		return false
 	}
 	return true
 }
 
-// DownloadBackup streams a single saved backup file back to the
-// client as an attachment. The filename comes from the URL param
-// {filename} and is validated by isSafeBackupName; the file must
-// live directly inside BackupDir (no symlinks followed, no nested
-// directories).
+// DownloadBackup streams a saved backup back to the client as an
+// attachment. For .sql.enc files the ciphertext is decrypted in
+// memory and the ".enc" suffix is stripped from the download
+// filename so the browser saves a ready-to-import .sql file. For
+// legacy .sql files the bytes are streamed through unchanged.
 func (h *DBHandler) DownloadBackup(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "filename")
 	if !isSafeBackupName(name) {
@@ -435,14 +519,8 @@ func (h *DBHandler) DownloadBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dir := h.backupDir()
-	path := filepath.Join(dir, name)
-
-	// Defence in depth: after joining, the resolved path must still
-	// be a direct child of BackupDir. EvalSymlinks isn't used here
-	// because BackupDir itself may be a bind mount; we accept that
-	// root-level symlink and just verify the filename component.
 	cleanDir := filepath.Clean(dir)
-	cleanPath := filepath.Clean(path)
+	cleanPath := filepath.Clean(filepath.Join(dir, name))
 	if filepath.Dir(cleanPath) != cleanDir {
 		writeError(w, http.StatusBadRequest, "invalid filename")
 		return
@@ -462,49 +540,63 @@ func (h *DBHandler) DownloadBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "not a file")
 		return
 	}
-	// Reject anything that isn't a regular file (symlink, device, pipe).
 	if !info.Mode().IsRegular() {
 		writeError(w, http.StatusBadRequest, "not a regular file")
 		return
 	}
 
-	f, err := os.Open(cleanPath)
+	// Load the whole file into memory. For the encrypted path we
+	// need the full ciphertext before we can emit any plaintext
+	// bytes (GCM auth tag check). For the legacy path we buffer
+	// too, for consistency with Content-Length + cleaner error
+	// handling. Backups are bounded by maxUpload elsewhere.
+	blob, err := os.ReadFile(cleanPath)
 	if err != nil {
-		slog.Error("download backup: open", "error", err, "name", name)
+		slog.Error("download backup: read", "error", err, "name", name)
 		writeError(w, http.StatusInternalServerError, "could not open backup")
 		return
 	}
-	defer f.Close()
 
-	// Commit headers BEFORE streaming. Same playbook as Export:
-	// application/octet-stream so the browser always saves, never
-	// renders. X-Accel-Buffering tells Nginx not to buffer the
-	// whole file into memory on the way out.
+	var payload []byte
+	dlName := name
+	if strings.HasSuffix(name, ".sql.enc") {
+		if h.Crypto == nil {
+			writeError(w, http.StatusInternalServerError, "backup crypto not configured")
+			return
+		}
+		pt, err := h.Crypto.Decrypt(blob)
+		// Always zero the ciphertext slice; we don't need it again.
+		ZeroBytes(blob)
+		if err != nil {
+			slog.Error("download backup: decrypt", "error", err, "name", name)
+			writeError(w, http.StatusInternalServerError, "decryption failed - wrong key or tampered file")
+			return
+		}
+		payload = pt
+		// Serve as golab-xxx.sql (the usable form) not .sql.enc.
+		dlName = strings.TrimSuffix(name, ".enc")
+	} else {
+		payload = blob
+	}
+	// Scrub plaintext once it's been flushed to the socket.
+	defer ZeroBytes(payload)
+
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
-	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	w.Header().Set("Content-Disposition", `attachment; filename="`+dlName+`"`)
+	w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Accel-Buffering", "no")
-	// Block caching so a later "delete backup" doesn't leave copies
-	// in shared proxy caches.
 	w.Header().Set("Cache-Control", "private, no-store")
-
-	// http.ServeContent would handle Range requests for free, but
-	// we want the hard no-cache semantics above and a guaranteed
-	// attachment disposition; a plain io.Copy is clearer.
 	w.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(w, f); err != nil {
-		slog.Error("download backup: stream", "error", err, "name", name)
+	if _, err := w.Write(payload); err != nil {
+		slog.Error("download backup: write", "error", err, "name", name)
 	}
 }
 
 // DeleteBackup removes a single saved backup file from BackupDir.
-// Uses the same path-traversal gate as DownloadBackup: only
-// golab-*.sql files directly inside BackupDir are deletable; every
-// other name returns 400 long before hitting the filesystem.
-//
-// Logged at Warn level with actor id so we can reconstruct "who
-// deleted what" from container logs if we ever have to.
+// Works on both .sql and .sql.enc entries. Same path-traversal
+// gate as DownloadBackup; Warn-level log with actor id so deletes
+// can be reconstructed from container logs.
 func (h *DBHandler) DeleteBackup(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "filename")
 	if !isSafeBackupName(name) {

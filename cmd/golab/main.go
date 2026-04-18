@@ -78,8 +78,18 @@ func run() error {
 	defer hubCancel()
 	go hub.Run(hubCtx)
 
+	// Sprint 13: backup-at-rest encryption. Initialised before the
+	// router so a bad GOLAB_BACKUP_KEY fails the whole startup
+	// rather than letting the server come up without encrypted
+	// backups. An empty key triggers one-shot generation that's
+	// logged once by NewBackupCrypto.
+	backupCrypto, err := handler.NewBackupCrypto(cfg.BackupKey)
+	if err != nil {
+		return fmt.Errorf("backup crypto: %w", err)
+	}
+
 	// Build router
-	r := newRouter(cfg, pool, tmpls, md, sanitizer, hub)
+	r := newRouter(cfg, pool, tmpls, md, sanitizer, hub, backupCrypto)
 
 	// Start server
 	srv := &http.Server{
@@ -111,7 +121,7 @@ func run() error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md *render.Markdown, sanitizer *render.Sanitizer, hub *handler.Hub) *chi.Mux {
+func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md *render.Markdown, sanitizer *render.Sanitizer, hub *handler.Hub, backupCrypto *handler.BackupCrypto) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -179,8 +189,10 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	}
 	// Sprint 13: admin database management (backup, export, import).
 	// BackupDir defaults to /opt/backups inside the container; the
-	// docker-compose `golab-backups` volume mounts it there.
-	dbH := &handler.DBHandler{Cfg: cfg}
+	// docker-compose `golab-backups` volume mounts it there. The
+	// BackupCrypto is constructed in run() before the router is
+	// built so startup fails closed on a bad GOLAB_BACKUP_KEY.
+	dbH := &handler.DBHandler{Cfg: cfg, Crypto: backupCrypto}
 
 	// Page handlers
 	pageH := &handler.PageHandler{
