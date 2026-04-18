@@ -227,14 +227,25 @@
       <template x-if="loading">
         <p class="muted">Loading...</p>
       </template>
-      <div class="admin-db-list" x-show="backups.length > 0" x-cloak>
-        <template x-for="b in backups" :key="b.name">
-          <div class="admin-db-row">
-            <span class="admin-db-name mono" x-text="b.name"></span>
-            <span class="admin-db-meta mono muted"
-                  x-text="formatSize(b.size) + ' - ' + formatDate(b.created_at)"></span>
-          </div>
-        </template>
+      <div class="admin-table-wrap" x-show="backups.length > 0" x-cloak>
+        <table class="admin-table admin-db-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="admin-db-th-size">Size</th>
+              <th class="admin-db-th-date">Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="b in backups" :key="b.name">
+              <tr>
+                <td class="mono admin-db-cell-name" x-text="b.name"></td>
+                <td class="mono muted" x-text="formatSize(b.size)"></td>
+                <td class="mono muted" x-text="formatDate(b.created_at)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
       </div>
     </div>
 

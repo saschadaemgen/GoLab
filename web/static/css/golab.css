@@ -367,6 +367,93 @@ img.avatar {
   letter-spacing: 0.08em;
 }
 
+/* ===== Sprint 13: Space cards (explore + home "Popular spaces") =====
+ *
+ * Mirrors the old .channel-card structure so the layout and hover
+ * feel identical, but bumps the title to --accent and adds room for
+ * the space icon + description + post count. The explore-grid above
+ * already gives us 3/2/1 responsive columns via auto-fill minmax,
+ * so we only need to style the card contents. --space-accent is set
+ * inline from the space's Color field; fallback to --accent so a
+ * space without a configured color still looks correct.
+ */
+.space-card {
+  --space-accent: var(--accent);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  text-decoration: none;
+  color: var(--text);
+  backdrop-filter: blur(6px);
+  transition: border-color var(--transition), transform var(--transition);
+  min-height: 180px;
+}
+.space-card:hover {
+  border-color: var(--space-accent, var(--accent));
+  color: var(--text);
+}
+.space-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+.space-card-icon {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-subtle);
+  color: var(--space-accent, var(--accent));
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.space-card-title {
+  min-width: 0;
+  flex: 1;
+}
+.space-card-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--space-accent, var(--accent));
+  line-height: 1.25;
+}
+.space-card-slug {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 0.15rem;
+}
+.space-card-desc {
+  color: var(--text);
+  margin: 0.25rem 0 0.5rem;
+  line-height: 1.5;
+  font-size: 0.925rem;
+  /* Clamp long descriptions so cards keep a uniform row height. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.space-card-meta {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
 /* Legacy feed-layout kept for any templates still referencing it.
    New pages use .page-container > .two-col from main.css. */
 .feed-layout {
@@ -3109,58 +3196,56 @@ img.avatar {
   padding: 0 0.3em;
   font-size: 0.85em;
 }
+/* Action bar: Create-backup + Export buttons side-by-side. flex-wrap
+   keeps them readable on narrow viewports (they drop to a second
+   row only below ~380px). */
 .admin-db-actions {
   display: flex;
-  gap: 0.65rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
+  align-items: center;
   margin-bottom: 1.25rem;
 }
 .admin-db-sub {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text);
-  margin: 1.25rem 0 0.5rem;
+  margin: 1.5rem 0 0.5rem;
 }
 .admin-db-backups .muted {
-  color: var(--text-muted);
+  color: var(--text-dim);
   font-size: 0.875rem;
-}
-.admin-db-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2, var(--surface));
-  padding: 0.4rem 0.5rem;
-  max-height: 320px;
-  overflow-y: auto;
-}
-.admin-db-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  padding: 0.35rem 0.45rem;
-  border-radius: 4px;
-}
-.admin-db-row:hover {
-  background: var(--surface, rgba(0, 0, 0, 0.04));
-}
-.admin-db-name {
-  font-size: 0.875rem;
-  color: var(--text);
-  word-break: break-all;
-}
-.admin-db-meta {
-  font-size: 0.8rem;
-  white-space: nowrap;
 }
 
-/* Import block: fenced off visually so nobody clicks it by accident. */
+/* Recent-backups table. Uses the admin-table chassis so column
+   sizing and borders stay consistent with the users table above. */
+.admin-db-table {
+  font-size: 0.875rem;
+}
+.admin-db-table th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.admin-db-cell-name {
+  word-break: break-all;
+  color: var(--text);
+}
+.admin-db-th-size {
+  width: 6.5rem;
+}
+.admin-db-th-date {
+  width: 12rem;
+}
+
+/* Import block: fenced off visually in red so nobody clicks it by
+   accident. The extra margin-top + borderfull separate it clearly
+   from the Recent-backups table above. */
 .admin-db-import {
-  margin-top: 1.75rem;
-  padding: 1rem;
+  margin-top: 2rem;
+  padding: 1rem 1.1rem 1.1rem;
   border: 1px solid var(--danger);
   border-radius: var(--radius-sm);
   background: rgba(220, 50, 50, 0.04);

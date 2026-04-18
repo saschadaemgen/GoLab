@@ -162,14 +162,22 @@ func (h *DBHandler) Backup(w http.ResponseWriter, r *http.Request) {
 }
 
 // Export runs pg_dump and streams the SQL directly to the client as
-// a download. Nothing is persisted server-side.
+// a file download. Nothing is persisted server-side.
+//
+// Headers must be set BEFORE any byte of the dump body is written,
+// otherwise WriteHeader implicitly commits status 200 with text/html
+// defaults and the browser opens the dump inline instead of saving
+// it. application/octet-stream is the safest Content-Type for a
+// file download; browsers never render it and Nginx won't add a
+// charset directive. If Nginx sits in front and strips the
+// Content-Disposition, add `proxy_pass_header Content-Disposition;`
+// and `proxy_pass_header Content-Type;` to the /api/admin location
+// block.
 func (h *DBHandler) Export(w http.ResponseWriter, r *http.Request) {
 	filename := fmt.Sprintf("golab-export-%s.sql", time.Now().UTC().Format("2006-01-02"))
-	w.Header().Set("Content-Type", "application/sql")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-	// We don't know the size up front; omit Content-Length and let
-	// the client read until EOF.
 
+	// 1) Lock the pg_dump call down with a context + timeout first so
+	//    we never flush headers and then fail to even start pg_dump.
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "pg_dump",
@@ -180,12 +188,41 @@ func (h *DBHandler) Export(w http.ResponseWriter, r *http.Request) {
 		"-d", h.Cfg.DB.Name,
 	)
 	cmd.Env = h.pgEnv()
-	cmd.Stdout = w
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		// Headers have already gone out by this point; there's nothing
-		// we can do but log. The client will see a truncated file.
-		slog.Error("export: pg_dump", "error", err)
+
+	// 2) Wire pg_dump's stdout into a pipe so we can decide to emit
+	//    headers only once we're sure the process actually started.
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		slog.Error("export: stdout pipe", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not open pg_dump pipe")
+		return
+	}
+	if err := cmd.Start(); err != nil {
+		slog.Error("export: pg_dump start", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not start pg_dump")
+		return
+	}
+
+	// 3) Headers committed BEFORE we touch the body. Once the first
+	//    Copy byte flies, these cannot be changed.
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Tell proxies not to buffer the stream so large dumps flow
+	// through instead of filling Nginx memory.
+	w.Header().Set("X-Accel-Buffering", "no")
+	// We don't know the size up front; omit Content-Length and let
+	// the client read until EOF.
+	w.WriteHeader(http.StatusOK)
+
+	// 4) Stream the dump. Errors here are unrecoverable (headers
+	//    already sent) - log and let the client see a short file.
+	if _, err := io.Copy(w, stdout); err != nil {
+		slog.Error("export: stream", "error", err)
+	}
+	if err := cmd.Wait(); err != nil {
+		slog.Error("export: pg_dump wait", "error", err)
 	}
 }
 
