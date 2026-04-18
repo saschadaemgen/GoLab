@@ -28,15 +28,16 @@ type PageData struct {
 }
 
 type PageHandler struct {
-	Render    *render.Engine
-	Users     *model.UserStore
-	Channels  *model.ChannelStore
-	Posts     *model.PostStore
-	Follows   *model.FollowStore
-	Reactions *model.ReactionStore
-	Spaces    *model.SpaceStore
-	Settings  *model.SettingsStore
-	SiteName  string
+	Render      *render.Engine
+	Users       *model.UserStore
+	Channels    *model.ChannelStore
+	Posts       *model.PostStore
+	Follows     *model.FollowStore
+	Reactions   *model.ReactionStore
+	Spaces      *model.SpaceStore
+	Settings    *model.SettingsStore
+	EditHistory *model.PostEditHistoryStore // Sprint 15a B6
+	SiteName    string
 }
 
 func (h *PageHandler) newPageData(r *http.Request, title string) PageData {
@@ -167,6 +168,11 @@ func (h *PageHandler) FeedPage(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("feed page: attach reactions", "error", err)
 		}
 	}
+	if h.EditHistory != nil {
+		if err := h.EditHistory.AttachEditedAt(r.Context(), posts); err != nil {
+			slog.Warn("feed page: attach edited_at", "error", err)
+		}
+	}
 
 	joined, err := h.Channels.ListForUser(r.Context(), user.ID, 10)
 	if err != nil {
@@ -288,18 +294,26 @@ func (h *PageHandler) ThreadPage(w http.ResponseWriter, r *http.Request) {
 	// Sprint 14: attach reaction state to the root post + every
 	// reply. The root goes through a singleton slice because
 	// AttachTo only accepts a []Post.
-	if h.Reactions != nil {
+	// Sprint 15a B6: edited_at batched the same way.
+	if h.Reactions != nil || h.EditHistory != nil {
 		var viewerID int64
 		if u := auth.UserFromContext(r.Context()); u != nil {
 			viewerID = u.ID
 		}
 		rootWrap := []model.Post{*post}
-		if err := h.Reactions.AttachTo(r.Context(), viewerID, rootWrap); err == nil {
-			post = &rootWrap[0]
+		if h.Reactions != nil {
+			_ = h.Reactions.AttachTo(r.Context(), viewerID, rootWrap)
+			if err := h.Reactions.AttachTo(r.Context(), viewerID, replies); err != nil {
+				slog.Warn("thread: attach reactions", "error", err)
+			}
 		}
-		if err := h.Reactions.AttachTo(r.Context(), viewerID, replies); err != nil {
-			slog.Warn("thread: attach reactions", "error", err)
+		if h.EditHistory != nil {
+			_ = h.EditHistory.AttachEditedAt(r.Context(), rootWrap)
+			if err := h.EditHistory.AttachEditedAt(r.Context(), replies); err != nil {
+				slog.Warn("thread: attach edited_at", "error", err)
+			}
 		}
+		post = &rootWrap[0]
 	}
 
 	data := h.newPageData(r, "Thread - GoLab")
@@ -392,6 +406,11 @@ func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := h.Reactions.AttachTo(r.Context(), viewerID, recent); err != nil {
 			slog.Warn("profile page: attach reactions", "error", err)
+		}
+	}
+	if h.EditHistory != nil {
+		if err := h.EditHistory.AttachEditedAt(r.Context(), recent); err != nil {
+			slog.Warn("profile page: attach edited_at", "error", err)
 		}
 	}
 

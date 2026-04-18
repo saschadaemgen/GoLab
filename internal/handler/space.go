@@ -14,11 +14,12 @@ import (
 // SpaceHandler serves both the /s/:slug HTML page and the /api/spaces
 // JSON endpoint.
 type SpaceHandler struct {
-	Render    *render.Engine
-	Spaces    *model.SpaceStore
-	Posts     *model.PostStore
-	Tags      *model.TagStore
-	Reactions *model.ReactionStore // Sprint 14: batch-attach reaction state
+	Render      *render.Engine
+	Spaces      *model.SpaceStore
+	Posts       *model.PostStore
+	Tags        *model.TagStore
+	Reactions   *model.ReactionStore            // Sprint 14: batch-attach reaction state
+	EditHistory *model.PostEditHistoryStore     // Sprint 15a B6: batch-attach edited_at
 }
 
 // validPostTypeQuery matches the briefing: all six post types from the
@@ -87,6 +88,12 @@ func (h *SpaceHandler) SpacePage(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("space page: attach reactions", "error", err)
 		}
 	}
+	// Sprint 15a B6: edited_at batched next to reactions.
+	if h.EditHistory != nil {
+		if err := h.EditHistory.AttachEditedAt(r.Context(), posts); err != nil {
+			slog.Warn("space page: attach edited_at", "error", err)
+		}
+	}
 
 	var popular []model.Tag
 	if h.Tags != nil {
@@ -125,11 +132,12 @@ func (h *SpaceHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // TagPage renders /t/:slug with all posts carrying that tag.
 type TagHandler struct {
-	Render    *render.Engine
-	Tags      *model.TagStore
-	Posts     *model.PostStore
-	Spaces    *model.SpaceStore // used by newPageData to populate the space bar
-	Reactions *model.ReactionStore
+	Render      *render.Engine
+	Tags        *model.TagStore
+	Posts       *model.PostStore
+	Spaces      *model.SpaceStore // used by newPageData to populate the space bar
+	Reactions   *model.ReactionStore
+	EditHistory *model.PostEditHistoryStore // Sprint 15a B6
 }
 
 func (h *TagHandler) TagPage(w http.ResponseWriter, r *http.Request) {
@@ -160,6 +168,11 @@ func (h *TagHandler) TagPage(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := h.Reactions.AttachTo(r.Context(), viewerID, posts); err != nil {
 			slog.Warn("tag page: attach reactions", "error", err)
+		}
+	}
+	if h.EditHistory != nil {
+		if err := h.EditHistory.AttachEditedAt(r.Context(), posts); err != nil {
+			slog.Warn("tag page: attach edited_at", "error", err)
 		}
 	}
 

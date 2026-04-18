@@ -11,8 +11,9 @@ import (
 )
 
 type FeedHandler struct {
-	Posts     *model.PostStore
-	Reactions *model.ReactionStore
+	Posts       *model.PostStore
+	Reactions   *model.ReactionStore
+	EditHistory *model.PostEditHistoryStore // Sprint 15a B6
 }
 
 func (h *FeedHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +50,13 @@ func (h *FeedHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if h.Reactions != nil {
 		if err := h.Reactions.AttachTo(r.Context(), user.ID, posts); err != nil {
 			slog.Warn("get feed: attach reactions", "error", err)
+		}
+	}
+	// Sprint 15a B6: same pattern for edited_at so the "edited"
+	// badge renders after a reload.
+	if h.EditHistory != nil {
+		if err := h.EditHistory.AttachEditedAt(r.Context(), posts); err != nil {
+			slog.Warn("get feed: attach edited_at", "error", err)
 		}
 	}
 

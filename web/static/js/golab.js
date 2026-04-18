@@ -38,6 +38,34 @@
     if (err) err.textContent = message || '';
   }
 
+  // Sprint 15 B1: null-safe Quill selection helper.
+  //
+  // Any UI element that steals focus (native file dialog for image
+  // upload, emoji quick-picker, link prompt, modal) leaves Quill
+  // with no active selection when control returns. Before Sprint 15
+  // we called quill.getSelection(true) then branched on null; in
+  // Quill 2.0.3 there's a race where even the "force focus" flag
+  // returns null on first read because focus has not fully settled
+  // inside the editor DOM yet. Result: insertEmbed / insertText
+  // crashes with "Cannot read properties of null (reading 'offset')".
+  //
+  // This helper focuses Quill, reads the selection, and synthesises
+  // a range at the document end if the real range is still missing.
+  // Every insertion path now routes through it.
+  function quillSafeRange(quill) {
+    if (!quill) return null;
+    try { quill.focus(); } catch (e) { /* ignore */ }
+    var range = null;
+    try { range = quill.getSelection(); } catch (e) { range = null; }
+    if (range && typeof range.index === 'number') return range;
+    // Quill's internal length includes a trailing newline; subtract
+    // one so the insertion point sits before it instead of beyond.
+    var len = 0;
+    try { len = quill.getLength(); } catch (e) { len = 0; }
+    var end = len > 0 ? len - 1 : 0;
+    return { index: end, length: 0 };
+  }
+
   // ---------- Alpine components ----------
 
   document.addEventListener('alpine:init', function () {
@@ -305,6 +333,141 @@
             self.busy = false;
             self.error = 'Network error';
           });
+        }
+      };
+    });
+
+    // Sprint 15a B6: edit-post modal component. Opens in response
+    // to a golab:open-edit-post window event (fired by the
+    // data-action="edit-post" click handler in bindActions), fetches
+    // the post, mounts a fresh Quill instance pre-seeded with the
+    // current content, and PATCHes /api/posts/{id} on save. The
+    // Quill instance is created on each open and destroyed on
+    // close so closing + reopening doesn't stack toolbars.
+    window.Alpine.data('editPostModal', function () {
+      return {
+        open: false,
+        loading: false,
+        saving: false,
+        error: '',
+        postId: 0,
+        quill: null,
+        _initialHTML: '',
+
+        openForPost: function (postId) {
+          if (!postId) return;
+          var self = this;
+          self.postId = postId;
+          self.error = '';
+          self.loading = true;
+          self.open = true;
+          // Fetch the freshest post text (an admin might have
+          // edited since the user's feed loaded).
+          apiJSON('/api/posts/' + postId, 'GET', null).then(function (res) {
+            self.loading = false;
+            if (!res.ok || !res.data || !res.data.post) {
+              self.error = (res.data && res.data.error) || 'Could not load post';
+              return;
+            }
+            self._initialHTML = res.data.post.content || '';
+            // Wait one frame so x-show has painted the editor div
+            // before Quill measures its host.
+            requestAnimationFrame(function () { self._mountQuill(); });
+          });
+        },
+
+        _mountQuill: function () {
+          if (this.quill) return; // already mounted
+          var host = this.$refs.editor;
+          if (!host || !window.Quill) return;
+          this.quill = new window.Quill(host, {
+            theme: 'snow',
+            placeholder: "What do you want to say?",
+            modules: {
+              toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                ['link', 'blockquote', 'code-block'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                ['clean']
+              ]
+            }
+          });
+          // Seed with the current post text. If it looks like HTML
+          // (Quill was the original editor) paste it through the
+          // clipboard pipeline; otherwise drop it in as plain text
+          // so legacy Markdown posts don't render as mangled HTML.
+          if (this._initialHTML) {
+            if (/^\s*</.test(this._initialHTML)) {
+              this.quill.clipboard.dangerouslyPasteHTML(this._initialHTML);
+            } else {
+              this.quill.setText(this._initialHTML);
+            }
+          }
+        },
+
+        hasContent: function () {
+          if (!this.quill) return false;
+          return (this.quill.getText() || '').replace(/\n$/, '').length > 0;
+        },
+
+        save: function () {
+          var self = this;
+          if (!self.quill || self.saving) return;
+          var content = self.quill.root.innerHTML;
+          if (content === '<p><br></p>') {
+            self.error = 'Content cannot be empty';
+            return;
+          }
+          self.saving = true;
+          self.error = '';
+          apiJSON('/api/posts/' + self.postId, 'PATCH', { content: content })
+            .then(function (res) {
+              self.saving = false;
+              if (!res.ok) {
+                self.error = (res.data && res.data.error) || 'Save failed';
+                return;
+              }
+              toast('success', 'Post updated');
+              // Update the card in place if it's visible on the
+              // current page. Full re-render would be cleaner but
+              // also more invasive; this keeps scroll position.
+              var card = document.getElementById('post-' + self.postId);
+              if (card && res.data.post) {
+                var body = card.querySelector('.post-content');
+                if (body) body.innerHTML = res.data.post.content_html || '';
+                var meta = card.querySelector('.post-meta');
+                if (meta && res.data.post.edited_at && !meta.querySelector('.post-edited')) {
+                  var span = document.createElement('span');
+                  span.className = 'post-edited';
+                  span.textContent = 'edited';
+                  meta.appendChild(span);
+                }
+              }
+              self.close();
+            })
+            .catch(function () {
+              self.saving = false;
+              self.error = 'Network error';
+            });
+        },
+
+        close: function () {
+          this.open = false;
+          this.error = '';
+          this.saving = false;
+          this.postId = 0;
+          this._initialHTML = '';
+          // Tear down Quill so the next open starts clean. Quill
+          // doesn't expose a formal destroy, but removing the DOM
+          // children clears its toolbar and editor wrappers.
+          this.quill = null;
+          var host = this.$refs && this.$refs.editor;
+          if (host) host.innerHTML = '';
+          var parent = host && host.parentElement;
+          if (parent) {
+            parent.querySelectorAll('.ql-toolbar').forEach(function (t) { t.remove(); });
+          }
         }
       };
     });
@@ -767,9 +930,17 @@
             b.addEventListener('click', function (ev) {
               ev.stopPropagation();
               if (!self.quill) return;
-              var range = self.quill.getSelection(true);
-              self.quill.insertText(range.index, e, 'user');
-              self.quill.setSelection(range.index + e.length);
+              // B1: picker steals focus; quillSafeRange synthesises a
+              // range at the document end if Quill's real selection is
+              // still null after the focus bounce.
+              var range = quillSafeRange(self.quill);
+              if (!range) { panel.remove(); return; }
+              try {
+                self.quill.insertText(range.index, e, 'user');
+                self.quill.setSelection(range.index + e.length, 0, 'user');
+              } catch (err) {
+                console.error('Quill emoji insertText failed', err);
+              }
               panel.remove();
             });
             panel.appendChild(b);
@@ -869,16 +1040,16 @@
               toast('success', 'Image added');
               if (!self.quill) return;
               try {
-                var range = self.quill.getSelection(true);
-                if (!range) {
-                  // Focus dropped while the native file dialog was open -
-                  // insert at the end of the document as fallback.
-                  var end = self.quill.getLength();
-                  self.quill.setSelection(end, 0);
-                  range = self.quill.getSelection(true) || { index: end };
-                }
+                // B1: the native file dialog ALWAYS drops Quill focus, so
+                // the previous getSelection(true) + setSelection(end)
+                // dance was unreliable. quillSafeRange returns a usable
+                // range (the real one if we can refocus, a synthesised
+                // end-of-document one otherwise) so insertEmbed never
+                // sees null.
+                var range = quillSafeRange(self.quill);
+                if (!range) throw new Error('no range');
                 self.quill.insertEmbed(range.index, 'image', res.data.url, 'user');
-                self.quill.setSelection(range.index + 1, 0);
+                self.quill.setSelection(range.index + 1, 0, 'user');
               } catch (e) {
                 console.error('Quill insertEmbed failed', e);
                 toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + res.data.url);
@@ -1370,15 +1541,38 @@
         });
       }
 
+      if (action === 'edit-post') {
+        // Sprint 15a B6: fire a window CustomEvent instead of poking
+        // the modal DOM directly. editPostModal() in the base
+        // template listens for it, fetches the post, and mounts a
+        // Quill instance pre-filled with the current content.
+        el.addEventListener('click', function () {
+          var id = el.dataset.postId;
+          if (!id) return;
+          window.dispatchEvent(new CustomEvent('golab:open-edit-post', {
+            detail: { postId: parseInt(id, 10) }
+          }));
+        });
+      }
+
       if (action === 'delete-post') {
         el.addEventListener('click', function () {
-          if (!confirm('Delete this post?')) return;
+          if (!confirm('Delete this post? This cannot be undone.')) return;
           var id = el.dataset.postId;
           apiJSON('/api/posts/' + id, 'DELETE', null).then(function (res) {
             if (res.ok) {
+              // Sprint 15a B5: fade the card out locally. The server
+              // WS broadcast also removes it for every other open
+              // feed via the post_deleted case in handleWSMessage,
+              // so a peer browser sees the same animation.
               var card = document.getElementById('post-' + id);
-              if (card) card.remove();
+              if (card) {
+                card.classList.add('post-leave');
+                setTimeout(function () { card.remove(); }, 220);
+              }
               toast('info', 'Post deleted');
+            } else {
+              toast('error', (res.data && res.data.error) || 'Could not delete post');
             }
           });
         });
@@ -1639,6 +1833,19 @@
       case 'new_post':
         injectNewPost(msg.html);
         break;
+      case 'post_deleted':
+        // Sprint 15a B5: remove the card when another user deletes
+        // a post we're looking at. Server sends msg.data.id as the
+        // post id; we match on DOM id `post-<n>` which post-card.html
+        // writes when the card is rendered.
+        if (msg.data && msg.data.id != null) {
+          var card = document.getElementById('post-' + msg.data.id);
+          if (card) {
+            card.classList.add('post-leave');
+            setTimeout(function () { card.remove(); }, 220);
+          }
+        }
+        break;
       case 'notification':
         toast(msg.data && msg.data.level ? msg.data.level : 'info', msg.message || '');
         break;
@@ -1663,12 +1870,14 @@
     if (!html) return;
     var feed = document.getElementById('feed-posts');
     if (!feed) return;
-    // Skip if already present
     var temp = document.createElement('div');
     temp.innerHTML = html.trim();
     var newCard = temp.firstElementChild;
     if (!newCard) return;
-    if (document.getElementById(newCard.id)) return;
+    // Skip if we already rendered this post (can happen when the
+    // sender's own socket echoes the broadcast back).
+    if (newCard.id && document.getElementById(newCard.id)) return;
+
     newCard.classList.add('post-enter');
     feed.insertBefore(newCard, feed.firstChild);
     requestAnimationFrame(function () {
@@ -1678,7 +1887,21 @@
         newCard.classList.remove('post-enter-active');
       }, 400);
     });
-    // Rebind actions for the new card
+
+    // Sprint 15a B2 / B3: walk the new subtree with Alpine so every
+    // x-data on the injected card (post actions menu, reaction bar
+    // state, reply compose forms) initialises. Without this the
+    // three-dot dropdown stays dead until a full page reload.
+    // Alpine.initTree is a no-op on trees already initialised, so
+    // running it on the subtree is safe even if Alpine ever walked
+    // it earlier through some other mechanism.
+    if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+      try { window.Alpine.initTree(newCard); } catch (e) {
+        console.error('Alpine.initTree failed on new post card', e);
+      }
+    }
+    // Bind data-action click handlers (react chips, delete, etc.)
+    // on the new card. bindActions is idempotent via dataset.bound.
     bindActions();
   }
 

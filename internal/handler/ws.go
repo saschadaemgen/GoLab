@@ -153,6 +153,23 @@ func (h *Hub) PublishNewPost(post *model.Post, channelSlug string) {
 	}
 }
 
+// PublishPostDeleted tells every open feed to remove the card for
+// postID from its DOM. Sprint 15a B5: before this existed, a
+// user's delete would succeed server-side but the zombie card
+// stayed visible on every other open browser until the viewer
+// hit refresh. channelSlug mirrors PublishNewPost so a deletion
+// reaches the same rooms the creation reached.
+func (h *Hub) PublishPostDeleted(postID int64, channelSlug string) {
+	msg := Message{
+		Type: "post_deleted",
+		Data: map[string]any{"id": postID},
+	}
+	h.Publish("global", msg)
+	if channelSlug != "" {
+		h.Publish("channel:"+channelSlug, msg)
+	}
+}
+
 // subscribe/unsubscribe manage per-topic client sets.
 func (h *Hub) subscribe(c *Client, topic string) {
 	h.mu.Lock()
