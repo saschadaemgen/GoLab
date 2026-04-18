@@ -83,8 +83,8 @@
       <div class="stat-label">Posts</div>
     </div>
     <div class="admin-stat-card hover-lift">
-      <div class="stat-counter" data-counter="{{ .Channels }}">0</div>
-      <div class="stat-label">Channels</div>
+      <div class="stat-counter" data-counter="{{ .Spaces }}">0</div>
+      <div class="stat-label">Spaces</div>
     </div>
     <div class="admin-stat-card hover-lift">
       <div class="stat-counter" data-counter="{{ .Banned }}">0</div>
@@ -187,35 +187,116 @@
     </div>
   </section>
 
-  <section class="admin-section">
-    <h2>Channels</h2>
-    <div class="admin-table-wrap">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Channel</th>
-            <th>Type</th>
-            <th>Members</th>
-            <th>Posts</th>
-            <th>Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{ range .Channels }}
-          <tr>
-            <td>
-              <a href="/c/{{ .Slug }}" hx-boost="true" style="color:var(--text-bright);font-weight:600;">{{ .Name }}</a>
-              <span class="muted mono" style="margin-left:0.4rem;">#{{ .Slug }}</span>
-            </td>
-            <td><span class="admin-pill admin-pill-user">{{ .ChannelType }}</span></td>
-            <td class="mono">{{ .MemberCount }}</td>
-            <td class="mono">{{ .PostCount }}</td>
-            <td class="mono muted">{{ timeAgo .CreatedAt }}</td>
-          </tr>
-          {{ end }}
-        </tbody>
-      </table>
+  {{/* Sprint 13: Channels section removed. Spaces replaced Channels
+       as the primary organisational unit. The 8 Spaces ship in
+       migration 020 and can be reviewed via the normal /s/{slug}
+       pages. */}}
+
+  {{/* Sprint 13: Database management. Every admin can backup /
+       export / list. Only the Owner (id=1) can import - the
+       handler enforces this server-side, the UI hides the import
+       card for non-owners so nobody wastes time on a forbidden
+       action. */}}
+  <section class="admin-section admin-db" x-data="dbManager()" x-init="loadBackups()">
+    <h2>Database</h2>
+    <p class="admin-section-intro">
+      Manual backup, download, and recovery tools. All operations run
+      inside the app container against the <code>db</code> Postgres
+      service.
+    </p>
+
+    <div class="admin-db-actions">
+      <button type="button" class="btn btn-primary press-effect"
+              @click="createBackup()"
+              :disabled="busy">
+        <span x-show="!busy || action !== 'backup'" x-cloak>Create backup</span>
+        <span x-show="busy && action === 'backup'" x-cloak>Creating...</span>
+      </button>
+      <a href="/api/admin/db/export"
+         class="btn btn-outline press-effect"
+         download>
+        Export (download .sql)
+      </a>
     </div>
+
+    <div class="admin-db-backups">
+      <h3 class="admin-db-sub">Recent backups</h3>
+      <template x-if="backups.length === 0 && !loading">
+        <p class="muted">No backups yet. Create one above.</p>
+      </template>
+      <template x-if="loading">
+        <p class="muted">Loading...</p>
+      </template>
+      <div class="admin-db-list" x-show="backups.length > 0" x-cloak>
+        <template x-for="b in backups" :key="b.name">
+          <div class="admin-db-row">
+            <span class="admin-db-name mono" x-text="b.name"></span>
+            <span class="admin-db-meta mono muted"
+                  x-text="formatSize(b.size) + ' - ' + formatDate(b.created_at)"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    {{ if $.User }}{{ if eq $.User.ID 1 }}
+    <div class="admin-db-import">
+      <h3 class="admin-db-sub">Import database</h3>
+      <p class="admin-db-warning">
+        <strong>Danger.</strong> Importing replaces every table in the
+        current database. A pre-import backup is created automatically
+        and the action is logged, but this cannot be undone without
+        that backup.
+      </p>
+
+      <form @submit.prevent="openImportConfirm($event)">
+        <input type="file" accept=".sql,application/sql" x-ref="importFile"
+               class="admin-db-file"
+               @change="selectedName = $event.target.files[0] ? $event.target.files[0].name : ''">
+        <span class="admin-db-filename mono muted" x-text="selectedName" x-show="selectedName" x-cloak></span>
+        <button type="submit" class="btn btn-danger press-effect"
+                :disabled="!selectedName || busy">
+          Import...
+        </button>
+      </form>
+    </div>
+
+    <!-- Confirm modal: user must type CONFIRM before the import runs.
+         Rendered in the DOM always so x-show transitions work, but
+         hidden via x-show when not open. -->
+    <div class="admin-db-modal-backdrop" x-show="confirmOpen" x-cloak
+         @click.self="confirmOpen = false"
+         x-transition.opacity>
+      <div class="admin-db-modal">
+        <h3>Confirm database import</h3>
+        <p>
+          This will <strong>replace ALL current data</strong> with the
+          contents of <code x-text="selectedName || 'the uploaded file'"></code>.
+          This cannot be undone.
+        </p>
+        <p>A pre-import backup will be written to <code>/opt/backups/</code> first.</p>
+        <p>Type <code>CONFIRM</code> below to proceed.</p>
+        <input type="text" class="form-input admin-db-confirm"
+               x-model="confirmText"
+               placeholder="CONFIRM"
+               autocomplete="off"
+               spellcheck="false">
+        <div x-show="error" x-cloak class="flash flash-error admin-db-modal-error"
+             x-text="error"></div>
+        <div class="admin-db-modal-actions">
+          <button type="button" class="btn btn-outline press-effect"
+                  @click="confirmOpen = false; confirmText = ''; error = ''">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-danger press-effect"
+                  @click="runImport()"
+                  :disabled="confirmText !== 'CONFIRM' || busy">
+            <span x-show="!busy || action !== 'import'" x-cloak>Replace database</span>
+            <span x-show="busy && action === 'import'" x-cloak>Importing...</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    {{ end }}{{ end }}
   </section>
   {{ end }}
 </div>

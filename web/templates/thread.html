@@ -2,11 +2,10 @@
 {{ with .Content }}
 <div class="page-container fade-in">
   <div class="single-col">
-    {{ if .Channel }}
-    <a href="/c/{{ .Channel.Slug }}" class="thread-back" hx-boost="true">back to #{{ .Channel.Slug }}</a>
-    {{ else }}
+    {{/* Sprint 13: channels are hidden from the UI. All "back to"
+         links now point at /feed regardless of whether the post
+         carried a channel_id. */}}
     <a href="/feed" class="thread-back" hx-boost="true">back to feed</a>
-    {{ end }}
 
     <div class="thread-root">
       {{ template "post-card.html" (dict "Post" .Post "User" $.User) }}

@@ -309,6 +309,112 @@
       };
     });
 
+    // Sprint 13: admin Database panel. Lists recent backups, creates
+    // new ones, and drives the import confirmation modal. Every
+    // network call here hits /api/admin/db/*; RequireAdmin middleware
+    // upstream blocks non-admins, Owner-only gate for import is both
+    // server-side AND visual (the import card is wrapped in a
+    // template guard).
+    window.Alpine.data('dbManager', function () {
+      return {
+        backups: [],
+        loading: false,
+        busy: false,
+        action: '',           // 'backup' | 'import' | '' - what's in flight
+        confirmOpen: false,
+        confirmText: '',
+        selectedName: '',
+        error: '',
+        loadBackups: function () {
+          var self = this;
+          self.loading = true;
+          fetch('/api/admin/db/backups', { credentials: 'same-origin' })
+            .then(function (r) { return r.json().catch(function () { return {}; }); })
+            .then(function (d) {
+              self.loading = false;
+              self.backups = (d && d.backups) || [];
+            })
+            .catch(function () { self.loading = false; });
+        },
+        createBackup: function () {
+          var self = this;
+          if (self.busy) return;
+          self.busy = true; self.action = 'backup';
+          apiJSON('/api/admin/db/backup', 'POST', null).then(function (res) {
+            self.busy = false; self.action = '';
+            if (res.ok) {
+              toast('success', 'Backup created: ' + (res.data && res.data.name));
+              self.loadBackups();
+            } else {
+              toast('error', (res.data && res.data.error) || 'Backup failed');
+            }
+          });
+        },
+        openImportConfirm: function () {
+          // The file is staged via x-ref in the template. Just flip
+          // the modal open and wait for the CONFIRM typing gate.
+          if (!this.$refs.importFile || !this.$refs.importFile.files ||
+              !this.$refs.importFile.files[0]) {
+            toast('error', 'Pick a .sql file first');
+            return;
+          }
+          this.confirmText = '';
+          this.error = '';
+          this.confirmOpen = true;
+        },
+        runImport: function () {
+          var self = this;
+          if (self.confirmText !== 'CONFIRM' || self.busy) return;
+          var file = self.$refs.importFile && self.$refs.importFile.files &&
+                     self.$refs.importFile.files[0];
+          if (!file) {
+            self.error = 'No file selected';
+            return;
+          }
+          self.busy = true; self.action = 'import'; self.error = '';
+          var form = new FormData();
+          form.append('file', file);
+          fetch('/api/admin/db/import', {
+            method: 'POST',
+            body: form,
+            credentials: 'same-origin'
+          }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; })
+              .catch(function () { return { ok: r.ok, status: r.status, data: {} }; });
+          }).then(function (res) {
+            self.busy = false; self.action = '';
+            if (res.ok) {
+              toast('success', 'Database imported. Pre-import backup: ' +
+                    (res.data && res.data.pre_backup));
+              self.confirmOpen = false;
+              self.confirmText = '';
+              self.selectedName = '';
+              if (self.$refs.importFile) self.$refs.importFile.value = '';
+              self.loadBackups();
+            } else {
+              self.error = (res.data && res.data.error) || 'Import failed';
+            }
+          }).catch(function () {
+            self.busy = false; self.action = '';
+            self.error = 'Network error';
+          });
+        },
+        formatSize: function (bytes) {
+          if (bytes < 1024) return bytes + ' B';
+          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+          if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+          return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+        },
+        formatDate: function (iso) {
+          if (!iso) return '';
+          try {
+            var d = new Date(iso);
+            return d.toLocaleString();
+          } catch (e) { return iso; }
+        }
+      };
+    });
+
     // Notifications dropdown
     window.Alpine.data('notificationsPanel', function () {
       return {

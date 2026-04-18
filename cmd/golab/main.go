@@ -177,6 +177,10 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		DB: pool, Render: tmpls, Users: users,
 		Settings: settings, Notifications: notifs, Hub: hub,
 	}
+	// Sprint 13: admin database management (backup, export, import).
+	// BackupDir defaults to /opt/backups inside the container; the
+	// docker-compose `golab-backups` volume mounts it there.
+	dbH := &handler.DBHandler{Cfg: cfg}
 
 	// Page handlers
 	pageH := &handler.PageHandler{
@@ -205,6 +209,9 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		r.Get("/register", pageH.RegisterPage)
 		r.Get("/login", pageH.LoginPage)
 		r.Get("/explore", pageH.ExplorePage)
+		// Sprint 13: /c/{slug} is a legacy redirect - Spaces replaced
+		// Channels as the primary UI unit. The handler itself is a
+		// one-liner http.Redirect.
 		r.Get("/c/{slug}", pageH.ChannelPage)
 		r.Get("/u/{username}", pageH.ProfilePage)
 		r.Get("/p/{id}", pageH.ThreadPage)
@@ -385,6 +392,15 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Post("/admin/users/{id}/approve", adminH.Approve)
 			r.Post("/admin/users/{id}/reject", adminH.Reject)
 			r.Put("/admin/settings/{key}", adminH.SetSetting)
+
+			// Sprint 13: database management. Backup / Export / List
+			// need admin (75+), Import needs Owner (100, enforced
+			// inside the handler). pg_dump and psql are expensive;
+			// the handler timeouts keep abuse bounded.
+			r.Get("/admin/db/backups", dbH.ListBackups)
+			r.Post("/admin/db/backup", dbH.Backup)
+			r.Get("/admin/db/export", dbH.Export)
+			r.Post("/admin/db/import", dbH.Import)
 		})
 	})
 

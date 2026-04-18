@@ -56,9 +56,14 @@ func (h *PageHandler) newPageData(r *http.Request, title string) PageData {
 
 // ---------- Home ----------
 
+// homeContent carries the data the landing page shows to logged-out
+// visitors. TrendingSpaces replaces the old TrendingChannels list -
+// Spaces are the admin-curated topic areas users actually navigate
+// by. Channels stay in the DB (feeds and posts still reference a
+// channel_id for legacy rows) but are no longer surfaced in the UI.
 type homeContent struct {
-	TrendingChannels []model.Channel
-	RecentPosts      []model.Post
+	TrendingSpaces []model.Space
+	RecentPosts    []model.Post
 }
 
 func (h *PageHandler) Home(w http.ResponseWriter, r *http.Request) {
@@ -68,19 +73,23 @@ func (h *PageHandler) Home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	trending, err := h.Channels.ListPublic(r.Context(), 6, 0)
-	if err != nil {
-		slog.Error("home: list channels", "error", err)
-		trending = nil
+	var trending []model.Space
+	if h.Spaces != nil {
+		spaces, err := h.Spaces.List(r.Context())
+		if err != nil {
+			slog.Error("home: list spaces", "error", err)
+		} else {
+			trending = spaces
+		}
 	}
 	if trending == nil {
-		trending = []model.Channel{}
+		trending = []model.Space{}
 	}
 
 	data := h.newPageData(r, "GoLab - Privacy-first developer community")
 	data.Content = homeContent{
-		TrendingChannels: trending,
-		RecentPosts:      nil,
+		TrendingSpaces: trending,
+		RecentPosts:    nil,
 	}
 	if err := h.Render.Render(w, "home", data); err != nil {
 		slog.Error("render home", "error", err)
@@ -184,71 +193,45 @@ func (h *PageHandler) FeedPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ---------- Channel ----------
+// ---------- Channel (legacy redirect) ----------
 
-type channelContent struct {
-	Channel  *model.Channel
-	Posts    []model.Post
-	IsMember bool
-}
-
+// ChannelPage used to render a per-channel feed. Sprint 10.5 hid
+// channels from the UI in favour of Spaces; Sprint 13 finishes the
+// job by redirecting every /c/{slug} URL to /feed so old links and
+// bookmarks no longer dead-end on a 404 or show stale UI. The
+// channel tables and APIs still exist for back-compat and Phase 2
+// migration, but the HTML page is gone.
 func (h *PageHandler) ChannelPage(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-	ch, err := h.Channels.FindBySlug(r.Context(), slug)
-	if err != nil {
-		slog.Error("channel page: find", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	if ch == nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	posts, err := h.Posts.ListByChannel(r.Context(), ch.ID, 30, nil)
-	if err != nil {
-		slog.Error("channel page: list posts", "error", err)
-		posts = nil
-	}
-	if posts == nil {
-		posts = []model.Post{}
-	}
-
-	isMember := false
-	if user := auth.UserFromContext(r.Context()); user != nil {
-		isMember, _ = h.Channels.IsMember(r.Context(), ch.ID, user.ID)
-	}
-
-	data := h.newPageData(r, ch.Name+" - GoLab")
-	data.Content = channelContent{
-		Channel:  ch,
-		Posts:    posts,
-		IsMember: isMember,
-	}
-	if err := h.Render.Render(w, "channel", data); err != nil {
-		slog.Error("render channel", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-	}
+	http.Redirect(w, r, "/feed", http.StatusFound)
 }
 
 // ---------- Explore ----------
 
+// exploreContent is the "discover something to read" page. Since
+// Sprint 10.5 this is organised by Space (admin-curated topic area)
+// rather than by Channel. The 8 Spaces are stable, numbered, and
+// live in the header; the explore page shows the same set as big
+// cards with description and post count.
 type exploreContent struct {
-	Channels []model.Channel
+	Spaces []model.Space
 }
 
 func (h *PageHandler) ExplorePage(w http.ResponseWriter, r *http.Request) {
-	channels, err := h.Channels.ListPublic(r.Context(), 50, 0)
-	if err != nil {
-		slog.Error("explore page", "error", err)
-		channels = nil
+	var spaces []model.Space
+	if h.Spaces != nil {
+		list, err := h.Spaces.List(r.Context())
+		if err != nil {
+			slog.Error("explore page: list spaces", "error", err)
+		} else {
+			spaces = list
+		}
 	}
-	if channels == nil {
-		channels = []model.Channel{}
+	if spaces == nil {
+		spaces = []model.Space{}
 	}
 
 	data := h.newPageData(r, "Explore - GoLab")
-	data.Content = exploreContent{Channels: channels}
+	data.Content = exploreContent{Spaces: spaces}
 	if err := h.Render.Render(w, "explore", data); err != nil {
 		slog.Error("render explore", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

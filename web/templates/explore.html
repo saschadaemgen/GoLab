@@ -2,30 +2,44 @@
 <div class="fade-in">
   <div class="page-container">
     <header class="explore-header">
-      <h1>Explore channels</h1>
-      <p>Discover communities. Join the ones that resonate.</p>
+      <h1>Explore spaces</h1>
+      <p>Eight curated topic areas. Pick one that fits and jump in.</p>
     </header>
 
     {{ with .Content }}
-    {{ if .Channels }}
+    {{ if .Spaces }}
     <div class="explore-grid stagger-in">
-      {{ range .Channels }}
-        {{ template "channel-card.html" . }}
+      {{ range .Spaces }}
+      <a href="/s/{{ .Slug }}" class="space-card hover-lift" hx-boost="true"
+         {{ if .Color }}style="--space-accent: {{ .Color }};"{{ end }}>
+        <div class="space-card-head">
+          <span class="space-card-icon" aria-hidden="true">{{ if .Icon }}{{ .Icon }}{{ else }}#{{ end }}</span>
+          <div class="space-card-title">
+            <div class="space-card-name">{{ .Name }}</div>
+            <div class="space-card-slug">/s/{{ .Slug }}</div>
+          </div>
+        </div>
+        {{ if .Description }}
+        <p class="space-card-desc">{{ truncate .Description 180 }}</p>
+        {{ end }}
+        <div class="space-card-meta">
+          <span>{{ .PostCount }} {{ pluralize .PostCount "post" "posts" }}</span>
+        </div>
+      </a>
       {{ end }}
     </div>
     {{ else }}
     <div class="explore-grid">
       <div class="empty-state" style="grid-column: 1 / -1;">
-        <h3>No channels yet</h3>
-        <p>Be the first to create one.</p>
+        <h3>No spaces yet</h3>
+        <p>Spaces are seeded by a database migration. Check that migrations have run.</p>
       </div>
     </div>
     {{ end }}
     {{ end }}
 
-    {{/* Channels (Sprint 10.5) stay in DB but are hidden from the UI;
-         there is no "Create channel" form anymore. Spaces are
-         admin-fixed, tags are user-applied. */}}
+    {{/* Spaces are admin-fixed (Sprint 10.5 + 13). Users don't create
+         them. Tags are the user-driven discovery layer on top. */}}
   </div>
 </div>
 {{ end }}

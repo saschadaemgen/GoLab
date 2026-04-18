@@ -16,7 +16,11 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 go build -o golab ./cmd/golab
 
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates
+# postgresql-client provides pg_dump and psql, needed by the Sprint 13
+# admin "Database" UI (manual backup, export, import). Version is
+# pinned by the alpine:3.21 base so it stays compatible with
+# postgres:16-alpine in docker-compose.yml.
+RUN apk add --no-cache ca-certificates postgresql-client
 WORKDIR /app
 
 # Binary.

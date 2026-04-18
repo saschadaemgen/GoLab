@@ -3094,3 +3094,143 @@ img.avatar {
   gap: 0.35rem;
   flex-wrap: wrap;
 }
+
+/* ===== Sprint 13: Admin Database section ===== */
+
+.admin-db .admin-section-intro {
+  color: var(--text-muted);
+  font-size: 0.925rem;
+  margin: 0 0 1rem;
+}
+.admin-db code {
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 0.3em;
+  font-size: 0.85em;
+}
+.admin-db-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.admin-db-sub {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.25rem 0 0.5rem;
+}
+.admin-db-backups .muted {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+.admin-db-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, var(--surface));
+  padding: 0.4rem 0.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.admin-db-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 4px;
+}
+.admin-db-row:hover {
+  background: var(--surface, rgba(0, 0, 0, 0.04));
+}
+.admin-db-name {
+  font-size: 0.875rem;
+  color: var(--text);
+  word-break: break-all;
+}
+.admin-db-meta {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* Import block: fenced off visually so nobody clicks it by accident. */
+.admin-db-import {
+  margin-top: 1.75rem;
+  padding: 1rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: rgba(220, 50, 50, 0.04);
+}
+.admin-db-import .admin-db-sub {
+  color: var(--danger);
+  margin-top: 0;
+}
+.admin-db-warning {
+  color: var(--text);
+  font-size: 0.9rem;
+  margin: 0 0 0.85rem;
+}
+.admin-db-file {
+  display: block;
+  margin: 0.5rem 0;
+}
+.admin-db-filename {
+  display: inline-block;
+  margin: 0 0.5rem 0.5rem 0;
+  font-size: 0.8rem;
+}
+
+/* Confirm modal. Lives in DOM always so x-show transitions animate,
+   uses fixed positioning so it layers over the whole page. The
+   backdrop takes the click-to-close via @click.self on the outer
+   element. */
+.admin-db-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10400;
+  padding: 1rem;
+}
+.admin-db-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.25rem 1rem;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.admin-db-modal h3 {
+  margin: 0 0 0.75rem;
+  color: var(--danger);
+  font-size: 1.1rem;
+}
+.admin-db-modal p {
+  margin: 0 0 0.65rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.admin-db-confirm {
+  margin: 0.75rem 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: center;
+  letter-spacing: 0.1em;
+}
+.admin-db-modal-error {
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+}
+.admin-db-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

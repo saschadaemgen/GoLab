@@ -24,7 +24,7 @@
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input type="text" class="search-input" placeholder="Search posts, channels, users..."
+        <input type="text" class="search-input" placeholder="Search posts, users, tags..."
                x-model="query"
                @input.debounce.300ms="doSearch()"
                @focus="active = true"
@@ -46,16 +46,9 @@
         <template x-if="!loading && !hasResults()">
           <div class="search-empty">No results for "<span x-text="query"></span>"</div>
         </template>
-        <div x-show="!loading && results.channels.length > 0" class="search-section">
-          <div class="search-section-title">Channels</div>
-          <template x-for="ch in results.channels" :key="'c-' + ch.id">
-            <a :href="'/c/' + ch.slug" class="search-result-item" @click="close()">
-              <span class="search-result-hash">#</span>
-              <span class="search-result-name" x-text="ch.slug"></span>
-              <span class="search-result-meta" x-text="ch.member_count + ' members'"></span>
-            </a>
-          </template>
-        </div>
+        {{/* Sprint 13: Channel search results are no longer rendered.
+             The backend may still include them in the response for
+             API back-compat; we simply ignore them here. */}}
         <div x-show="!loading && results.users.length > 0" class="search-section">
           <div class="search-section-title">Users</div>
           <template x-for="u in results.users" :key="'u-' + u.id">

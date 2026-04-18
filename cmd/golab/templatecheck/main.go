@@ -66,8 +66,8 @@ func main() {
 		"home": map[string]any{
 			"Title": "Home", "SiteName": "GoLab", "User": nil, "CurrentPath": "/",
 			"Content": map[string]any{
-				"TrendingChannels": []model.Channel{{ID: 1, Slug: "general", Name: "General", MemberCount: 42, ChannelType: "public"}},
-				"RecentPosts":      nil,
+				"TrendingSpaces": dummySpaces,
+				"RecentPosts":    nil,
 			},
 		},
 		"register": map[string]any{"Title": "Register", "SiteName": "GoLab", "User": nil, "CurrentPath": "/register"},
@@ -83,7 +83,7 @@ func main() {
 		"explore": map[string]any{
 			"Title": "Explore", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/explore",
 			"Content": map[string]any{
-				"Channels": []model.Channel{{ID: 1, Slug: "general", Name: "General", Description: "Main lobby", MemberCount: 42, ChannelType: "public"}},
+				"Spaces": dummySpaces,
 			},
 		},
 		"settings": map[string]any{"Title": "Settings", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/settings"},
@@ -117,12 +117,9 @@ func main() {
 		"admin": map[string]any{
 			"Title": "Admin", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/admin",
 			"Content": map[string]any{
-				"Stats": map[string]any{"Users": 42, "Posts": 187, "Channels": 8, "Banned": 0},
+				"Stats": map[string]any{"Users": 42, "Posts": 187, "Spaces": 8, "Banned": 0},
 				"Users": []map[string]any{
 					{"ID": int64(1), "Username": "prinz", "DisplayName": "Der Prinz", "PowerLevel": 100, "PostCount": 3, "Banned": false, "CreatedAt": time.Now().Add(-2 * time.Hour)},
-				},
-				"Channels": []map[string]any{
-					{"ID": int64(1), "Slug": "general", "Name": "General", "ChannelType": "public", "MemberCount": 42, "PostCount": 12, "CreatedAt": time.Now().Add(-3 * 24 * time.Hour)},
 				},
 			},
 		},

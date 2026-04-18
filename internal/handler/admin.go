@@ -44,10 +44,13 @@ type AdminHandler struct {
 }
 
 type adminStats struct {
-	Users    int `json:"users"`
-	Posts    int `json:"posts"`
-	Channels int `json:"channels"`
-	Banned   int `json:"banned"`
+	Users  int `json:"users"`
+	Posts  int `json:"posts"`
+	// Sprint 13 UI cleanup: the dashboard now counts Spaces instead
+	// of Channels because Channels are no longer surfaced in the UI.
+	// The DB column is called "spaces" since migration 016.
+	Spaces int `json:"spaces"`
+	Banned int `json:"banned"`
 }
 
 type adminUser struct {
@@ -60,20 +63,9 @@ type adminUser struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-type adminChannel struct {
-	ID          int64     `json:"id"`
-	Slug        string    `json:"slug"`
-	Name        string    `json:"name"`
-	ChannelType string    `json:"channel_type"`
-	MemberCount int       `json:"member_count"`
-	PostCount   int       `json:"post_count"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
 type adminDashboard struct {
 	Stats               adminStats
 	Users               []adminUser
-	Channels            []adminChannel
 	PendingUsers        []model.User // Sprint 12 moderation queue
 	RequireApproval     bool         // current state of the toggle
 	AllowUsernameChange bool         // Sprint 13: user-facing username editor
@@ -96,15 +88,15 @@ func (h *AdminHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminHandler) collect(r *http.Request) adminDashboard {
 	out := adminDashboard{
-		Users:    []adminUser{},
-		Channels: []adminChannel{},
+		Users: []adminUser{},
 	}
 	ctx := r.Context()
 
-	// Stats
+	// Stats. "Spaces" replaced the old "Channels" counter in Sprint 13;
+	// Channels stay in the DB but are no longer surfaced in the UI.
 	_ = h.DB.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&out.Stats.Users)
 	_ = h.DB.QueryRow(ctx, `SELECT COUNT(*) FROM posts`).Scan(&out.Stats.Posts)
-	_ = h.DB.QueryRow(ctx, `SELECT COUNT(*) FROM channels`).Scan(&out.Stats.Channels)
+	_ = h.DB.QueryRow(ctx, `SELECT COUNT(*) FROM spaces`).Scan(&out.Stats.Spaces)
 	_ = h.DB.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE banned`).Scan(&out.Stats.Banned)
 
 	// Users
@@ -124,22 +116,10 @@ func (h *AdminHandler) collect(r *http.Request) adminDashboard {
 		}
 	}
 
-	// Channels
-	crows, err := h.DB.Query(ctx, `
-		SELECT c.id, c.slug, c.name, c.channel_type, c.member_count, c.created_at,
-		       (SELECT COUNT(*) FROM posts p WHERE p.channel_id = c.id) AS posts
-		FROM channels c
-		ORDER BY c.created_at DESC
-		LIMIT 50`)
-	if err == nil {
-		defer crows.Close()
-		for crows.Next() {
-			var ac adminChannel
-			if err := crows.Scan(&ac.ID, &ac.Slug, &ac.Name, &ac.ChannelType, &ac.MemberCount, &ac.CreatedAt, &ac.PostCount); err == nil {
-				out.Channels = append(out.Channels, ac)
-			}
-		}
-	}
+	// Channels list was removed from the admin UI in Sprint 13 (the
+	// `channels` table still exists for back-compat but users navigate
+	// by Space now). If this ever needs to come back, query via
+	// channel_members + posts.
 
 	// Sprint 12 moderation data: pending users queue + require_approval
 	// setting current state for the toggle.

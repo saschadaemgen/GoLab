@@ -16,8 +16,14 @@ services:
     # Persist uploads across `docker-compose build` rebuilds. Without
     # this volume, every rebuild destroyed user avatars and post
     # images because they lived inside the ephemeral container fs.
+    #
+    # golab-backups holds manual pg_dump files created via the admin
+    # "Database" UI (Sprint 13). Mounted at /opt/backups inside the
+    # container; production can override to a bind mount of the host
+    # /opt/backups directory via a compose override file.
     volumes:
       - golab-uploads:/app/web/static/uploads
+      - golab-backups:/opt/backups
     depends_on:
       - db
     restart: unless-stopped
@@ -37,3 +43,4 @@ services:
 volumes:
   golab-data:
   golab-uploads:
+  golab-backups:

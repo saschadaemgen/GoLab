@@ -198,9 +198,24 @@ func truncate(s string, n int) string {
 	return s[:n] + "..."
 }
 
-func pluralize(n int, singular, plural string) string {
-	if n == 1 {
-		return singular
+// pluralize returns singular/plural based on n. Accepts int or int64
+// (Space.PostCount is int64 from the COUNT(*) aggregate) so callers
+// do not have to remember to cast. Any other type is treated as
+// plural, which is the safe default.
+func pluralize(n any, singular, plural string) string {
+	switch v := n.(type) {
+	case int:
+		if v == 1 {
+			return singular
+		}
+	case int64:
+		if v == 1 {
+			return singular
+		}
+	case int32:
+		if v == 1 {
+			return singular
+		}
 	}
 	return plural
 }
