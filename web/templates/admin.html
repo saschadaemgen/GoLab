@@ -234,6 +234,7 @@
               <th>Name</th>
               <th class="admin-db-th-size">Size</th>
               <th class="admin-db-th-date">Created</th>
+              <th class="admin-db-th-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -242,6 +243,21 @@
                 <td class="mono admin-db-cell-name" x-text="b.name"></td>
                 <td class="mono muted" x-text="formatSize(b.size)"></td>
                 <td class="mono muted" x-text="formatDate(b.created_at)"></td>
+                <td class="admin-db-cell-actions">
+                  <a :href="downloadUrl(b.name)"
+                     class="admin-db-icon-btn press-effect tooltip"
+                     data-tooltip="Download"
+                     :aria-label="'Download ' + b.name"
+                     download>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                  </a>
+                </td>
               </tr>
             </template>
           </tbody>

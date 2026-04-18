@@ -411,6 +411,14 @@
             var d = new Date(iso);
             return d.toLocaleString();
           } catch (e) { return iso; }
+        },
+        downloadUrl: function (name) {
+          // Build the per-file download URL. encodeURIComponent
+          // guards against stray characters; the server rejects
+          // anything that isn't golab-*.sql with no path separators,
+          // but URL-encoding on the client side keeps the path
+          // clean and standards-compliant.
+          return '/api/admin/db/backups/' + encodeURIComponent(name) + '/download';
         }
       };
     });

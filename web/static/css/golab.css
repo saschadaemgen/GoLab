@@ -3239,6 +3239,43 @@ img.avatar {
 .admin-db-th-date {
   width: 12rem;
 }
+.admin-db-th-actions {
+  width: 4rem;
+  text-align: right;
+}
+.admin-db-cell-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Icon-only button used for the per-row Download action. Matches
+   the look of other ghost buttons (transparent bg, subtle border
+   on hover) so the table stays quiet until the user reaches for a
+   specific row. */
+.admin-db-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: border-color var(--transition, 0.15s ease),
+              color var(--transition, 0.15s ease),
+              background var(--transition, 0.15s ease);
+}
+.admin-db-icon-btn:hover,
+.admin-db-icon-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--border-hover, var(--border));
+  background: var(--accent-subtle);
+  outline: none;
+}
+.admin-db-icon-btn svg {
+  display: block;
+}
 
 /* Import block: fenced off visually in red so nobody clicks it by
    accident. The extra margin-top + borderfull separate it clearly

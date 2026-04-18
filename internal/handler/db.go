@@ -1,13 +1,14 @@
 package handler
 
-// Sprint 13 admin database management. Four endpoints:
+// Sprint 13 admin database management. Five endpoints:
 //
-//   POST /api/admin/db/backup   - run pg_dump, save to /opt/backups/
-//   GET  /api/admin/db/export   - run pg_dump, stream as .sql download
-//   POST /api/admin/db/import   - multipart upload, auto-backup, psql < file
-//   GET  /api/admin/db/backups  - list existing backups
+//   POST /api/admin/db/backup                       - run pg_dump, save to /opt/backups/
+//   GET  /api/admin/db/export                       - run pg_dump, stream as .sql download
+//   POST /api/admin/db/import                       - multipart upload, auto-backup, psql < file
+//   GET  /api/admin/db/backups                      - list existing backups
+//   GET  /api/admin/db/backups/{filename}/download  - download one saved backup
 //
-// All four require admin (RequireAdmin middleware in the router).
+// All five require admin (RequireAdmin middleware in the router).
 // Import additionally requires Owner (power_level == 100, id == 1).
 //
 // Security notes:
@@ -36,6 +37,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/saschadaemgen/GoLab/internal/auth"
 	"github.com/saschadaemgen/GoLab/internal/config"
 )
@@ -380,4 +382,117 @@ func firstLine(s string) string {
 		}
 	}
 	return "unknown error"
+}
+
+// isSafeBackupName is the path-traversal gate for DownloadBackup.
+// It allows only filenames that:
+//   - start with the "golab-" prefix (so unrelated files in
+//     /opt/backups stay invisible),
+//   - end with ".sql",
+//   - contain no path separators ('/' or '\\') or ".." segments,
+//   - contain no NUL bytes (defence in depth against weird locales).
+//
+// The frontend only ever sends names that came from ListBackups,
+// but the server NEVER trusts that - the whole point of this
+// check is to reject a manually crafted URL.
+func isSafeBackupName(name string) bool {
+	if name == "" {
+		return false
+	}
+	if !strings.HasPrefix(name, "golab-") || !strings.HasSuffix(name, ".sql") {
+		return false
+	}
+	if strings.ContainsAny(name, "/\\\x00") {
+		return false
+	}
+	if strings.Contains(name, "..") {
+		return false
+	}
+	// Reject Windows-ish reserved characters / shell chars while we
+	// are at it. None of our generated names ever contain these.
+	if strings.ContainsAny(name, ":*?\"<>|") {
+		return false
+	}
+	// Confirm the name filepath.Base normalises to itself - anything
+	// that collapses differently is suspicious.
+	if filepath.Base(name) != name {
+		return false
+	}
+	return true
+}
+
+// DownloadBackup streams a single saved backup file back to the
+// client as an attachment. The filename comes from the URL param
+// {filename} and is validated by isSafeBackupName; the file must
+// live directly inside BackupDir (no symlinks followed, no nested
+// directories).
+func (h *DBHandler) DownloadBackup(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "filename")
+	if !isSafeBackupName(name) {
+		writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	dir := h.backupDir()
+	path := filepath.Join(dir, name)
+
+	// Defence in depth: after joining, the resolved path must still
+	// be a direct child of BackupDir. EvalSymlinks isn't used here
+	// because BackupDir itself may be a bind mount; we accept that
+	// root-level symlink and just verify the filename component.
+	cleanDir := filepath.Clean(dir)
+	cleanPath := filepath.Clean(path)
+	if filepath.Dir(cleanPath) != cleanDir {
+		writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, "backup not found")
+			return
+		}
+		slog.Error("download backup: stat", "error", err, "name", name)
+		writeError(w, http.StatusInternalServerError, "could not read backup")
+		return
+	}
+	if info.IsDir() {
+		writeError(w, http.StatusBadRequest, "not a file")
+		return
+	}
+	// Reject anything that isn't a regular file (symlink, device, pipe).
+	if !info.Mode().IsRegular() {
+		writeError(w, http.StatusBadRequest, "not a regular file")
+		return
+	}
+
+	f, err := os.Open(cleanPath)
+	if err != nil {
+		slog.Error("download backup: open", "error", err, "name", name)
+		writeError(w, http.StatusInternalServerError, "could not open backup")
+		return
+	}
+	defer f.Close()
+
+	// Commit headers BEFORE streaming. Same playbook as Export:
+	// application/octet-stream so the browser always saves, never
+	// renders. X-Accel-Buffering tells Nginx not to buffer the
+	// whole file into memory on the way out.
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Accel-Buffering", "no")
+	// Block caching so a later "delete backup" doesn't leave copies
+	// in shared proxy caches.
+	w.Header().Set("Cache-Control", "private, no-store")
+
+	// http.ServeContent would handle Range requests for free, but
+	// we want the hard no-cache semantics above and a guaranteed
+	// attachment disposition; a plain io.Copy is clearer.
+	w.WriteHeader(http.StatusOK)
+	if _, err := io.Copy(w, f); err != nil {
+		slog.Error("download backup: stream", "error", err, "name", name)
+	}
 }

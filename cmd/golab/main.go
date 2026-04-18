@@ -393,11 +393,12 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Post("/admin/users/{id}/reject", adminH.Reject)
 			r.Put("/admin/settings/{key}", adminH.SetSetting)
 
-			// Sprint 13: database management. Backup / Export / List
-			// need admin (75+), Import needs Owner (100, enforced
-			// inside the handler). pg_dump and psql are expensive;
-			// the handler timeouts keep abuse bounded.
+			// Sprint 13: database management. Backup / Export / List /
+			// per-file Download need admin (75+); Import needs Owner
+			// (100, enforced inside the handler). pg_dump and psql
+			// are expensive; the handler timeouts keep abuse bounded.
 			r.Get("/admin/db/backups", dbH.ListBackups)
+			r.Get("/admin/db/backups/{filename}/download", dbH.DownloadBackup)
 			r.Post("/admin/db/backup", dbH.Backup)
 			r.Get("/admin/db/export", dbH.Export)
 			r.Post("/admin/db/import", dbH.Import)
