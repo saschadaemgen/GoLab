@@ -16,11 +16,18 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 go build -o golab ./cmd/golab
 
 FROM alpine:3.21
-# postgresql-client provides pg_dump and psql, needed by the Sprint 13
-# admin "Database" UI (manual backup, export, import). Version is
-# pinned by the alpine:3.21 base so it stays compatible with
-# postgres:16-alpine in docker-compose.yml.
-RUN apk add --no-cache ca-certificates postgresql-client
+# postgresql16-client provides pg_dump and psql, needed by the
+# Sprint 13 admin "Database" UI (manual backup, export, import).
+#
+# Version pin matters: alpine:3.21 ships postgresql17-client as the
+# default when you ask for the generic "postgresql-client" alias, but
+# our db service runs postgres:16-alpine. A v17 pg_dump writes dumps
+# with v17-only options that v16 psql cannot replay, so the client
+# must match the server's major version. Alpine exposes each major
+# as its own package (postgresql15-client / 16-client / 17-client),
+# so we name the v16 one explicitly and will bump this line in
+# lockstep with any future Postgres upgrade.
+RUN apk add --no-cache ca-certificates postgresql16-client
 WORKDIR /app
 
 # Binary.
