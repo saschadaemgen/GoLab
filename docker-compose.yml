@@ -42,8 +42,6 @@ services:
       - POSTGRES_PASSWORD=golab-dev
     volumes:
       - golab-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     restart: unless-stopped
 
 volumes:
