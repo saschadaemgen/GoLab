@@ -143,6 +143,8 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	tags := &model.TagStore{DB: pool}
 	settings := &model.SettingsStore{DB: pool}
 	sessions := &auth.SessionStore{DB: pool}
+	// Sprint 14: MentionStore borrows UserStore for resolution.
+	mentions := &model.MentionStore{DB: pool, Users: users}
 
 	// Notification dispatcher (used by post + profile handlers to fan events).
 	notifDispatch := &handler.NotifDispatch{Store: notifs, Hub: hub}
@@ -166,12 +168,14 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	postH := &handler.PostHandler{
 		Posts: posts, Channels: channels, Reactions: reactions, Tags: tags,
 		Spaces:   spaces,
+		Users:    users,    // Sprint 14: needed to resolve @mentions -> profile links
+		Mentions: mentions, // Sprint 14: record mention rows on Create
 		Markdown: md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
 	}
 	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}
-	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags}
-	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts, Spaces: spaces}
-	feedH := &handler.FeedHandler{Posts: posts}
+	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags, Reactions: reactions}
+	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts, Spaces: spaces, Reactions: reactions}
+	feedH := &handler.FeedHandler{Posts: posts, Reactions: reactions}
 	profileH := &handler.ProfileHandler{
 		Users:    users,
 		Posts:    posts,
@@ -346,6 +350,13 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 				httprate.WithKeyFuncs(perUserRate),
 				httprate.WithLimitHandler(handler.RateLimited),
 			)).Get("/users/check-username", profileH.CheckUsername)
+			// Sprint 14: @mention autocomplete. 60/min/user is plenty
+			// for a debounced typeahead and keeps the prefix-ILIKE
+			// query from becoming a DoS vector.
+			r.With(httprate.Limit(60, time.Minute,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Get("/users/autocomplete", profileH.Autocomplete)
 			r.With(httprate.Limit(10, time.Hour,
 				httprate.WithKeyFuncs(perUserRate),
 				httprate.WithLimitHandler(handler.RateLimited),
