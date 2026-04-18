@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,8 @@ type PostHandler struct {
 	Reactions *model.ReactionStore
 	Tags      *model.TagStore
 	Spaces    *model.SpaceStore
+	Users     *model.UserStore     // Sprint 14: resolve @username -> link on render
+	Mentions  *model.MentionStore  // Sprint 14: record mentions on post create/update
 	Markdown  *render.Markdown
 	Sanitizer *render.Sanitizer
 	Hub       *Hub           // optional; when present, new posts get broadcast
@@ -166,6 +169,11 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	//
 	// This lets the new rich editor and old Markdown clients coexist with a
 	// single `content_html` column used for display.
+	//
+	// Sprint 14: after sanitizing we post-process the HTML to turn
+	// `@username` tokens into profile links. Done last so a raw
+	// "@admin" literal stored by an old Markdown client still
+	// becomes a live link on display.
 	var contentHTML string
 	if render.LooksLikeHTML(req.Content) {
 		if h.Sanitizer != nil {
@@ -181,6 +189,9 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 				contentHTML = rendered
 			}
 		}
+	}
+	if h.Users != nil {
+		contentHTML = render.LinkMentions(contentHTML, h.mentionResolver(r.Context()))
 	}
 
 	// Normalise post_type to a known value. Empty / unknown -> discussion.
@@ -246,6 +257,28 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("post created", "id", post.ID, "author", user.Username)
+
+	// Sprint 14: record @mentions and fan out notifications. Best-
+	// effort: the post is already saved, a mention failure should
+	// not 500 the response. Self-mentions don't notify.
+	if h.Mentions != nil {
+		usernames := model.ExtractUsernames(req.Content)
+		if len(usernames) > 0 {
+			userIDs, err := h.Mentions.RecordMentions(r.Context(), post.ID, usernames)
+			if err != nil {
+				slog.Warn("create post: record mentions", "post", post.ID, "error", err)
+			}
+			if h.Notifs != nil {
+				pid := post.ID
+				for _, uid := range userIDs {
+					if uid == user.ID {
+						continue
+					}
+					h.Notifs.Notify(r.Context(), uid, user.ID, model.NotifMention, &pid)
+				}
+			}
+		}
+	}
 
 	// Notify the parent post author if this is a reply
 	if req.ParentID != nil && h.Notifs != nil {
@@ -318,6 +351,20 @@ func (h *PostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// React toggles one (post, user, emoji) triple and returns the
+// full reaction state afterwards. Sprint 14 shape:
+//
+//	{
+//	  "result": "added" | "removed",
+//	  "user_types": ["heart", "thumbsup"],
+//	  "counts": { "heart": 3, "thumbsup": 1, "laugh": 0, ... }
+//	}
+//
+// The 6 keys in "counts" are always present, zero when no rows.
+// Clients render all 6 chips and highlight the ones listed in
+// "user_types". A user adding a second distinct emoji counts as
+// ReactAdded and fires a fresh notification - that matches the
+// GitHub multi-reaction behaviour.
 func (h *PostHandler) React(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 
@@ -340,28 +387,32 @@ func (h *PostHandler) React(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only fire a notification when a reaction was added or switched -
-	// removing a reaction shouldn't re-notify the post author.
-	if h.Notifs != nil && result != model.ReactRemoved {
+	// Notify on every add (including second-emoji-on-same-post),
+	// never on remove. The NotificationStore already dedupes
+	// within 60s so fast add/remove/add can't spam the author.
+	if h.Notifs != nil && result == model.ReactAdded {
 		if post, err := h.Posts.FindByID(r.Context(), id); err == nil && post != nil {
 			h.Notifs.Notify(r.Context(), post.AuthorID, user.ID, model.NotifReaction, &id)
 		}
 	}
 
-	// Return the final state so the client can update without a reload:
-	// which type (if any) this user now holds, plus the total count.
-	userType, _ := h.Reactions.UserReactionType(r.Context(), user.ID, id)
-	var count int
-	if p, err := h.Posts.FindByID(r.Context(), id); err == nil && p != nil {
-		count = p.ReactionCount
+	state, err := h.Reactions.StateFor(r.Context(), user.ID, id)
+	if err != nil {
+		slog.Error("react: state", "error", err)
+		// The toggle succeeded; return what we can.
 	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"result":    string(result),
-		"user_type": userType,
-		"count":     count,
+		"result":     string(result),
+		"user_types": state.UserTypes,
+		"counts":     state.Counts,
 	})
 }
 
+// Unreact is kept as a fallback for clients that predate Sprint 14.
+// It wipes EVERY reaction the user holds on the post. Logged at
+// Warn so we can track remaining legacy callers from container
+// logs.
 func (h *PostHandler) Unreact(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 
@@ -371,6 +422,10 @@ func (h *PostHandler) Unreact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	slog.Warn("legacy unreact endpoint hit",
+		"user_id", user.ID, "post_id", id,
+		"user_agent", r.Header.Get("User-Agent"))
+
 	if err := h.Reactions.Unreact(r.Context(), user.ID, id); err != nil {
 		slog.Error("unreact", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -378,6 +433,30 @@ func (h *PostHandler) Unreact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "unreacted"})
+}
+
+// mentionResolver is the closure passed to render.LinkMentions.
+// It memoises lookups per invocation so a post that mentions the
+// same username three times only queries the DB once. Returns
+// false for unknown / banned / pending users, and LinkMentions
+// then leaves the raw "@username" text unchanged.
+func (h *PostHandler) mentionResolver(ctx context.Context) func(username string) (int64, bool) {
+	cache := make(map[string]int64)
+	return func(username string) (int64, bool) {
+		if h.Users == nil {
+			return 0, false
+		}
+		if id, ok := cache[username]; ok {
+			return id, id > 0
+		}
+		u, err := h.Users.FindByUsername(ctx, username)
+		if err != nil || u == nil || u.Status != model.UserStatusActive {
+			cache[username] = 0
+			return 0, false
+		}
+		cache[username] = u.ID
+		return u.ID, true
+	}
 }
 
 func (h *PostHandler) Repost(w http.ResponseWriter, r *http.Request) {

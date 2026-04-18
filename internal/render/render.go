@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/saschadaemgen/GoLab/internal/model"
 )
 
 // Engine renders pages and HTMX fragments.
@@ -146,7 +148,41 @@ func funcMap() template.FuncMap {
 		"pluralize": pluralize,
 		"isActive":  isActive,
 		"dict":      dict,
+		// Sprint 14 multi-reaction helpers.
+		"emojiFor":      emojiFor,
+		"reactionTypes": reactionTypes,
+		"contains":      contains,
 	}
+}
+
+// emojiFor looks up the glyph for a reaction type. Returns the
+// raw type name unchanged if it isn't in the allowlist so mis-
+// typed template code doesn't render empty cells.
+func emojiFor(t string) string {
+	if e, ok := model.ReactionEmoji[t]; ok {
+		return e
+	}
+	return t
+}
+
+// reactionTypes returns the canonical display order for the six
+// Sprint 14 emoji chips. Exposed to templates so ranging over
+// them doesn't hard-code the list in two places.
+func reactionTypes() []string {
+	return model.ReactionTypesOrdered
+}
+
+// contains reports whether needle is in haystack. Used in the
+// post-card template to decide whether a reaction chip should
+// render in its active (user-pressed) state. Template-friendly:
+// accepts nil slices and returns false rather than panicking.
+func contains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // dict builds a map[string]any from key/value pairs. Used in templates

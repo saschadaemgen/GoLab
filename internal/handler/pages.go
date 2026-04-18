@@ -161,6 +161,12 @@ func (h *PageHandler) FeedPage(w http.ResponseWriter, r *http.Request) {
 	if posts == nil {
 		posts = []model.Post{}
 	}
+	// Sprint 14: one batch query for reaction state across the page.
+	if h.Reactions != nil {
+		if err := h.Reactions.AttachTo(r.Context(), user.ID, posts); err != nil {
+			slog.Warn("feed page: attach reactions", "error", err)
+		}
+	}
 
 	joined, err := h.Channels.ListForUser(r.Context(), user.ID, 10)
 	if err != nil {
@@ -279,6 +285,23 @@ func (h *PageHandler) ThreadPage(w http.ResponseWriter, r *http.Request) {
 		ch, _ = h.Channels.FindByID(r.Context(), *post.ChannelID)
 	}
 
+	// Sprint 14: attach reaction state to the root post + every
+	// reply. The root goes through a singleton slice because
+	// AttachTo only accepts a []Post.
+	if h.Reactions != nil {
+		var viewerID int64
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			viewerID = u.ID
+		}
+		rootWrap := []model.Post{*post}
+		if err := h.Reactions.AttachTo(r.Context(), viewerID, rootWrap); err == nil {
+			post = &rootWrap[0]
+		}
+		if err := h.Reactions.AttachTo(r.Context(), viewerID, replies); err != nil {
+			slog.Warn("thread: attach reactions", "error", err)
+		}
+	}
+
 	data := h.newPageData(r, "Thread - GoLab")
 	data.Content = threadContent{Post: post, Replies: replies, Channel: ch}
 	if err := h.Render.Render(w, "thread", data); err != nil {
@@ -361,6 +384,15 @@ func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if recent == nil {
 		recent = []model.Post{}
+	}
+	if h.Reactions != nil {
+		var viewerID int64
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			viewerID = u.ID
+		}
+		if err := h.Reactions.AttachTo(r.Context(), viewerID, recent); err != nil {
+			slog.Warn("profile page: attach reactions", "error", err)
+		}
 	}
 
 	followerCount, _ := h.Follows.FollowerCount(r.Context(), profile.ID)

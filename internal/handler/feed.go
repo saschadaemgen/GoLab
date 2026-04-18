@@ -11,7 +11,8 @@ import (
 )
 
 type FeedHandler struct {
-	Posts *model.PostStore
+	Posts     *model.PostStore
+	Reactions *model.ReactionStore
 }
 
 func (h *FeedHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +42,14 @@ func (h *FeedHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	if posts == nil {
 		posts = []model.Post{}
+	}
+
+	// Sprint 14: one batch query to attach ReactionCounts +
+	// UserReactionTypes to every post in the page.
+	if h.Reactions != nil {
+		if err := h.Reactions.AttachTo(r.Context(), user.ID, posts); err != nil {
+			slog.Warn("get feed: attach reactions", "error", err)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"posts": posts})

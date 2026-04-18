@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Sprint 14: Multi-reactions and @mentions
+
+#### Added
+
+- GitHub-style multi-emoji reactions. Each user can now place any
+  subset of the 6 emoji types (heart, thumbsup, laugh, surprised,
+  sad, fire) on any post, and every post card renders all six as
+  a persistent chip bar with counts and a per-user highlight.
+- `ReactionStore.StateFor` + `StateForMany` for O(2) batched
+  reaction state across a feed / thread / profile / space / tag
+  page. Feed pages no longer N+1 on reaction counts.
+- `ReactionStore.AttachTo` convenience method - populates
+  `Post.ReactionCounts` and `Post.UserReactionTypes` on a post
+  slice in place.
+- Two indexes on reactions (user_id, created_at DESC) and
+  (reaction_type, created_at DESC) that cover the aggregation
+  queries a later ranking sprint will need.
+- `@mention` system: new `mentions` join table, `MentionStore`
+  with `ExtractUsernames`, `RecordMentions`, `SyncMentions`,
+  `ForUser`, and server-side HTML post-processing via
+  `render.LinkMentions`. `@username` becomes
+  `<a href="/u/username" class="mention">@username</a>` only
+  when the target user exists and is active.
+- `NotifMention` fan-out on post create. Self-mentions do not
+  notify. Edit path uses `SyncMentions` and does not re-notify
+  existing mentions.
+- `GET /api/users/autocomplete?q=` endpoint (RequireAuth, 60/min
+  per user). Prefix match on username, excludes banned and
+  non-active users, limit 8.
+- `quill-mention.js`: vendored, no-deps, ~270 line Quill module
+  that wires typeahead + keyboard nav (up/down/enter/tab/escape)
+  into the compose editor. Dropdown renders above modals.
+- Template helpers `emojiFor`, `reactionTypes`, `contains` so
+  post-card.html can range over the 6 types without hard-coding
+  them in HTML.
+- Pure-function test coverage: `ExtractUsernames` (9 scenarios),
+  `LinkMentions` (6 scenarios), `IsValidReactionType` (positive
+  and negative paths).
+
+#### Changed
+
+- `ReactionStore.Toggle` semantics: removed the "switched" branch.
+  Every call adds or removes one `(user, post, type)` row. The
+  `React` JSON response now returns `{result, user_types, counts}`
+  where counts is a map with all 6 types populated (zero when
+  none). The pre-Sprint-14 `{user_type, count}` shape is gone.
+- Reaction notifications fire on every `ReactAdded` (including a
+  second distinct emoji on the same post) and never on
+  `ReactRemoved`. `NotificationStore.Create` still dedupes within
+  60 seconds so rapid add/remove cycles don't spam the author.
+- Post-card footer: the single heart + count button is replaced
+  by a horizontal chip bar. The old picker popup and its
+  positioning code are gone; chips are inline with delegated
+  click handling and optimistic UI that rolls back on server
+  error. Mobile (below 420px) hides the zero-count label to
+  keep the bar inside a 375px viewport without wrapping.
+
+#### Deprecated
+
+- `ReactionStore.UserReactionType` (single-type getter) stays as
+  a shim returning the first type a user holds. Remove in a
+  future sprint once no caller references it. `UserReactionTypes`
+  is the replacement.
+- `POST /api/posts/:id/unreact` still accepts legacy clients and
+  wipes every reaction the user holds on a post. Every call is
+  logged at Warn with the user agent so the remaining callers
+  can be tracked down.
+
+#### Fixed
+
+- N+1 on reaction counts in the /feed API, /feed page, thread
+  page, profile page, space page, and tag page. Every list now
+  calls `AttachTo` once and fans the result out into view models.
+
+#### Migrations
+
+- `023_reactions_multi_emoji.sql` - drops the old (user_id,
+  post_id) PK, wipes the reactions table (five users, no
+  published content that relied on historical reactions), adds
+  the (user_id, post_id, reaction_type) PK, drops the now-
+  redundant unique-triple index, adds two ranking indexes, and
+  resets `posts.reaction_count` to 0. DOWN is a no-op per the
+  live-DB rule.
+- `024_mentions.sql` - creates the `mentions` join table with
+  FK cascades on both sides and an idx on (mentioned_user,
+  created_at DESC) for "posts that mention me" lookups. DOWN is
+  a no-op.
+
 ### Planned
 
 - Argon2id password hashing migration (Phase 1, 0.2.x)
@@ -14,6 +102,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Email verification on registration
 - 2FA via TOTP
 - Account export (GDPR Art. 20)
+- Ranking UI on top of the Sprint 14 aggregation indexes
+- Email notifications for mentions
+- Group mentions (@admins, @here)
 - Phase 2: SMP transport layer migration (simplex-js + GoBot relay)
 - Phase 2: GoUNITY certificate-based identity
 - Phase 2: Server becomes a blind relay (no plaintext visibility)

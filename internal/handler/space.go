@@ -14,10 +14,11 @@ import (
 // SpaceHandler serves both the /s/:slug HTML page and the /api/spaces
 // JSON endpoint.
 type SpaceHandler struct {
-	Render *render.Engine
-	Spaces *model.SpaceStore
-	Posts  *model.PostStore
-	Tags   *model.TagStore
+	Render    *render.Engine
+	Spaces    *model.SpaceStore
+	Posts     *model.PostStore
+	Tags      *model.TagStore
+	Reactions *model.ReactionStore // Sprint 14: batch-attach reaction state
 }
 
 // validPostTypeQuery matches the briefing: all six post types from the
@@ -76,6 +77,17 @@ func (h *SpaceHandler) SpacePage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Sprint 14: attach reaction state in one batch query.
+	if h.Reactions != nil {
+		var viewerID int64
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			viewerID = u.ID
+		}
+		if err := h.Reactions.AttachTo(r.Context(), viewerID, posts); err != nil {
+			slog.Warn("space page: attach reactions", "error", err)
+		}
+	}
+
 	var popular []model.Tag
 	if h.Tags != nil {
 		popular, _ = h.Tags.ListBySpace(r.Context(), sp.ID, 25)
@@ -113,10 +125,11 @@ func (h *SpaceHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // TagPage renders /t/:slug with all posts carrying that tag.
 type TagHandler struct {
-	Render *render.Engine
-	Tags   *model.TagStore
-	Posts  *model.PostStore
-	Spaces *model.SpaceStore // used by newPageData to populate the space bar
+	Render    *render.Engine
+	Tags      *model.TagStore
+	Posts     *model.PostStore
+	Spaces    *model.SpaceStore // used by newPageData to populate the space bar
+	Reactions *model.ReactionStore
 }
 
 func (h *TagHandler) TagPage(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +151,15 @@ func (h *TagHandler) TagPage(w http.ResponseWriter, r *http.Request) {
 	for i := range posts {
 		if tags, err := h.Tags.ListByPost(r.Context(), posts[i].ID); err == nil {
 			posts[i].Tags = tags
+		}
+	}
+	if h.Reactions != nil {
+		var viewerID int64
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			viewerID = u.ID
+		}
+		if err := h.Reactions.AttachTo(r.Context(), viewerID, posts); err != nil {
+			slog.Warn("tag page: attach reactions", "error", err)
 		}
 	}
 

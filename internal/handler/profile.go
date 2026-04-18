@@ -366,6 +366,58 @@ func (h *ProfileHandler) Follow(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "following"})
 }
 
+// Autocomplete returns up to 8 active users whose username matches
+// the `q` prefix (case-insensitive). Used by the Sprint 14 Quill
+// mention module. Requires auth at the router level; no anonymous
+// autocomplete because usernames are not fully public metadata.
+type autocompleteUser struct {
+	ID          int64  `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar,omitempty"`
+}
+
+func (h *ProfileHandler) Autocomplete(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	// Empty / too-short prefixes return [] rather than every user;
+	// the ILIKE '%' hack would leak the full user table otherwise.
+	if len(q) < 1 {
+		writeJSON(w, http.StatusOK, []autocompleteUser{})
+		return
+	}
+	if len(q) > 32 {
+		q = q[:32]
+	}
+
+	rows, err := h.Users.DB.Query(r.Context(),
+		`SELECT id, username, display_name, avatar_url
+		   FROM users
+		  WHERE LOWER(username) LIKE LOWER($1) || '%'
+		    AND status = 'active'
+		    AND NOT banned
+		  ORDER BY username ASC
+		  LIMIT 8`,
+		q,
+	)
+	if err != nil {
+		slog.Error("autocomplete", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	out := make([]autocompleteUser, 0, 8)
+	for rows.Next() {
+		var u autocompleteUser
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Avatar); err != nil {
+			slog.Error("autocomplete: scan", "error", err)
+			continue
+		}
+		out = append(out, u)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (h *ProfileHandler) Unfollow(w http.ResponseWriter, r *http.Request) {
 	currentUser := auth.UserFromContext(r.Context())
 	username := chi.URLParam(r, "username")

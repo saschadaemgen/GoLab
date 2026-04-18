@@ -36,6 +36,14 @@ type Post struct {
 
 	// Populated on demand (not by SELECT) - use TagStore.ListByPost.
 	Tags []Tag `json:"tags,omitempty"`
+
+	// Sprint 14 multi-reaction fields. Populated by feed / thread
+	// handlers via ReactionStore.StateForMany; nil on naked reads
+	// so templates must guard with `{{ if .ReactionCounts }}` or
+	// use the fallback in post-card.html. Counts has every allowed
+	// emoji type as key with a zero value when the post has none.
+	ReactionCounts    map[string]int `json:"reaction_counts,omitempty"`
+	UserReactionTypes []string       `json:"user_reaction_types,omitempty"`
 }
 
 type PostStore struct {

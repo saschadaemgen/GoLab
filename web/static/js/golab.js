@@ -673,6 +673,19 @@
             self.charCount = self.textLength();
           });
 
+          // Sprint 14: attach @mention autocomplete. The module
+          // is vendored in quill-mention.js and exposed as the
+          // GolabQuillMention global. We tie it to this Alpine
+          // component's lifecycle so teardown cleans up listeners
+          // (see destroy path below for the .destroy() call).
+          if (typeof window.GolabQuillMention === 'function') {
+            try {
+              this.mention = new window.GolabQuillMention(this.quill, {
+                fetchUrl: '/api/users/autocomplete'
+              });
+            } catch (err) { /* autocomplete is best-effort */ }
+          }
+
           // Paste a .gif URL -> convert to an <img> embed automatically.
           // Quill's matchers fire during clipboard processing so the URL
           // never lands as plain text first.
@@ -792,6 +805,13 @@
         // removed from DOM, HTMX swap, etc). Clearing the mount flag lets
         // the next incarnation mount a fresh Quill.
         destroy: function () {
+          // Sprint 14: tear down the mention autocomplete so its
+          // document-level listeners and dropdown element don't
+          // leak past the editor.
+          if (this.mention && typeof this.mention.destroy === 'function') {
+            try { this.mention.destroy(); } catch (e) {}
+          }
+          this.mention = null;
           var container = this.$refs && this.$refs.editor;
           if (container) {
             delete container.__quillMounted;
@@ -1328,12 +1348,12 @@
       }
 
       if (action === 'react') {
-        // Sprint 10.5: clicking the react button opens a quick picker
-        // with 6 emoji types. The old "like toggle" behaviour becomes
-        // one of those 6 (heart).
+        // Sprint 14: every emoji chip carries its own data-action="react"
+        // and data-reaction-type. Clicking toggles that specific triple
+        // on the server and updates the chip inline - no popup picker.
         el.addEventListener('click', function (e) {
           e.stopPropagation();
-          openReactionPicker(el);
+          submitReaction(el);
         });
       }
 
@@ -1668,103 +1688,91 @@
     bindAll();
   });
 
-  // ---------- Sprint 10.5 reaction quick picker ----------
+  // ---------- Sprint 14 multi-reaction chip handler ----------
   //
-  // The 6 types match the server's allowedReactionTypes map. Clicking
-  // a type toggles the user's reaction via POST /api/posts/:id/react.
-  // The server enforces one reaction per user per post; clicking the
-  // currently-held type removes it, a different type switches it.
+  // Each .reaction-chip carries data-post-id and data-reaction-type
+  // and invokes submitReaction on click. The server response returns
+  // the full post state (all 6 counts + the caller's active types),
+  // which we fold back into every chip in the same bar. Optimistic
+  // UI toggles the clicked chip immediately and rolls back on error.
+  // A custom event golab:reaction-updated fires on success so future
+  // ranking widgets can hook without touching this code.
 
-  var REACTION_EMOJI = {
-    heart:     '\u{2764}\u{FE0F}',
-    thumbsup:  '\u{1F44D}',
-    laugh:     '\u{1F602}',
-    surprised: '\u{1F62E}',
-    sad:       '\u{1F622}',
-    fire:      '\u{1F525}'
-  };
-  var REACTION_ORDER = ['heart', 'thumbsup', 'laugh', 'surprised', 'sad', 'fire'];
+  function submitReaction(chip) {
+    var postId = chip.dataset.postId;
+    var type   = chip.dataset.reactionType;
+    if (!postId || !type) return;
 
-  function openReactionPicker(anchor) {
-    var existing = document.querySelector('.reaction-picker');
-    if (existing) { existing.remove(); return; }
+    var bar = chip.closest('.reaction-bar');
+    if (!bar) return;
 
-    var postId = anchor.dataset.postId;
-    if (!postId) return;
+    // Optimistic toggle so the click feels instant. We remember the
+    // pre-click state to roll back on network / server error.
+    var wasActive = chip.classList.contains('is-active');
+    chip.classList.toggle('is-active', !wasActive);
+    chip.setAttribute('aria-pressed', String(!wasActive));
+    var countEl = chip.querySelector('.reaction-count');
+    var prevCount = parseInt(countEl && countEl.textContent, 10) || 0;
+    var optimisticCount = wasActive ? Math.max(0, prevCount - 1) : prevCount + 1;
+    if (countEl) {
+      countEl.textContent = String(optimisticCount);
+      chip.classList.toggle('is-empty', optimisticCount === 0);
+    }
 
-    var panel = document.createElement('div');
-    panel.className = 'reaction-picker';
-
-    REACTION_ORDER.forEach(function (type) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'reaction-picker-item';
-      b.title = type;
-      b.textContent = REACTION_EMOJI[type];
-      b.addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        panel.remove();
-        submitReaction(anchor, postId, type);
-      });
-      panel.appendChild(b);
-    });
-
-    // Anchor above the react button.
-    var rect = anchor.getBoundingClientRect();
-    panel.style.top = (rect.top + window.scrollY - 48) + 'px';
-    panel.style.left = (rect.left + window.scrollX) + 'px';
-    document.body.appendChild(panel);
-
-    setTimeout(function () {
-      var closer = function (e) {
-        if (!panel.contains(e.target) && e.target !== anchor) {
-          panel.remove();
-          document.removeEventListener('click', closer);
-          document.removeEventListener('keydown', keyCloser);
-        }
-      };
-      var keyCloser = function (e) {
-        if (e.key === 'Escape') {
-          panel.remove();
-          document.removeEventListener('click', closer);
-          document.removeEventListener('keydown', keyCloser);
-        }
-      };
-      document.addEventListener('click', closer);
-      document.addEventListener('keydown', keyCloser);
-    }, 10);
-  }
-
-  function submitReaction(anchor, postId, type) {
     apiJSON('/api/posts/' + postId + '/react', 'POST', { reaction_type: type })
       .then(function (res) {
         if (!res.ok) {
+          // Roll back the optimistic update.
+          chip.classList.toggle('is-active', wasActive);
+          chip.setAttribute('aria-pressed', String(wasActive));
+          if (countEl) {
+            countEl.textContent = String(prevCount);
+            chip.classList.toggle('is-empty', prevCount === 0);
+          }
           toast('error', (res.data && res.data.error) || 'Could not react');
           return;
         }
-        // Update the button visuals from the server response.
         var data = res.data || {};
-        anchor.classList.toggle('active', !!data.user_type);
-        var icon = anchor.querySelector('.reaction-icon');
-        var heart = anchor.querySelector('.reaction-heart');
-        if (data.user_type) {
-          if (icon) icon.textContent = REACTION_EMOJI[data.user_type] || '';
-          if (heart) heart.style.display = 'none';
-        } else {
-          if (icon) icon.textContent = '';
-          if (heart) heart.style.display = '';
-        }
-        var counter = anchor.querySelector('.reaction-count, #react-count-' + postId);
-        if (counter && typeof data.count === 'number') {
-          counter.textContent = data.count;
-          counter.classList.add('number-bump');
-          setTimeout(function () { counter.classList.remove('number-bump'); }, 320);
-        }
-        // Heart-pop micro animation
-        anchor.classList.add('heart-pop');
-        setTimeout(function () { anchor.classList.remove('heart-pop'); }, 400);
+        var counts = data.counts || {};
+        var userTypes = data.user_types || [];
+
+        // Sync every chip in the bar from the authoritative server
+        // state. Optimistic value may have been wrong if the server
+        // deduped a concurrent reaction.
+        bar.querySelectorAll('.reaction-chip').forEach(function (other) {
+          var t = other.dataset.reactionType;
+          var n = counts[t];
+          if (typeof n === 'number') {
+            var otherCount = other.querySelector('.reaction-count');
+            if (otherCount) {
+              var before = parseInt(otherCount.textContent, 10) || 0;
+              otherCount.textContent = String(n);
+              if (n !== before) {
+                otherCount.classList.add('bump');
+                setTimeout(function () { otherCount.classList.remove('bump'); }, 340);
+              }
+            }
+            other.classList.toggle('is-empty', n === 0);
+          }
+          var active = userTypes.indexOf(t) >= 0;
+          other.classList.toggle('is-active', active);
+          other.setAttribute('aria-pressed', String(active));
+        });
+
+        window.dispatchEvent(new CustomEvent('golab:reaction-updated', {
+          detail: { postId: postId, type: type, result: data.result,
+                    counts: counts, userTypes: userTypes }
+        }));
       })
-      .catch(function () { toast('error', 'Network error'); });
+      .catch(function () {
+        chip.classList.toggle('is-active', wasActive);
+        chip.setAttribute('aria-pressed', String(wasActive));
+        if (countEl) {
+          countEl.textContent = String(prevCount);
+          chip.classList.toggle('is-empty', prevCount === 0);
+        }
+        toast('error', 'Network error');
+      });
   }
 
   // ---------- image lightbox ----------
