@@ -4,10 +4,25 @@
 {{ $currentUser := .User }}
 {{ $powerLevel := 0 }}
 {{ if $currentUser }}{{ $powerLevel = $currentUser.PowerLevel }}{{ end }}
+{{/*
+  Sprint 15a B4: this form used to have method="POST" action="/api/posts"
+  as a no-JS fallback. Combined with the body-level hx-boost="true" on
+  base.html, htmx intercepted every submit and fired its own XHR in
+  parallel with Alpine's @submit.prevent -> submit() path. Network
+  tab then showed TWO requests: Alpine's correct JSON POST (content
+  in body) and htmx's form-encoded POST (only the named inputs -
+  post_type, tags, space_id - no content because Quill's editable
+  div has no `name` attribute). The server rejected the second one
+  with 400 after every successful post.
+
+  Fix: the form is JS-driven, period. No action, no method, and
+  hx-boost="false" stops htmx from treating the form as a boost
+  target. If JS ever fails to load, the button simply does nothing
+  instead of leaking a half-populated native submit.
+*/}}
 <form id="compose-form"
-      method="POST"
-      action="/api/posts"
       class="compose-box compose-quill"
+      hx-boost="false"
       x-data="composeEditor({ powerLevel: {{ $powerLevel }} })"
       @submit.prevent="submit()">
 
