@@ -1408,13 +1408,22 @@
 
       if (action === 'delete-post') {
         el.addEventListener('click', function () {
-          if (!confirm('Delete this post?')) return;
+          if (!confirm('Delete this post? This cannot be undone.')) return;
           var id = el.dataset.postId;
           apiJSON('/api/posts/' + id, 'DELETE', null).then(function (res) {
             if (res.ok) {
+              // Sprint 15a B5: fade the card out locally. The server
+              // WS broadcast also removes it for every other open
+              // feed via the post_deleted case in handleWSMessage,
+              // so a peer browser sees the same animation.
               var card = document.getElementById('post-' + id);
-              if (card) card.remove();
+              if (card) {
+                card.classList.add('post-leave');
+                setTimeout(function () { card.remove(); }, 220);
+              }
               toast('info', 'Post deleted');
+            } else {
+              toast('error', (res.data && res.data.error) || 'Could not delete post');
             }
           });
         });
@@ -1674,6 +1683,19 @@
     switch (msg.type) {
       case 'new_post':
         injectNewPost(msg.html);
+        break;
+      case 'post_deleted':
+        // Sprint 15a B5: remove the card when another user deletes
+        // a post we're looking at. Server sends msg.data.id as the
+        // post id; we match on DOM id `post-<n>` which post-card.html
+        // writes when the card is rendered.
+        if (msg.data && msg.data.id != null) {
+          var card = document.getElementById('post-' + msg.data.id);
+          if (card) {
+            card.classList.add('post-leave');
+            setTimeout(function () { card.remove(); }, 220);
+          }
+        }
         break;
       case 'notification':
         toast(msg.data && msg.data.level ? msg.data.level : 'info', msg.message || '');

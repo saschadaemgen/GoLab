@@ -798,6 +798,16 @@ img.avatar {
   transform: translateY(0);
   transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* Sprint 15a B5: symmetric leave animation when a post is deleted
+   locally OR removed by a post_deleted WS event on another client.
+   Short transition so the DOM clears well before the 220ms setTimeout
+   in the click / WS handler fires remove(). */
+.post-leave {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
 
 /* Like / heart pop */
 .heart-pop { animation: heartPop 0.4s cubic-bezier(0.4, 0, 0.2, 1); }

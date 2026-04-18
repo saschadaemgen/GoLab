@@ -342,10 +342,27 @@ func (h *PostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pull the channel slug BEFORE deleting so we can broadcast to
+	// the right WS room. Best-effort: if the lookup fails or the
+	// post was never tied to a channel, we just skip the channel
+	// topic and broadcast to "global" only.
+	var channelSlug string
+	if post, err := h.Posts.FindByID(r.Context(), id); err == nil && post != nil && post.ChannelID != nil {
+		if ch, err := h.Channels.FindByID(r.Context(), *post.ChannelID); err == nil && ch != nil {
+			channelSlug = ch.Slug
+		}
+	}
+
 	if err := h.Posts.Delete(r.Context(), id, user.ID); err != nil {
 		slog.Error("delete post", "error", err)
 		writeError(w, http.StatusNotFound, "post not found or not owned by you")
 		return
+	}
+
+	// Sprint 15a B5: fan out a post_deleted event so every open
+	// feed removes the zombie card without a reload.
+	if h.Hub != nil {
+		h.Hub.PublishPostDeleted(id, channelSlug)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
