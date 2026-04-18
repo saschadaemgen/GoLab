@@ -1699,12 +1699,14 @@
     if (!html) return;
     var feed = document.getElementById('feed-posts');
     if (!feed) return;
-    // Skip if already present
     var temp = document.createElement('div');
     temp.innerHTML = html.trim();
     var newCard = temp.firstElementChild;
     if (!newCard) return;
-    if (document.getElementById(newCard.id)) return;
+    // Skip if we already rendered this post (can happen when the
+    // sender's own socket echoes the broadcast back).
+    if (newCard.id && document.getElementById(newCard.id)) return;
+
     newCard.classList.add('post-enter');
     feed.insertBefore(newCard, feed.firstChild);
     requestAnimationFrame(function () {
@@ -1714,7 +1716,21 @@
         newCard.classList.remove('post-enter-active');
       }, 400);
     });
-    // Rebind actions for the new card
+
+    // Sprint 15a B2 / B3: walk the new subtree with Alpine so every
+    // x-data on the injected card (post actions menu, reaction bar
+    // state, reply compose forms) initialises. Without this the
+    // three-dot dropdown stays dead until a full page reload.
+    // Alpine.initTree is a no-op on trees already initialised, so
+    // running it on the subtree is safe even if Alpine ever walked
+    // it earlier through some other mechanism.
+    if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+      try { window.Alpine.initTree(newCard); } catch (e) {
+        console.error('Alpine.initTree failed on new post card', e);
+      }
+    }
+    // Bind data-action click handlers (react chips, delete, etc.)
+    // on the new card. bindActions is idempotent via dataset.bound.
     bindActions();
   }
 
