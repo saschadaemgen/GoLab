@@ -1,14 +1,15 @@
 package handler
 
-// Sprint 13 admin database management. Five endpoints:
+// Sprint 13 admin database management. Six endpoints:
 //
-//   POST /api/admin/db/backup                       - run pg_dump, save to /opt/backups/
-//   GET  /api/admin/db/export                       - run pg_dump, stream as .sql download
-//   POST /api/admin/db/import                       - multipart upload, auto-backup, psql < file
-//   GET  /api/admin/db/backups                      - list existing backups
-//   GET  /api/admin/db/backups/{filename}/download  - download one saved backup
+//   POST   /api/admin/db/backup                       - run pg_dump, save to /opt/backups/
+//   GET    /api/admin/db/export                       - run pg_dump, stream as .sql download
+//   POST   /api/admin/db/import                       - multipart upload, auto-backup, psql < file
+//   GET    /api/admin/db/backups                      - list existing backups
+//   GET    /api/admin/db/backups/{filename}/download  - download one saved backup
+//   DELETE /api/admin/db/backups/{filename}           - delete one saved backup
 //
-// All five require admin (RequireAdmin middleware in the router).
+// All six require admin (RequireAdmin middleware in the router).
 // Import additionally requires Owner (power_level == 100, id == 1).
 //
 // Security notes:
@@ -495,4 +496,60 @@ func (h *DBHandler) DownloadBackup(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, f); err != nil {
 		slog.Error("download backup: stream", "error", err, "name", name)
 	}
+}
+
+// DeleteBackup removes a single saved backup file from BackupDir.
+// Uses the same path-traversal gate as DownloadBackup: only
+// golab-*.sql files directly inside BackupDir are deletable; every
+// other name returns 400 long before hitting the filesystem.
+//
+// Logged at Warn level with actor id so we can reconstruct "who
+// deleted what" from container logs if we ever have to.
+func (h *DBHandler) DeleteBackup(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "filename")
+	if !isSafeBackupName(name) {
+		writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	dir := h.backupDir()
+	cleanDir := filepath.Clean(dir)
+	cleanPath := filepath.Clean(filepath.Join(dir, name))
+	if filepath.Dir(cleanPath) != cleanDir {
+		writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, "backup not found")
+			return
+		}
+		slog.Error("delete backup: stat", "error", err, "name", name)
+		writeError(w, http.StatusInternalServerError, "could not read backup")
+		return
+	}
+	if !info.Mode().IsRegular() {
+		writeError(w, http.StatusBadRequest, "not a regular file")
+		return
+	}
+
+	actor := auth.UserFromContext(r.Context())
+	if err := os.Remove(cleanPath); err != nil {
+		slog.Error("delete backup: remove", "error", err, "name", name)
+		writeError(w, http.StatusInternalServerError, "could not delete backup")
+		return
+	}
+	var actorID int64
+	if actor != nil {
+		actorID = actor.ID
+	}
+	slog.Warn("admin backup deleted",
+		"actor_id", actorID, "name", name, "size", info.Size())
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status": "deleted",
+		"name":   name,
+	})
 }

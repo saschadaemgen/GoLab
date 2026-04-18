@@ -200,23 +200,30 @@
   <section class="admin-section admin-db" x-data="dbManager()" x-init="loadBackups()">
     <h2>Database</h2>
     <p class="admin-section-intro">
-      Manual backup, download, and recovery tools. All operations run
-      inside the app container against the <code>db</code> Postgres
-      service.
+      Manual backup and recovery. All operations run inside the app
+      container against the <code>db</code> Postgres service.
+      Per-file download and delete buttons live in the table below.
     </p>
 
+    {{/* Sprint 13: two primary actions side by side. Export lives
+         in the table as a per-row download button now; one global
+         "give me the whole DB" was redundant. Import is Owner-only
+         (id=1) and only rendered for the Owner. Non-owners see
+         just the Create-backup button, equally sized. */}}
     <div class="admin-db-actions">
-      <button type="button" class="btn btn-primary press-effect"
+      <button type="button" class="btn btn-primary press-effect admin-db-action-btn"
               @click="createBackup()"
               :disabled="busy">
         <span x-show="!busy || action !== 'backup'" x-cloak>Create backup</span>
         <span x-show="busy && action === 'backup'" x-cloak>Creating...</span>
       </button>
-      <a href="/api/admin/db/export"
-         class="btn btn-outline press-effect"
-         download>
-        Export (download .sql)
-      </a>
+      {{ if $.User }}{{ if eq $.User.ID 1 }}
+      <button type="button" class="btn btn-danger press-effect admin-db-action-btn"
+              @click="openImportModal()"
+              :disabled="busy">
+        Import...
+      </button>
+      {{ end }}{{ end }}
     </div>
 
     <div class="admin-db-backups">
@@ -227,7 +234,7 @@
       <template x-if="loading">
         <p class="muted">Loading...</p>
       </template>
-      <div class="admin-table-wrap" x-show="backups.length > 0" x-cloak>
+      <div class="admin-db-table-wrap" x-show="backups.length > 0" x-cloak>
         <table class="admin-table admin-db-table">
           <thead>
             <tr>
@@ -238,7 +245,7 @@
             </tr>
           </thead>
           <tbody>
-            <template x-for="b in backups" :key="b.name">
+            <template x-for="b in pagedBackups()" :key="b.name">
               <tr>
                 <td class="mono admin-db-cell-name" x-text="b.name"></td>
                 <td class="mono muted" x-text="formatSize(b.size)"></td>
@@ -257,66 +264,98 @@
                       <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
                   </a>
+                  <button type="button"
+                          class="admin-db-icon-btn admin-db-icon-danger press-effect tooltip"
+                          data-tooltip="Delete"
+                          :aria-label="'Delete ' + b.name"
+                          @click="openDeleteConfirm(b.name)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                      <path d="M10 11v6M14 11v6"/>
+                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
                 </td>
               </tr>
             </template>
           </tbody>
         </table>
       </div>
+
+      {{/* Pagination: only visible when there's more than one page.
+           Alpine drives the page list client-side since 100 rows of
+           backup metadata is cheap to keep in memory. */}}
+      <nav class="admin-db-pagination"
+           x-show="totalPages() > 1"
+           x-cloak
+           aria-label="Backup pages">
+        <button type="button"
+                class="admin-db-page-btn"
+                :disabled="currentPage <= 1"
+                @click="goToPage(currentPage - 1)"
+                aria-label="Previous page">&lsaquo;</button>
+        <template x-for="p in pageList()" :key="p">
+          <button type="button"
+                  class="admin-db-page-btn"
+                  :class="{ 'is-current': p === currentPage }"
+                  :aria-current="p === currentPage ? 'page' : null"
+                  @click="goToPage(p)"
+                  x-text="p"></button>
+        </template>
+        <button type="button"
+                class="admin-db-page-btn"
+                :disabled="currentPage >= totalPages()"
+                @click="goToPage(currentPage + 1)"
+                aria-label="Next page">&rsaquo;</button>
+      </nav>
     </div>
 
+    {{/* Import modal. Opens from the "Import..." action button and
+         holds the file picker + CONFIRM gate + warning in one
+         dialog so the dangerous path is visually contained. */}}
     {{ if $.User }}{{ if eq $.User.ID 1 }}
-    <div class="admin-db-import">
-      <h3 class="admin-db-sub">Import database</h3>
-      <p class="admin-db-warning">
-        <strong>Danger.</strong> Importing replaces every table in the
-        current database. A pre-import backup is created automatically
-        and the action is logged, but this cannot be undone without
-        that backup.
-      </p>
+    <div class="admin-db-modal-backdrop" x-show="importOpen" x-cloak
+         @click.self="closeImportModal()"
+         x-transition.opacity>
+      <div class="admin-db-modal admin-db-modal-danger">
+        <h3>Import database</h3>
+        <p class="admin-db-warning">
+          <strong>Danger.</strong> Importing replaces every table in
+          the current database. A pre-import backup is created
+          automatically and the action is logged, but this cannot be
+          undone without that backup.
+        </p>
 
-      <form @submit.prevent="openImportConfirm($event)">
+        <label class="admin-db-field-label">Backup file (.sql)</label>
         <input type="file" accept=".sql,application/sql" x-ref="importFile"
                class="admin-db-file"
-               @change="selectedName = $event.target.files[0] ? $event.target.files[0].name : ''">
-        <span class="admin-db-filename mono muted" x-text="selectedName" x-show="selectedName" x-cloak></span>
-        <button type="submit" class="btn btn-danger press-effect"
-                :disabled="!selectedName || busy">
-          Import...
-        </button>
-      </form>
-    </div>
+               @change="importFileName = $event.target.files[0] ? $event.target.files[0].name : ''">
+        <div class="admin-db-filename mono muted"
+             x-text="importFileName"
+             x-show="importFileName" x-cloak></div>
 
-    <!-- Confirm modal: user must type CONFIRM before the import runs.
-         Rendered in the DOM always so x-show transitions work, but
-         hidden via x-show when not open. -->
-    <div class="admin-db-modal-backdrop" x-show="confirmOpen" x-cloak
-         @click.self="confirmOpen = false"
-         x-transition.opacity>
-      <div class="admin-db-modal">
-        <h3>Confirm database import</h3>
-        <p>
-          This will <strong>replace ALL current data</strong> with the
-          contents of <code x-text="selectedName || 'the uploaded file'"></code>.
-          This cannot be undone.
-        </p>
-        <p>A pre-import backup will be written to <code>/opt/backups/</code> first.</p>
-        <p>Type <code>CONFIRM</code> below to proceed.</p>
+        <label class="admin-db-field-label">Type <code>CONFIRM</code> to proceed</label>
         <input type="text" class="form-input admin-db-confirm"
-               x-model="confirmText"
+               x-model="importConfirmText"
                placeholder="CONFIRM"
                autocomplete="off"
                spellcheck="false">
-        <div x-show="error" x-cloak class="flash flash-error admin-db-modal-error"
-             x-text="error"></div>
+
+        <div x-show="importError" x-cloak
+             class="flash flash-error admin-db-modal-error"
+             x-text="importError"></div>
+
         <div class="admin-db-modal-actions">
           <button type="button" class="btn btn-outline press-effect"
-                  @click="confirmOpen = false; confirmText = ''; error = ''">
+                  @click="closeImportModal()">
             Cancel
           </button>
           <button type="button" class="btn btn-danger press-effect"
                   @click="runImport()"
-                  :disabled="confirmText !== 'CONFIRM' || busy">
+                  :disabled="!importFileName || importConfirmText !== 'CONFIRM' || busy">
             <span x-show="!busy || action !== 'import'" x-cloak>Replace database</span>
             <span x-show="busy && action === 'import'" x-cloak>Importing...</span>
           </button>
@@ -324,6 +363,33 @@
       </div>
     </div>
     {{ end }}{{ end }}
+
+    {{/* Delete-backup confirm. Small, single-click confirmation;
+         the file is already re-downloadable so we don't need a
+         typing gate the way Import does. */}}
+    <div class="admin-db-modal-backdrop" x-show="deleteOpen" x-cloak
+         @click.self="closeDeleteConfirm()"
+         x-transition.opacity>
+      <div class="admin-db-modal admin-db-modal-small">
+        <h3>Delete backup?</h3>
+        <p>This permanently removes <code x-text="deleteTarget"></code> from the server. This cannot be undone.</p>
+
+        <div x-show="deleteError" x-cloak
+             class="flash flash-error admin-db-modal-error"
+             x-text="deleteError"></div>
+
+        <div class="admin-db-modal-actions">
+          <button type="button" class="btn btn-outline press-effect"
+                  @click="closeDeleteConfirm()">Cancel</button>
+          <button type="button" class="btn btn-danger press-effect"
+                  @click="runDelete()"
+                  :disabled="busy">
+            <span x-show="!busy || action !== 'delete'" x-cloak>Delete</span>
+            <span x-show="busy && action === 'delete'" x-cloak>Deleting...</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </section>
   {{ end }}
 </div>

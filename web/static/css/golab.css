@@ -3196,15 +3196,28 @@ img.avatar {
   padding: 0 0.3em;
   font-size: 0.85em;
 }
-/* Action bar: Create-backup + Export buttons side-by-side. flex-wrap
-   keeps them readable on narrow viewports (they drop to a second
-   row only below ~380px). */
+/* Action bar: "Create backup" + "Import..." buttons side-by-side,
+   same width. flex: 1 1 0 on each button makes them share the row
+   equally; the row itself is capped at 26rem so they don't stretch
+   across the whole dashboard on ultrawide screens. Wraps to a
+   column on very narrow viewports via flex-wrap. */
 .admin-db-actions {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
-  align-items: center;
-  margin-bottom: 1.25rem;
+  align-items: stretch;
+  margin-bottom: 1.5rem;
+  max-width: 26rem;
+}
+.admin-db-action-btn {
+  flex: 1 1 10rem;
+}
+/* Non-owners see just one button; don't stretch it across the whole
+   max-width or it reads like a dead-man's switch. :has() has been
+   stable in every evergreen browser since 2023; if it's not supported
+   the button just ends up wider, which is harmless. */
+.admin-db-actions:has(> .admin-db-action-btn:only-child) .admin-db-action-btn {
+  flex: 0 0 auto;
 }
 .admin-db-sub {
   font-size: 1rem;
@@ -3218,9 +3231,24 @@ img.avatar {
 }
 
 /* Recent-backups table. Uses the admin-table chassis so column
-   sizing and borders stay consistent with the users table above. */
+   sizing and borders stay consistent with the users table above.
+   The .admin-db-table-wrap override drops the forced 600px
+   min-width + overflow-x: auto from the generic admin-table-wrap
+   because backup names wrap naturally and we don't want a
+   permanent horizontal scrollbar on this table. */
+.admin-db-table-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
 .admin-db-table {
+  width: 100%;
+  min-width: 0;
   font-size: 0.875rem;
+  border-collapse: collapse;
+}
+.admin-db-table tbody tr:last-child td {
+  border-bottom: none;
 }
 .admin-db-table th {
   font-family: 'JetBrains Mono', monospace;
@@ -3246,11 +3274,18 @@ img.avatar {
 .admin-db-cell-actions {
   text-align: right;
   white-space: nowrap;
+  display: flex;
+  gap: 0.3rem;
+  justify-content: flex-end;
+}
+.admin-db-th-actions {
+  width: 6rem;
+  text-align: right;
 }
 
-/* Icon-only button used for the per-row Download action. Matches
-   the look of other ghost buttons (transparent bg, subtle border
-   on hover) so the table stays quiet until the user reaches for a
+/* Icon-only button used for per-row Download / Delete actions. Matches
+   the look of other ghost buttons (transparent bg, subtle border on
+   hover) so the table stays quiet until the user reaches for a
    specific row. */
 .admin-db-icon-btn {
   display: inline-flex;
@@ -3260,8 +3295,10 @@ img.avatar {
   height: 2rem;
   border-radius: var(--radius-sm, 6px);
   border: 1px solid transparent;
+  background: transparent;
   color: var(--text-dim);
   text-decoration: none;
+  cursor: pointer;
   transition: border-color var(--transition, 0.15s ease),
               color var(--transition, 0.15s ease),
               background var(--transition, 0.15s ease);
@@ -3276,25 +3313,66 @@ img.avatar {
 .admin-db-icon-btn svg {
   display: block;
 }
-
-/* Import block: fenced off visually in red so nobody clicks it by
-   accident. The extra margin-top + borderfull separate it clearly
-   from the Recent-backups table above. */
-.admin-db-import {
-  margin-top: 2rem;
-  padding: 1rem 1.1rem 1.1rem;
-  border: 1px solid var(--danger);
-  border-radius: var(--radius-sm);
-  background: rgba(220, 50, 50, 0.04);
-}
-.admin-db-import .admin-db-sub {
+/* Delete variant: red on hover to make the destructive action
+   obvious before the click, not after. */
+.admin-db-icon-btn.admin-db-icon-danger:hover,
+.admin-db-icon-btn.admin-db-icon-danger:focus-visible {
   color: var(--danger);
-  margin-top: 0;
+  background: rgba(220, 50, 50, 0.08);
+  border-color: var(--danger);
 }
+
+/* Pagination: < 1 2 3 > row below the table. Small square buttons
+   in the same design language as the icon buttons above. Hidden
+   entirely when there's only one page. */
+.admin-db-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.85rem;
+  flex-wrap: wrap;
+}
+.admin-db-page-btn {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--transition, 0.15s ease),
+              color var(--transition, 0.15s ease),
+              background var(--transition, 0.15s ease);
+}
+.admin-db-page-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.admin-db-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.admin-db-page-btn.is-current {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg, #000);
+  font-weight: 600;
+}
+
+/* Import flow moved into a modal (see .admin-db-modal-danger); the
+   old inline-red-box .admin-db-import block is gone. .admin-db-warning
+   is the danger paragraph shown at the top of that modal. */
 .admin-db-warning {
   color: var(--text);
   font-size: 0.9rem;
   margin: 0 0 0.85rem;
+}
+.admin-db-warning strong {
+  color: var(--danger);
 }
 .admin-db-file {
   display: block;
@@ -3322,13 +3400,36 @@ img.avatar {
   padding: 1rem;
 }
 .admin-db-modal {
-  background: var(--surface);
+  background: var(--bg-card, var(--surface));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.25rem 1.25rem 1rem;
   max-width: 480px;
   width: 100%;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+/* Import modal variant: red border emphasises the danger zone.
+   Small variant for the delete confirm: less padding, narrower. */
+.admin-db-modal-danger {
+  border-color: var(--danger);
+}
+.admin-db-modal-small {
+  max-width: 380px;
+  padding: 1rem 1.1rem 0.9rem;
+}
+.admin-db-field-label {
+  display: block;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.admin-db-field-label code {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent);
 }
 .admin-db-modal h3 {
   margin: 0 0 0.75rem;

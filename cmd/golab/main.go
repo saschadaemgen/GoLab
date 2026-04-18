@@ -399,6 +399,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			// are expensive; the handler timeouts keep abuse bounded.
 			r.Get("/admin/db/backups", dbH.ListBackups)
 			r.Get("/admin/db/backups/{filename}/download", dbH.DownloadBackup)
+			r.Delete("/admin/db/backups/{filename}", dbH.DeleteBackup)
 			r.Post("/admin/db/backup", dbH.Backup)
 			r.Get("/admin/db/export", dbH.Export)
 			r.Post("/admin/db/import", dbH.Import)

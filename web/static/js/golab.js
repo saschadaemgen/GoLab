@@ -310,21 +310,38 @@
     });
 
     // Sprint 13: admin Database panel. Lists recent backups, creates
-    // new ones, and drives the import confirmation modal. Every
-    // network call here hits /api/admin/db/*; RequireAdmin middleware
-    // upstream blocks non-admins, Owner-only gate for import is both
-    // server-side AND visual (the import card is wrapped in a
-    // template guard).
+    // new ones, drives the import modal (with CONFIRM typing gate),
+    // drives the per-row delete confirm, and paginates the list at
+    // 10 rows per page. Every network call here hits /api/admin/db/*;
+    // RequireAdmin middleware upstream blocks non-admins, Owner-only
+    // gate for import is both server-side AND visual (the import
+    // button is wrapped in a Go-template guard).
     window.Alpine.data('dbManager', function () {
       return {
         backups: [],
         loading: false,
         busy: false,
-        action: '',           // 'backup' | 'import' | '' - what's in flight
-        confirmOpen: false,
-        confirmText: '',
-        selectedName: '',
-        error: '',
+        action: '',           // 'backup' | 'import' | 'delete' | ''
+
+        // Pagination - everything client-side. 10 per page is enough
+        // to keep the table short; the API returns at most 50 entries
+        // so 5 pages is the worst case.
+        perPage: 10,
+        currentPage: 1,
+
+        // Import modal state.
+        importOpen: false,
+        importConfirmText: '',
+        importFileName: '',
+        importError: '',
+
+        // Delete-confirm modal state.
+        deleteOpen: false,
+        deleteTarget: '',
+        deleteError: '',
+
+        // ------- list loading + pagination helpers -------
+
         loadBackups: function () {
           var self = this;
           self.loading = true;
@@ -333,9 +350,38 @@
             .then(function (d) {
               self.loading = false;
               self.backups = (d && d.backups) || [];
+              // Clamp currentPage if a delete or refresh shrinks the list.
+              var total = self.totalPages();
+              if (self.currentPage > total) self.currentPage = total || 1;
             })
             .catch(function () { self.loading = false; });
         },
+        totalPages: function () {
+          if (!this.backups || this.backups.length === 0) return 1;
+          return Math.max(1, Math.ceil(this.backups.length / this.perPage));
+        },
+        pagedBackups: function () {
+          var start = (this.currentPage - 1) * this.perPage;
+          return this.backups.slice(start, start + this.perPage);
+        },
+        pageList: function () {
+          // For now we render every page number. With 50 max backups
+          // at 10 per page we get at most 5 buttons - no need for
+          // ellipsis logic yet. Revisit if the cap ever rises.
+          var n = this.totalPages();
+          var out = [];
+          for (var i = 1; i <= n; i++) out.push(i);
+          return out;
+        },
+        goToPage: function (p) {
+          if (p < 1) p = 1;
+          var max = this.totalPages();
+          if (p > max) p = max;
+          this.currentPage = p;
+        },
+
+        // ------- create backup -------
+
         createBackup: function () {
           var self = this;
           if (self.busy) return;
@@ -350,28 +396,34 @@
             }
           });
         },
-        openImportConfirm: function () {
-          // The file is staged via x-ref in the template. Just flip
-          // the modal open and wait for the CONFIRM typing gate.
-          if (!this.$refs.importFile || !this.$refs.importFile.files ||
-              !this.$refs.importFile.files[0]) {
-            toast('error', 'Pick a .sql file first');
-            return;
-          }
-          this.confirmText = '';
-          this.error = '';
-          this.confirmOpen = true;
+
+        // ------- import modal -------
+
+        openImportModal: function () {
+          this.importOpen = true;
+          this.importConfirmText = '';
+          this.importError = '';
+          this.importFileName = '';
+          // Clear any previously staged file so re-opening starts fresh.
+          if (this.$refs.importFile) this.$refs.importFile.value = '';
+        },
+        closeImportModal: function () {
+          this.importOpen = false;
+          this.importConfirmText = '';
+          this.importError = '';
+          this.importFileName = '';
+          if (this.$refs.importFile) this.$refs.importFile.value = '';
         },
         runImport: function () {
           var self = this;
-          if (self.confirmText !== 'CONFIRM' || self.busy) return;
+          if (self.importConfirmText !== 'CONFIRM' || self.busy) return;
           var file = self.$refs.importFile && self.$refs.importFile.files &&
                      self.$refs.importFile.files[0];
           if (!file) {
-            self.error = 'No file selected';
+            self.importError = 'No file selected';
             return;
           }
-          self.busy = true; self.action = 'import'; self.error = '';
+          self.busy = true; self.action = 'import'; self.importError = '';
           var form = new FormData();
           form.append('file', file);
           fetch('/api/admin/db/import', {
@@ -386,19 +438,57 @@
             if (res.ok) {
               toast('success', 'Database imported. Pre-import backup: ' +
                     (res.data && res.data.pre_backup));
-              self.confirmOpen = false;
-              self.confirmText = '';
-              self.selectedName = '';
-              if (self.$refs.importFile) self.$refs.importFile.value = '';
+              self.closeImportModal();
               self.loadBackups();
             } else {
-              self.error = (res.data && res.data.error) || 'Import failed';
+              self.importError = (res.data && res.data.error) || 'Import failed';
             }
           }).catch(function () {
             self.busy = false; self.action = '';
-            self.error = 'Network error';
+            self.importError = 'Network error';
           });
         },
+
+        // ------- delete modal -------
+
+        openDeleteConfirm: function (name) {
+          this.deleteTarget = name;
+          this.deleteError = '';
+          this.deleteOpen = true;
+        },
+        closeDeleteConfirm: function () {
+          this.deleteOpen = false;
+          this.deleteTarget = '';
+          this.deleteError = '';
+        },
+        runDelete: function () {
+          var self = this;
+          if (!self.deleteTarget || self.busy) return;
+          self.busy = true; self.action = 'delete'; self.deleteError = '';
+          var name = self.deleteTarget;
+          fetch('/api/admin/db/backups/' + encodeURIComponent(name), {
+            method: 'DELETE',
+            credentials: 'same-origin'
+          }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; })
+              .catch(function () { return { ok: r.ok, status: r.status, data: {} }; });
+          }).then(function (res) {
+            self.busy = false; self.action = '';
+            if (res.ok) {
+              toast('info', 'Backup deleted: ' + name);
+              self.closeDeleteConfirm();
+              self.loadBackups();
+            } else {
+              self.deleteError = (res.data && res.data.error) || 'Delete failed';
+            }
+          }).catch(function () {
+            self.busy = false; self.action = '';
+            self.deleteError = 'Network error';
+          });
+        },
+
+        // ------- formatting helpers -------
+
         formatSize: function (bytes) {
           if (bytes < 1024) return bytes + ' B';
           if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
