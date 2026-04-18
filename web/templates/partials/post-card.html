@@ -64,20 +64,31 @@
   </div>
   {{ end }}
 
-  <footer class="post-actions">
-    <!-- Reaction button: click opens the 6-emoji quick picker. The
-         server's /api/posts/:id/react toggle logic fills the final
-         state back into this button via golab.js. -->
-    <button class="post-action reaction-button" data-action="react" data-post-id="{{ $post.ID }}"
-            aria-label="Add or change your reaction">
-      <span class="reaction-icon" aria-hidden="true"></span>
-      <svg class="reaction-heart" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"
-           fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-      </svg>
-      <span id="react-count-{{ $post.ID }}" class="reaction-count">{{ $post.ReactionCount }}</span>
+  <!-- Sprint 14 multi-reaction bar. All 6 emoji chips always
+       render; the current user's active reactions carry the
+       is-active class. Counts default to 0 when the post has
+       no reactions for that type, which is why ReactionCounts
+       is always fully populated by ReactionStore.AttachTo. -->
+  <div class="reaction-bar" data-post-id="{{ $post.ID }}">
+    {{ $active := $post.UserReactionTypes }}
+    {{ $counts := $post.ReactionCounts }}
+    {{ range $type := reactionTypes }}
+    {{ $isActive := contains $active $type }}
+    {{ $n := 0 }}{{ if $counts }}{{ $n = index $counts $type }}{{ end }}
+    <button type="button"
+            class="reaction-chip{{ if $isActive }} is-active{{ end }}{{ if eq $n 0 }} is-empty{{ end }}"
+            data-action="react"
+            data-post-id="{{ $post.ID }}"
+            data-reaction-type="{{ $type }}"
+            aria-pressed="{{ if $isActive }}true{{ else }}false{{ end }}"
+            aria-label="React with {{ $type }}">
+      <span class="reaction-emoji" aria-hidden="true">{{ emojiFor $type }}</span>
+      <span class="reaction-count" data-reaction-type="{{ $type }}">{{ $n }}</span>
     </button>
+    {{ end }}
+  </div>
 
+  <footer class="post-actions">
     <button class="post-action" data-action="repost" data-post-id="{{ $post.ID }}">
       <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>

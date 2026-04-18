@@ -76,6 +76,10 @@
   <script src="/static/js/htmx.min.js"></script>
   <script src="/static/js/quill.min.js"></script>
   <script src="/static/js/highlight.min.js"></script>
+  <!-- Sprint 14 @mention autocomplete. Pure JS, ~270 LOC, no deps.
+       Must load AFTER quill (uses the Quill global) and BEFORE
+       golab.js so composeEditor can attach it on setup. -->
+  <script src="/static/js/quill-mention.js"></script>
   <script defer src="/static/js/particles.js"></script>
   <script defer src="/static/js/theme.js"></script>
   <script defer src="/static/js/golab.js"></script>
