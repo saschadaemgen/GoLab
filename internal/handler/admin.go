@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -70,11 +71,12 @@ type adminChannel struct {
 }
 
 type adminDashboard struct {
-	Stats           adminStats
-	Users           []adminUser
-	Channels        []adminChannel
-	PendingUsers    []model.User // Sprint 12 moderation queue
-	RequireApproval bool         // current state of the toggle
+	Stats               adminStats
+	Users               []adminUser
+	Channels            []adminChannel
+	PendingUsers        []model.User // Sprint 12 moderation queue
+	RequireApproval     bool         // current state of the toggle
+	AllowUsernameChange bool         // Sprint 13: user-facing username editor
 }
 
 // Page renders the full /admin dashboard (server-rendered).
@@ -148,6 +150,7 @@ func (h *AdminHandler) collect(r *http.Request) adminDashboard {
 	}
 	if h.Settings != nil {
 		out.RequireApproval = h.Settings.GetBool(ctx, "require_approval")
+		out.AllowUsernameChange = h.Settings.GetBool(ctx, "allow_username_change")
 	}
 	return out
 }
@@ -295,7 +298,8 @@ type setSettingReq struct {
 }
 
 var allowedSettings = map[string]bool{
-	"require_approval": true,
+	"require_approval":      true,
+	"allow_username_change": true,
 }
 
 func (h *AdminHandler) SetSetting(w http.ResponseWriter, r *http.Request) {
@@ -373,4 +377,81 @@ func (h *AdminHandler) SetPower(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// SetUsername lets an admin rename any user. Bypasses the
+// allow_username_change platform toggle (that's a user-facing gate
+// only). Guarded by the usual power-level rules: admins cannot
+// rename users at or above their own level, and nobody can rename
+// themselves via this endpoint (they use /settings for that).
+type setUsernameReq struct {
+	Username string `json:"username"`
+}
+
+func (h *AdminHandler) SetUsername(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	actor := auth.UserFromContext(r.Context())
+	if actor == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if actor.ID == id {
+		writeError(w, http.StatusBadRequest, "use /settings to change your own username")
+		return
+	}
+
+	var req setUsernameReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	req.Username = strings.TrimSpace(req.Username)
+	if !isValidUsername(req.Username) {
+		writeError(w, http.StatusBadRequest, "username must be 3-32 alphanumeric characters or underscores")
+		return
+	}
+
+	// Power-level guard: admins cannot rename users at or above their
+	// level. Owners (100) can rename anyone but themselves.
+	target, err := h.Users.FindByID(r.Context(), id)
+	if err != nil {
+		slog.Error("admin set username: find user", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if target == nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if target.PowerLevel >= actor.PowerLevel {
+		writeError(w, http.StatusForbidden, "cannot rename a user at or above your power level")
+		return
+	}
+
+	// Case-insensitive uniqueness check. If the only collision is the
+	// target themselves (case change of own handle) we allow it.
+	taken, err := h.Users.UsernameExists(r.Context(), req.Username)
+	if err != nil {
+		slog.Error("admin set username: check", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if taken && !strings.EqualFold(req.Username, target.Username) {
+		writeError(w, http.StatusConflict, "username already taken")
+		return
+	}
+
+	if err := h.Users.UpdateUsername(r.Context(), id, req.Username); err != nil {
+		slog.Error("admin set username: update", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	slog.Info("admin renamed user",
+		"actor_id", actor.ID, "target_id", id,
+		"old", target.Username, "new", req.Username)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated", "username": req.Username})
 }

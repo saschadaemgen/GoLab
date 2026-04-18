@@ -2993,3 +2993,104 @@ img.avatar {
   opacity: 0.6;
   pointer-events: none;
 }
+
+/* ===== Sprint 13: Settings - Security + Username editor ===== */
+
+/* Divider between the profile form and the security form. Subtle
+   so we don't break the card's visual flow, just give the eye a
+   moment between two unrelated groups of inputs. */
+.settings-divider {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0 1.25rem;
+}
+.settings-heading {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 0.25rem;
+}
+.settings-sub {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+}
+
+/* Username editor: @ prefix sits visually inside the input so the
+   handle reads like a real mention, but we keep them as separate
+   elements so the input's focus ring stays clean. */
+.username-edit-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.username-edit-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+.username-prefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.65rem;
+  background: var(--surface-2, var(--surface));
+  color: var(--text-muted);
+  font-weight: 600;
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+.username-input.form-input {
+  border: 0;
+  border-radius: 0;
+  flex: 1;
+  min-width: 0;
+  box-shadow: none;
+}
+.username-input.form-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.username-input.form-input:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  background: var(--surface-2, var(--surface));
+}
+
+/* Status line under the username input. Reuses the color tokens
+   used by form errors and toasts so the scheme is consistent. */
+.username-status {
+  margin-top: 0.4rem;
+  font-size: 0.825rem;
+  line-height: 1.2;
+  min-height: 1.1em;
+}
+.username-status.status-ok {
+  color: var(--success);
+}
+.username-status.status-error {
+  color: var(--danger);
+}
+.username-status.status-checking {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Password error flash inside the settings card. Tighter margin
+   than the top-of-page flashes because it's inline above the
+   submit button. */
+.password-error.flash.flash-error {
+  margin: 0.5rem 0 1rem;
+  font-size: 0.875rem;
+}
+
+/* Admin actions column: stack rename + ban vertically on narrow
+   columns, inline when there's room. Keeps the user table readable
+   when a user has multiple available actions. */
+.admin-action-stack {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}

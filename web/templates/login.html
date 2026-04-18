@@ -4,9 +4,18 @@
     <h1 class="auth-title">Welcome back</h1>
     <p class="auth-subtitle">Sign in to continue to GoLab.</p>
 
-    {{ if .Content }}{{ with .Content }}{{ if .Error }}
-    <div class="flash flash-error" role="alert">{{ .Error }}</div>
-    {{ end }}{{ end }}{{ end }}
+    {{ if .Content }}{{ with .Content }}
+      {{ if .Error }}
+      <div class="flash flash-error" role="alert">{{ .Error }}</div>
+      {{ end }}
+      {{/* Whitelist known flash codes so a crafted ?msg= can't inject
+           arbitrary text. Each code maps to a fixed human string. */}}
+      {{ if eq .Flash "password-changed" }}
+      <div class="flash flash-success" role="status">
+        Password updated. Please log in again with your new password.
+      </div>
+      {{ end }}
+    {{ end }}{{ end }}
 
     <form id="login-form"
           method="POST"

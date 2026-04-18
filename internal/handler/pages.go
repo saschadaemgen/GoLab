@@ -35,6 +35,7 @@ type PageHandler struct {
 	Follows   *model.FollowStore
 	Reactions *model.ReactionStore
 	Spaces    *model.SpaceStore
+	Settings  *model.SettingsStore
 	SiteName  string
 }
 
@@ -91,6 +92,10 @@ func (h *PageHandler) Home(w http.ResponseWriter, r *http.Request) {
 
 type authContent struct {
 	Error string
+	// Flash is a short info banner shown above the form for non-error
+	// states (e.g. "password-changed", "logged-out"). The template
+	// whitelists known values so a crafted ?msg= can't inject content.
+	Flash string
 }
 
 func (h *PageHandler) RegisterPage(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +117,10 @@ func (h *PageHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := h.newPageData(r, "Login to GoLab")
-	data.Content = authContent{Error: r.URL.Query().Get("error")}
+	data.Content = authContent{
+		Error: r.URL.Query().Get("error"),
+		Flash: r.URL.Query().Get("msg"),
+	}
 	if err := h.Render.Render(w, "login", data); err != nil {
 		slog.Error("render login", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -312,8 +320,27 @@ func (h *PageHandler) PendingPage(w http.ResponseWriter, r *http.Request) {
 
 // ---------- Settings ----------
 
+// settingsContent exposes the handful of platform flags the settings
+// page needs to decide what to show (username editor gated by
+// allow_username_change for non-admins) plus the ?error / ?status flash
+// states from POST redirects.
+type settingsContent struct {
+	AllowUsernameChange bool
+	Error               string
+	Status              string
+}
+
 func (h *PageHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	data := h.newPageData(r, "Settings - GoLab")
+	allow := true
+	if h.Settings != nil {
+		allow = h.Settings.GetBool(r.Context(), "allow_username_change")
+	}
+	data.Content = settingsContent{
+		AllowUsernameChange: allow,
+		Error:               r.URL.Query().Get("error"),
+		Status:              r.URL.Query().Get("status"),
+	}
 	if err := h.Render.Render(w, "settings", data); err != nil {
 		slog.Error("render settings", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

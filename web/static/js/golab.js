@@ -165,6 +165,150 @@
       };
     });
 
+    // Sprint 13: live username availability probe for the settings
+    // form. Debounced on the input side (@input.debounce.500ms in the
+    // template) so we don't hammer /api/users/check-username while
+    // the user is mid-type. The server is the source of truth; this
+    // is purely UX sugar to avoid a failed submit.
+    //
+    // Args:
+    //   originalUsername - current handle, shown pre-filled
+    //   allow            - platform flag allow_username_change (bool)
+    //   isAdmin          - admins bypass the platform flag
+    window.Alpine.data('usernameEditor', function (originalUsername, allow, isAdmin) {
+      return {
+        username: originalUsername || '',
+        original: originalUsername || '',
+        canEdit: !!(allow || isAdmin),
+        statusText: '',
+        statusClass: '',
+        available: true,   // true means the submit button is not blocked by us
+        checking: false,
+        init: function () {
+          var form = this.$root;
+          if (form && form.tagName === 'FORM') {
+            form.dataset.originalUsername = this.original;
+          }
+        },
+        get canSubmit() {
+          // The submit button listens to this. We only hard-block when
+          // a username change is in flight AND the server said it's
+          // invalid or taken. Same-as-current and empty (i.e. user
+          // reverted) are fine - they just mean "don't touch it".
+          if (!this.canEdit) return true;
+          if (!this.username || this.username === this.original) return true;
+          return this.available && !this.checking;
+        },
+        check: function () {
+          var self = this;
+          if (!self.canEdit) return;
+          var value = (self.username || '').trim();
+          if (!value || value === self.original) {
+            self.statusText = '';
+            self.statusClass = '';
+            self.available = true;
+            return;
+          }
+          if (!/^[a-zA-Z0-9_]{3,32}$/.test(value)) {
+            self.statusText = 'Use 3-32 letters, numbers, or underscore.';
+            self.statusClass = 'status-error';
+            self.available = false;
+            return;
+          }
+          self.checking = true;
+          self.statusText = 'Checking...';
+          self.statusClass = 'status-checking';
+          fetch('/api/users/check-username?username=' + encodeURIComponent(value), {
+            credentials: 'same-origin'
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            self.checking = false;
+            if (d && d.available) {
+              self.statusText = 'Available';
+              self.statusClass = 'status-ok';
+              self.available = true;
+              return;
+            }
+            self.available = false;
+            if (d && d.reason === 'taken') {
+              self.statusText = 'Already taken';
+            } else if (d && d.reason === 'invalid') {
+              self.statusText = 'Invalid format';
+            } else if (d && d.reason === 'same') {
+              // Shouldn't reach here thanks to the early return above,
+              // but handle anyway.
+              self.statusText = '';
+              self.statusClass = '';
+              self.available = true;
+            } else {
+              self.statusText = 'Not available';
+            }
+            self.statusClass = 'status-error';
+          }).catch(function () {
+            self.checking = false;
+            self.statusText = '';
+            self.statusClass = '';
+            self.available = true; // don't block submit on a network blip
+          });
+        }
+      };
+    });
+
+    // Sprint 13: password change form. Client-side confirm match +
+    // POST to /api/users/me/password. On success the server revokes
+    // every session (including this one) so we end up logged out and
+    // hop to /login. The server also redirects form submissions to
+    // /login?msg=password-changed, so if JS is off the flow still
+    // works through the native form submit.
+    window.Alpine.data('passwordForm', function () {
+      return {
+        current: '',
+        next: '',
+        confirm: '',
+        busy: false,
+        error: '',
+        get mismatch() {
+          return this.next && this.confirm && this.next !== this.confirm;
+        },
+        get canSubmit() {
+          if (!this.current || !this.next || !this.confirm) return false;
+          if (this.next.length < 8) return false;
+          if (this.next !== this.confirm) return false;
+          if (this.next === this.current) return false;
+          return true;
+        },
+        onSubmit: function (ev) {
+          ev.preventDefault();
+          var self = this;
+          if (!self.canSubmit || self.busy) return;
+          self.error = '';
+          self.busy = true;
+          apiJSON('/api/users/me/password', 'POST', {
+            current_password: self.current,
+            new_password: self.next
+          }).then(function (res) {
+            self.busy = false;
+            if (res.ok) {
+              toast('success', 'Password updated. Please log in again.');
+              // Server already cleared the session cookie. Give the
+              // toast a beat, then hop to /login with the success flag.
+              setTimeout(function () {
+                window.location.href = '/login?msg=password-changed';
+              }, 600);
+              return;
+            }
+            if (res.status === 429) {
+              self.error = 'Too many attempts. Try again in an hour.';
+            } else {
+              self.error = (res.data && res.data.error) || 'Could not update password';
+            }
+          }).catch(function () {
+            self.busy = false;
+            self.error = 'Network error';
+          });
+        }
+      };
+    });
+
     // Notifications dropdown
     window.Alpine.data('notificationsPanel', function () {
       return {
@@ -853,17 +997,31 @@
       btn.disabled = true;
       var original = label ? label.textContent : '';
       if (label) label.innerHTML = '<span class="spin-inline">Saving...</span>';
-      apiJSON('/api/users/me', 'PUT', {
+      // Sprint 13: username is optional in the payload. Send it only
+      // when the user actually changed it so "profile save" stays a
+      // no-op for the username side. The server treats empty Username
+      // as "don't touch it".
+      var payload = {
         display_name: form.display_name.value,
         bio: form.bio.value,
         avatar_url: form.avatar_url.value
-      }).then(function (res) {
+      };
+      if (form.username && form.username.value) {
+        payload.username = form.username.value;
+      }
+      apiJSON('/api/users/me', 'PUT', payload).then(function (res) {
         btn.disabled = false;
         if (label) label.textContent = original || 'Save changes';
         if (res.ok) {
           toast('success', 'Profile saved');
           btn.classList.add('success-pop');
           setTimeout(function () { btn.classList.remove('success-pop'); }, 500);
+          // If the username changed, every existing /u/<old> link on
+          // this page is stale. A soft reload keeps things simple.
+          if (payload.username && form.dataset.originalUsername &&
+              payload.username !== form.dataset.originalUsername) {
+            setTimeout(function () { window.location.reload(); }, 400);
+          }
         } else {
           setError(form, res.data.error || 'Could not save');
           form.classList.add('shake');
@@ -1126,6 +1284,35 @@
                 toast('error', res.data.error || 'Could not update');
                 el.classList.add('shake');
                 setTimeout(function () { el.classList.remove('shake'); }, 500);
+              }
+            });
+        });
+      }
+
+      // Sprint 13: admin rename. A native prompt() is plenty for the
+      // occasional rename action, keeps the admin table simple, and
+      // sidesteps building a modal for a near-never-used path.
+      if (action === 'admin-rename') {
+        el.addEventListener('click', function () {
+          var id = el.dataset.userId;
+          var current = el.dataset.currentUsername || '';
+          var next = window.prompt('New username for @' + current + ':', current);
+          if (next === null) return; // cancelled
+          next = next.trim();
+          if (!next || next === current) return;
+          if (!/^[a-zA-Z0-9_]{3,32}$/.test(next)) {
+            toast('error', 'Invalid format (3-32 letters, numbers, underscore).');
+            return;
+          }
+          el.disabled = true;
+          apiJSON('/api/admin/users/' + id + '/username', 'PUT', { username: next })
+            .then(function (res) {
+              el.disabled = false;
+              if (res.ok) {
+                toast('success', 'Username updated');
+                setTimeout(function () { window.location.reload(); }, 300);
+              } else {
+                toast('error', (res.data && res.data.error) || 'Could not rename');
               }
             });
         });

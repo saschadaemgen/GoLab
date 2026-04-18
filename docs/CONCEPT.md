@@ -384,26 +384,153 @@ occupies this design space.
 
 ---
 
-## 10. Open questions
+## 10. Open questions - answered in Phase 1
 
-Issues that need resolution during development:
+Every question below was resolved during Season 1. This section
+now documents the decisions that shaped the running Phase 1
+platform at lab.simplego.dev.
 
-| Question | Options | Decision |
-|:---------|:--------|:---------|
-| Application server language | Go (ecosystem consistency) vs TypeScript (team familiarity) | Leaning Go |
-| Database for persistence | SQLite (simple) vs Postgres (scalable) | TBD |
-| Channel key distribution | Sender-key (efficient) vs pairwise (private) | TBD |
-| Federation between GoLab instances | ActivityPub bridge vs custom SMP federation | Future (Phase 8) |
-| Code hosting integration | Link-only vs basic git browsing vs full hosting | Link-only (Phase 1) |
-| Mobile client | PWA vs native app vs GoChat-style widget | TBD |
-| Content addressing | SHA-256 hash vs UUID vs ULID | Leaning SHA-256 |
-| Offline support | Full offline-first vs online-required | TBD |
-
-These questions will be resolved as GoLab moves from concept to
-implementation, informed by experience from GoBot, GoChat, and
-GoUNITY development.
+| Question | Answer |
+|:---------|:-------|
+| Application server language | **Go 1.24** (confirmed, ecosystem consistency with GoBot) |
+| Database for persistence | **PostgreSQL 16** (confirmed, scales + full-text search) |
+| Channel key distribution | **Deferred to Phase 2** (Phase 1 uses HTTPS, no channel keys yet) |
+| Federation between GoLab instances | **Phase 2+** (deferred until single-instance UX is solid) |
+| Code hosting integration | **Link-only** (confirmed, GoLab is discussion + project mgmt, not git host) |
+| Mobile client | **Responsive web** (confirmed for Phase 1, 375px to ultrawide) |
+| Content addressing | **UUID for posts, SHA-256 for uploads** (confirmed) |
+| Offline support | **Online-required for Phase 1** (Phase 2 may revisit after SMP migration) |
 
 ---
 
-*GoLab Technical Concept v1 - April 2026*
+## 11. Phase 1 implementation notes
+
+Phase 1 is the live Go + PostgreSQL platform at lab.simplego.dev.
+This section documents the specific technical decisions made during
+Season 1 development so future contributors understand the "why".
+
+### 11.1 HTMX + Alpine.js instead of React / TypeScript
+
+The original concept sketched a TypeScript browser client built
+on simplex-js. Phase 1 ships a server-rendered HTML UI with HTMX
+for page transitions and Alpine.js for local interactivity.
+
+Why:
+- No build step. `docker-compose up -d` and you are running.
+- Zero npm dependencies in production. Nothing to audit monthly.
+- SSR means every page works without JS (graceful degradation).
+- HTMX + Alpine is ~40 KB minified, the whole UI layer.
+- When Phase 2 arrives, simplex-js can be dropped in without
+  rewriting the UI (the SSR fallback keeps everything usable).
+
+### 11.2 Quill.js 2.0.3 for the editor
+
+A plain textarea was tried first. Users wanted rich text, image
+upload, syntax highlighting, and emoji. Quill 2.0.3 provides all
+of that with a stable API and no CDN dependency.
+
+Why Quill and not alternatives:
+- TipTap pulls in ProseMirror + a Node build chain (rejected).
+- CKEditor is AGPL-incompatible at the enterprise tier (rejected).
+- Trix is too minimal for code blocks (rejected).
+- Quill 2.0.3 is MIT-licensed, ~200 KB, self-hostable.
+
+The editor output is sanitized with bluemonday before storage.
+Quill's raw HTML is NEVER trusted.
+
+### 11.3 Spaces instead of Channels
+
+The concept uses "Channels" throughout. Phase 1 ships "Spaces"
+as the primary content organization. The underlying database
+still has a `channels` table (kept for Phase 2), but the UI and
+routes are space-oriented.
+
+Why:
+- Channels in the Matrix sense imply user creation and per-space
+  permissions. Phase 1 needs stability, not UGC organization.
+- 8 admin-curated Spaces give newcomers a clear map: "where do
+  I post about SimpleX?" -> SimpleX Protocol space.
+- Post Types (Discussion / Question / Tutorial / Code / Showcase
+  / Link) give the flexibility Channels would have, without the
+  permission complexity.
+- If Phase 2 wants user-created Channels back, the `channels`
+  table is still there.
+
+### 11.4 Admin-fixed categories, not user-created
+
+The 8 Spaces are seeded by migration 018 (later 020). Users
+cannot create new Spaces. Tags ARE user-created and provide
+cross-Space discovery.
+
+Why:
+- New communities die in empty categories. Fewer, well-used
+  Spaces beat dozens of ghost towns.
+- Spam defense: a spammer cannot flood the platform with 100
+  fake Spaces. They can create tags, but tags lurk in a pool,
+  not in the navigation.
+- Migration cost is low: a new Space is one INSERT statement.
+
+### 11.5 No GIF API (Tenor shutdown, GIPHY paid)
+
+The editor has an emoji picker but no GIF picker.
+
+Why:
+- Tenor's public API was shut down in 2024.
+- GIPHY's remaining API requires commercial licensing.
+- Self-hosting a GIF library has content-moderation implications
+  that Phase 1 is not built to handle.
+- Users CAN upload GIFs as images; they just lack a search UI.
+
+This may be revisited if a privacy-respecting GIF source emerges.
+
+### 11.6 Self-hosted all JS / CSS libraries
+
+Zero runtime CDN calls. Every library (Quill, HTMX, Alpine,
+highlight.js, emoji picker) is vendored into `web/static/` and
+served from the same origin as the app.
+
+Why:
+- A CDN is a tracking vector. `unpkg.com` sees every page load.
+- A CDN is a supply-chain vector. Compromise cdnjs, compromise
+  GoLab.
+- A CDN is a privacy leak. Users' IPs flow to third parties.
+- A CDN is a dependency risk. Phase 2 promises "no server reads
+  your content" - CDNs would silently break that promise.
+
+The `Dockerfile` copies `web/static/` into the final image.
+There is no `npm install` at runtime.
+
+### 11.7 User moderation via status field, not a separate table
+
+Users have a `status` column (`active` / `pending` / `rejected`)
+plus `reviewed_at` and `reviewed_by`. When `require_approval`
+is enabled, new registrations land in `pending` and cannot post
+until an admin approves them. Rejected users see a read-only
+view and get logged out on their next session touch.
+
+Why:
+- Adding a column is reversible via the existing live-DB rules.
+- A separate table would duplicate user references and make the
+  approval queue a join.
+- The `SetStatus` method is the single write path; no chance of
+  three tables drifting.
+
+### 11.8 Session management via database rows
+
+Sessions are bcrypt-gated but NOT JWT-based. The `sessions` table
+stores `(id, user_id, expires_at)` rows. Every request re-reads
+the session and the user. Password change = `DELETE FROM sessions
+WHERE user_id = $1`, which revokes every device.
+
+Why:
+- JWTs cannot be revoked without a blocklist table, which puts
+  us back at DB-per-request.
+- DB-per-request is ~1 ms and trivial to optimize later.
+- The `__Host-` cookie prefix gives us path confinement in
+  production; dev uses a plain `session_id` cookie because
+  `__Host-` requires HTTPS.
+
+---
+
+*GoLab Technical Concept v2 - April 2026 (Phase 1 live)*
 *IT and More Systems, Recklinghausen, Germany*

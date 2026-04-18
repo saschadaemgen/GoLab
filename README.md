@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License"></a>
-  <a href="#status"><img src="https://img.shields.io/badge/status-concept-yellow.svg" alt="Status"></a>
+  <a href="https://lab.simplego.dev"><img src="https://img.shields.io/badge/status-phase--1--live-brightgreen.svg" alt="Status"></a>
   <a href="https://github.com/saschadaemgen/SimpleGo"><img src="https://img.shields.io/badge/ecosystem-SimpleGo-green.svg" alt="SimpleGo"></a>
 </p>
 
@@ -23,6 +23,59 @@ GoLab is a developer community platform that combines GitLab-style project colla
 Your identity is not an account on a server. It is an Ed25519 certificate issued by [GoUNITY](https://github.com/saschadaemgen/GoUNITY) - a cryptographic proof that you are who you claim to be, without revealing who that is. Moderation is handled by [GoBot](https://github.com/saschadaemgen/GoBot), which enforces community rules without ever seeing message content in its hardware-secured mode. And if you want physical proof of identity, plug in a [SimpleGo](https://github.com/saschadaemgen/SimpleGo) device and verify with a hardware challenge-response that no software can fake.
 
 This architecture has no precedent. No existing platform combines anonymous transport, persistent pseudonymous identity, scalable community features, and hardware-backed verification in a single system.
+
+---
+
+## What GoLab is today (Phase 1)
+
+GoLab Phase 1 is live at [lab.simplego.dev](https://lab.simplego.dev).
+A fully functional developer community platform built with:
+
+- **Backend:** Go 1.24, chi router, PostgreSQL 16
+- **Frontend:** Server-rendered HTML with HTMX + Alpine.js
+- **Editor:** Quill.js 2.0.3 WYSIWYG with emoji picker
+- **Real-time:** WebSocket notifications and live updates
+- **Search:** PostgreSQL full-text search
+- **Auth:** bcrypt with rate limiting and security headers
+- **Deploy:** Docker Compose on Debian VPS
+
+### Current features
+
+- 8 thematic Spaces (SimpleX Protocol, Matrix / Element,
+  Cybersecurity, Privacy, Hardware, SimpleGo Ecosystem, Dev Tools,
+  Off-Topic / Meta)
+- Post Types (Discussion, Question, Tutorial, Code, Showcase, Link)
+- Tag system with autocomplete
+- Rich text editor with image upload and syntax highlighting
+- Real-time notifications via WebSocket
+- Threaded conversations with reply chains
+- Admin dashboard with user management and power levels
+- User moderation (pending / active / rejected approval system)
+- Account security (password change, username change with
+  availability check, session revocation)
+- Fullscreen mobile menu (dark / cyan, slide-in)
+- Responsive design from 375px to ultrawide
+- Rate limiting and HTML sanitization
+- Zero npm dependencies, zero CDN calls, self-hosted everything
+
+### Phase 1 architecture
+
+```
+[Browser] --> [Nginx reverse proxy]
+                    |
+              [Go Application Server]
+                    |
+              [PostgreSQL 16]
+```
+
+Phase 1 uses standard HTTPS transport. Posts are stored in PostgreSQL.
+The server CAN read content. This is the foundation that will be
+replaced by SMP transport in Phase 2.
+
+The sections below describe the Phase 2 vision: a server that is
+blind to content, routes encrypted SMP blocks, and authenticates
+users by certificate rather than by account. Phase 1 exists so
+Phase 2 has a real community to migrate, not an empty shell.
 
 ---
 
@@ -50,7 +103,12 @@ GoLab is two things in one:
 
 ---
 
-## How it works
+## How it works (Phase 2 - Future)
+
+*The architecture below is the Phase 2 target. Phase 1 (today) uses
+standard HTTPS to a Go server with PostgreSQL; see the "What GoLab
+is today" section above. Phase 2 replaces the transport layer with
+SMP queues and swaps account-based auth for GoUNITY certificates.*
 
 ```
 [Browser / GoLab Client]
@@ -158,7 +216,11 @@ GoLab is two things in one:
 
 ---
 
-## Architecture
+## Architecture (Phase 2 - Future)
+
+*Phase 1 is a single Go binary + PostgreSQL container; the multi-
+component composition below applies once Phase 2 migrates the
+transport layer to SMP. The Phase 1 stack lives in this repository.*
 
 GoLab is not a monolith. It is composed of existing SimpleGo ecosystem components:
 
@@ -247,9 +309,16 @@ Standard ActivityStreams types mapped to GoLab features:
 
 ---
 
-## Security
+## Security (Phase 2 - Future)
 
-### What the GoLab server knows
+*The zero-knowledge properties below describe the Phase 2 target.
+Phase 1 uses HTTPS + PostgreSQL, so today the server DOES see
+content, DOES store user identities (bcrypt-hashed), and DOES know
+the social graph. Phase 1 security is covered in
+[docs/ARCHITECTURE_AND_SECURITY.md](docs/ARCHITECTURE_AND_SECURITY.md)
+under the Phase 1 section.*
+
+### What the GoLab server knows (Phase 2)
 
 | Data | Visible to server? |
 |:-----|:-------------------|
@@ -278,8 +347,13 @@ See [Architecture and Security](docs/ARCHITECTURE_AND_SECURITY.md) for the full 
 | Component | Status |
 |:----------|:-------|
 | GoLab concept and architecture | Season 1 - this document |
-| GoLab application server | Planned |
-| GoLab browser client | Planned |
+| GoLab Phase 1 application server | **LIVE** at [lab.simplego.dev](https://lab.simplego.dev) (Go 1.24 + PostgreSQL 16) |
+| GoLab Phase 1 browser client | **LIVE** (Go html/template + HTMX + Alpine.js, no TypeScript) |
+| GoLab Phase 1 content features | **LIVE** (8 Spaces, post types, tags, editor, notifications, search) |
+| GoLab Phase 1 moderation | **LIVE** (power levels 0-100, ban system, approval queue) |
+| GoLab Phase 1 deployment | **LIVE** (Docker Compose on Debian VPS, Nginx, Let's Encrypt) |
+| GoLab Phase 2 SMP migration | Planned (after GoBot Season 2-3) |
+| GoLab Phase 2 certificate identity | Planned (after GoUNITY Season 4) |
 | GoBot community relay extensions | Planned (after GoBot Season 2-3) |
 | GoUNITY certificate integration | Planned (after GoUNITY Season 4) |
 | simplex-js transport layer | Available (npm: simplex-js@1.0.0) |
@@ -299,7 +373,28 @@ GoLab builds on components that are in active development:
 
 ---
 
-## Setup (planned)
+## Setup
+
+### Phase 1 (today)
+
+```bash
+git clone https://github.com/saschadaemgen/GoLab.git
+cd GoLab
+docker-compose up -d
+```
+
+GoLab is now running at http://localhost:3000.
+
+**Requirements:**
+- Docker and Docker Compose
+- That is it. No Go, no Node, no npm.
+
+The first user to register becomes the Owner (power level 100).
+All subsequent users are regular Members (power level 10). Admins
+can approve / reject new accounts if the `require_approval`
+setting is enabled.
+
+### Phase 2 (planned)
 
 ```bash
 git clone https://github.com/saschadaemgen/GoLab.git
@@ -313,7 +408,7 @@ make run
 docker-compose up -d
 ```
 
-**Requirements:**
+**Phase 2 requirements:**
 - GoBot instance (community relay)
 - GoUNITY instance (certificate authority)
 - SMP server with WebSocket support (e.g., smp.simplego.dev)

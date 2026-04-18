@@ -74,6 +74,17 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// DeleteAllForUser removes every session row for a user. Called after
+// a password change so every device is forced to log in again with
+// the new password.
+func (s *SessionStore) DeleteAllForUser(ctx context.Context, userID int64) error {
+	_, err := s.DB.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
+	if err != nil {
+		return fmt.Errorf("deleting user sessions: %w", err)
+	}
+	return nil
+}
+
 func (s *SessionStore) DeleteExpired(ctx context.Context) error {
 	_, err := s.DB.Exec(ctx, `DELETE FROM sessions WHERE expires_at < NOW()`)
 	if err != nil {

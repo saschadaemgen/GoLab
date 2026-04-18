@@ -31,8 +31,9 @@
   </section>
   {{ end }}
 
-  <!-- Require-approval toggle (only meaningful to Owner, but visible
-       to every admin so they know the current state). -->
+  <!-- Platform toggles (Owner-only). Visible read-only wouldn't help
+       admins much - we simply don't render this block for non-owners
+       and show it live for id=1. -->
   {{ if $.User }}{{ if eq $.User.ID 1 }}
   <div class="admin-setting">
     <label class="admin-setting-label">
@@ -46,6 +47,24 @@
       <input type="checkbox" id="require-approval-toggle"
              {{ if .RequireApproval }}checked{{ end }}
              data-action="admin-toggle-setting" data-key="require_approval">
+      <span class="toggle-track">
+        <span class="toggle-thumb"></span>
+      </span>
+    </label>
+  </div>
+
+  <div class="admin-setting">
+    <label class="admin-setting-label">
+      <span>Allow users to change their username</span>
+      <span class="admin-setting-hint">
+        When disabled, the username field on /settings becomes read-only
+        for regular users. Admins can still rename anyone from this page.
+      </span>
+    </label>
+    <label class="toggle">
+      <input type="checkbox" id="allow-username-change-toggle"
+             {{ if .AllowUsernameChange }}checked{{ end }}
+             data-action="admin-toggle-setting" data-key="allow_username_change">
       <span class="toggle-track">
         <span class="toggle-thumb"></span>
       </span>
@@ -144,10 +163,21 @@
                 <button class="btn btn-outline btn-sm press-effect" data-action="admin-unban" data-user-id="{{ .ID }}">Unban</button>
               {{ else if $isSelf }}
                 <span class="muted mono" style="font-size:0.75rem;">self</span>
-              {{ else if lt .PowerLevel 100 }}
-                <button class="btn btn-danger btn-sm press-effect" data-action="admin-ban" data-user-id="{{ .ID }}">Ban</button>
               {{ else }}
-                <span class="muted mono" style="font-size:0.75rem;">-</span>
+                <div class="admin-action-stack">
+                  {{/* Rename: only visible when the current admin actually
+                       outranks the target. Server enforces the same rule,
+                       this is UX so we don't show dead buttons. */}}
+                  {{ if $me }}{{ if lt .PowerLevel $me.PowerLevel }}
+                  <button class="btn btn-outline btn-sm press-effect"
+                          data-action="admin-rename"
+                          data-user-id="{{ .ID }}"
+                          data-current-username="{{ .Username }}">Rename</button>
+                  {{ end }}{{ end }}
+                  {{ if lt .PowerLevel 100 }}
+                  <button class="btn btn-danger btn-sm press-effect" data-action="admin-ban" data-user-id="{{ .ID }}">Ban</button>
+                  {{ end }}
+                </div>
               {{ end }}
             </td>
           </tr>

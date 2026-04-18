@@ -245,3 +245,47 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id int64, displayName, bi
 	}
 	return nil
 }
+
+// UpdatePassword swaps the user's bcrypt hash. Callers should hash
+// before calling; the hash column stores the raw bcrypt string.
+func (s *UserStore) UpdatePassword(ctx context.Context, id int64, newHash string) error {
+	_, err := s.DB.Exec(ctx,
+		`UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`,
+		id, newHash,
+	)
+	if err != nil {
+		return fmt.Errorf("updating password: %w", err)
+	}
+	return nil
+}
+
+// UpdateUsername changes the handle. The caller must validate format
+// and uniqueness (case-insensitive) BEFORE calling; the DB's UNIQUE
+// index on username is case-sensitive so callers also use
+// UsernameExists as a gate.
+func (s *UserStore) UpdateUsername(ctx context.Context, id int64, newUsername string) error {
+	_, err := s.DB.Exec(ctx,
+		`UPDATE users SET username = $2, updated_at = NOW() WHERE id = $1`,
+		id, newUsername,
+	)
+	if err != nil {
+		return fmt.Errorf("updating username: %w", err)
+	}
+	return nil
+}
+
+// UsernameExists reports whether any user already uses this handle
+// (case-insensitive). Used as a gate before UpdateUsername to give
+// users a clean "already taken" error instead of a SQL unique
+// violation.
+func (s *UserStore) UsernameExists(ctx context.Context, username string) (bool, error) {
+	var exists bool
+	err := s.DB.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username) = LOWER($1))`,
+		username,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("checking username: %w", err)
+	}
+	return exists, nil
+}

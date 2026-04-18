@@ -162,7 +162,14 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags}
 	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts, Spaces: spaces}
 	feedH := &handler.FeedHandler{Posts: posts}
-	profileH := &handler.ProfileHandler{Users: users, Posts: posts, Follows: follows, Notifs: notifDispatch}
+	profileH := &handler.ProfileHandler{
+		Users:    users,
+		Posts:    posts,
+		Follows:  follows,
+		Sessions: sessions,
+		Settings: settings,
+		Notifs:   notifDispatch,
+	}
 	notifH := &handler.NotifHandler{Store: notifs}
 	avatarH := &handler.AvatarHandler{Users: users, RootDir: "web/static"}
 	searchH := &handler.SearchHandler{DB: pool}
@@ -180,6 +187,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Follows:   follows,
 		Reactions: reactions,
 		Spaces:    spaces,
+		Settings:  settings,
 		SiteName:  cfg.SiteName,
 	}
 
@@ -305,6 +313,20 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Use(requireAuth)
 			r.Use(auth.RequireActiveUser)
 			r.Put("/users/me", profileH.UpdateMe)
+			// Sprint 13: password change. 3/hour per user stops brute-force
+			// current-password guessing and accidental request storms from
+			// a broken client. Revokes all sessions on success.
+			r.With(httprate.Limit(3, time.Hour,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Post("/users/me/password", profileH.ChangePassword)
+			// Sprint 13: live username availability probe. 60/minute per
+			// user is plenty for a debounced typeahead and cheap enough
+			// to leave uncontested.
+			r.With(httprate.Limit(60, time.Minute,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Get("/users/check-username", profileH.CheckUsername)
 			r.With(httprate.Limit(10, time.Hour,
 				httprate.WithKeyFuncs(perUserRate),
 				httprate.WithLimitHandler(handler.RateLimited),
@@ -355,6 +377,9 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Post("/admin/users/{id}/ban", adminH.Ban)
 			r.Post("/admin/users/{id}/unban", adminH.Unban)
 			r.Put("/admin/users/{id}/power", adminH.SetPower)
+			// Sprint 13: admins can rename any user below their level,
+			// regardless of the allow_username_change toggle.
+			r.Put("/admin/users/{id}/username", adminH.SetUsername)
 			// Sprint 12 moderation
 			r.Get("/admin/pending", adminH.Pending)
 			r.Post("/admin/users/{id}/approve", adminH.Approve)
