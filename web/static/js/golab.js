@@ -38,6 +38,34 @@
     if (err) err.textContent = message || '';
   }
 
+  // Sprint 15 B1: null-safe Quill selection helper.
+  //
+  // Any UI element that steals focus (native file dialog for image
+  // upload, emoji quick-picker, link prompt, modal) leaves Quill
+  // with no active selection when control returns. Before Sprint 15
+  // we called quill.getSelection(true) then branched on null; in
+  // Quill 2.0.3 there's a race where even the "force focus" flag
+  // returns null on first read because focus has not fully settled
+  // inside the editor DOM yet. Result: insertEmbed / insertText
+  // crashes with "Cannot read properties of null (reading 'offset')".
+  //
+  // This helper focuses Quill, reads the selection, and synthesises
+  // a range at the document end if the real range is still missing.
+  // Every insertion path now routes through it.
+  function quillSafeRange(quill) {
+    if (!quill) return null;
+    try { quill.focus(); } catch (e) { /* ignore */ }
+    var range = null;
+    try { range = quill.getSelection(); } catch (e) { range = null; }
+    if (range && typeof range.index === 'number') return range;
+    // Quill's internal length includes a trailing newline; subtract
+    // one so the insertion point sits before it instead of beyond.
+    var len = 0;
+    try { len = quill.getLength(); } catch (e) { len = 0; }
+    var end = len > 0 ? len - 1 : 0;
+    return { index: end, length: 0 };
+  }
+
   // ---------- Alpine components ----------
 
   document.addEventListener('alpine:init', function () {
@@ -767,9 +795,17 @@
             b.addEventListener('click', function (ev) {
               ev.stopPropagation();
               if (!self.quill) return;
-              var range = self.quill.getSelection(true);
-              self.quill.insertText(range.index, e, 'user');
-              self.quill.setSelection(range.index + e.length);
+              // B1: picker steals focus; quillSafeRange synthesises a
+              // range at the document end if Quill's real selection is
+              // still null after the focus bounce.
+              var range = quillSafeRange(self.quill);
+              if (!range) { panel.remove(); return; }
+              try {
+                self.quill.insertText(range.index, e, 'user');
+                self.quill.setSelection(range.index + e.length, 0, 'user');
+              } catch (err) {
+                console.error('Quill emoji insertText failed', err);
+              }
               panel.remove();
             });
             panel.appendChild(b);
@@ -869,16 +905,16 @@
               toast('success', 'Image added');
               if (!self.quill) return;
               try {
-                var range = self.quill.getSelection(true);
-                if (!range) {
-                  // Focus dropped while the native file dialog was open -
-                  // insert at the end of the document as fallback.
-                  var end = self.quill.getLength();
-                  self.quill.setSelection(end, 0);
-                  range = self.quill.getSelection(true) || { index: end };
-                }
+                // B1: the native file dialog ALWAYS drops Quill focus, so
+                // the previous getSelection(true) + setSelection(end)
+                // dance was unreliable. quillSafeRange returns a usable
+                // range (the real one if we can refocus, a synthesised
+                // end-of-document one otherwise) so insertEmbed never
+                // sees null.
+                var range = quillSafeRange(self.quill);
+                if (!range) throw new Error('no range');
                 self.quill.insertEmbed(range.index, 'image', res.data.url, 'user');
-                self.quill.setSelection(range.index + 1, 0);
+                self.quill.setSelection(range.index + 1, 0, 'user');
               } catch (e) {
                 console.error('Quill insertEmbed failed', e);
                 toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + res.data.url);
