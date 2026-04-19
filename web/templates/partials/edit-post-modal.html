@@ -18,13 +18,14 @@
      x-show="open"
      x-cloak
      @golab:open-edit-post.window="openForPost($event.detail && $event.detail.postId)"
+     @keydown.escape.window="close()"
      @click.self="close()"
      x-transition.opacity>
-  <div class="edit-post-modal">
+  <div class="edit-post-modal" @click.stop>
     <header class="edit-post-modal-head">
       <h3>Edit post</h3>
       <button type="button" class="btn btn-ghost btn-sm press-effect"
-              @click="close()" aria-label="Close">
+              @click.stop.prevent="close()" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round">
@@ -47,9 +48,9 @@
 
       <div class="edit-post-modal-actions">
         <button type="button" class="btn btn-outline press-effect"
-                @click="close()">Cancel</button>
+                @click.stop.prevent="close()">Cancel</button>
         <button type="button" class="btn btn-primary press-effect"
-                @click="save()"
+                @click.stop.prevent="save()"
                 :disabled="saving || !hasContent()">
           <span x-show="!saving" x-cloak>Save changes</span>
           <span x-show="saving" x-cloak>Saving...</span>

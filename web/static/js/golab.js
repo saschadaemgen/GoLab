@@ -38,32 +38,62 @@
     if (err) err.textContent = message || '';
   }
 
-  // Sprint 15 B1: null-safe Quill selection helper.
+  // Sprint 15a.1 P1 / P2: null-safe Quill selection helper.
   //
-  // Any UI element that steals focus (native file dialog for image
-  // upload, emoji quick-picker, link prompt, modal) leaves Quill
-  // with no active selection when control returns. Before Sprint 15
-  // we called quill.getSelection(true) then branched on null; in
-  // Quill 2.0.3 there's a race where even the "force focus" flag
-  // returns null on first read because focus has not fully settled
-  // inside the editor DOM yet. Result: insertEmbed / insertText
-  // crashes with "Cannot read properties of null (reading 'offset')".
+  // Sprint 15a's first attempt called quill.focus() and synthesised a
+  // range. The synthesised index was correct, but insertEmbed STILL
+  // threw "Cannot read properties of null (reading 'offset')" because
+  // Quill 2.0.3's internal selection update (called as a side effect
+  // of insertEmbed mutating the doc) fetched the live DOM selection,
+  // which was still null - quill.focus() does not reliably move the
+  // browser focus into the editor's DOM root in time.
   //
-  // This helper focuses Quill, reads the selection, and synthesises
-  // a range at the document end if the real range is still missing.
-  // Every insertion path now routes through it.
+  // The new approach has three layers, applied by every caller:
+  //
+  //   1. Focus the EDITOR DOM ELEMENT (quill.root) directly. This is
+  //      the actual contenteditable node and accepts focus deterministically.
+  //   2. Commit the synthesised range to Quill's internal state via
+  //      setSelection(idx, 0, 'silent'). The 'silent' source skips
+  //      the selection-change event so we don't trigger the same
+  //      update path that crashed.
+  //   3. Schedule the actual insertion via setTimeout(fn, 0) so the
+  //      browser finishes its post-file-dialog focus / blur shuffle
+  //      before Quill mutates anything.
+  //
+  // quillSafeRange just returns the chosen range; the focus + commit
+  // happen inside it so callers don't have to remember the dance.
   function quillSafeRange(quill) {
     if (!quill) return null;
-    try { quill.focus(); } catch (e) { /* ignore */ }
+    // 1. Focus the actual DOM editor element. quill.focus() is the
+    //    Quill API call which we ALSO try, but the DOM call is what
+    //    actually puts the cursor into a state where getSelection
+    //    returns a real range.
+    try {
+      if (quill.root && typeof quill.root.focus === 'function') {
+        quill.root.focus();
+      }
+      quill.focus();
+    } catch (e) { /* ignore */ }
+
     var range = null;
     try { range = quill.getSelection(); } catch (e) { range = null; }
-    if (range && typeof range.index === 'number') return range;
-    // Quill's internal length includes a trailing newline; subtract
-    // one so the insertion point sits before it instead of beyond.
+    if (range && typeof range.index === 'number') {
+      return range;
+    }
+
+    // 2. Synthesise an end-of-document range. getLength() includes a
+    //    trailing newline so the editable position is length - 1.
     var len = 0;
     try { len = quill.getLength(); } catch (e) { len = 0; }
     var end = len > 0 ? len - 1 : 0;
-    return { index: end, length: 0 };
+    var fallback = { index: end, length: 0 };
+
+    // 3. Commit the synthesised range to Quill's internal state so
+    //    its next getSelection() (called from inside insertEmbed's
+    //    update pipeline) returns a real value instead of null. The
+    //    'silent' source avoids re-firing the update we just escaped.
+    try { quill.setSelection(end, 0, 'silent'); } catch (e) { /* ignore */ }
+    return fallback;
   }
 
   // ---------- Alpine components ----------
@@ -353,18 +383,52 @@
         postId: 0,
         quill: null,
         _initialHTML: '',
+        _opening: false, // re-entrancy guard: ignore back-to-back opens
+
+        // Sprint 15a.1 P4 diagnostic. The live deploy reports the
+        // modal opens spontaneously when clicking unrelated UI. Source
+        // grep shows exactly one dispatcher and one listener of
+        // golab:open-edit-post, so the bug is not visible to static
+        // review. Set localStorage.golabDebugEditModal = '1' in the
+        // browser to log every open / close transition with a stack
+        // trace, then the trigger source can be identified from the
+        // console without redeploying.
+        _trace: function (label, extra) {
+          try {
+            if (window.localStorage &&
+                window.localStorage.getItem('golabDebugEditModal') === '1') {
+              console.log('[edit-modal] ' + label,
+                          extra || '', new Error().stack);
+            }
+          } catch (e) { /* ignore */ }
+        },
 
         openForPost: function (postId) {
-          if (!postId) return;
+          // Hard guards: only proceed when called with a real numeric
+          // post id. The listener passes
+          // `$event.detail && $event.detail.postId` so a custom event
+          // dispatched without a detail payload now becomes a no-op
+          // here instead of opening an empty modal.
+          if (!postId || typeof postId !== 'number' || postId <= 0) {
+            this._trace('openForPost ignored', { postId: postId });
+            return;
+          }
+          if (this._opening) {
+            this._trace('openForPost re-entrant ignored', { postId: postId });
+            return;
+          }
+          this._opening = true;
           var self = this;
           self.postId = postId;
           self.error = '';
           self.loading = true;
           self.open = true;
+          self._trace('openForPost', { postId: postId });
           // Fetch the freshest post text (an admin might have
           // edited since the user's feed loaded).
           apiJSON('/api/posts/' + postId, 'GET', null).then(function (res) {
             self.loading = false;
+            self._opening = false;
             if (!res.ok || !res.data || !res.data.post) {
               self.error = (res.data && res.data.error) || 'Could not load post';
               return;
@@ -373,6 +437,10 @@
             // Wait one frame so x-show has painted the editor div
             // before Quill measures its host.
             requestAnimationFrame(function () { self._mountQuill(); });
+          }).catch(function () {
+            self.loading = false;
+            self._opening = false;
+            self.error = 'Network error';
           });
         },
 
@@ -453,11 +521,19 @@
         },
 
         close: function () {
+          // Sprint 15a.1 P4: every state field reset, in order. Cancel
+          // and the X button both go through here, the backdrop's
+          // @click.self does too, and Escape on the window. The full
+          // reset means a "spontaneous reopen" (whatever its source)
+          // can't inherit half-stale state from a prior session.
+          this._trace('close');
           this.open = false;
-          this.error = '';
+          this.loading = false;
           this.saving = false;
+          this.error = '';
           this.postId = 0;
           this._initialHTML = '';
+          this._opening = false;
           // Tear down Quill so the next open starts clean. Quill
           // doesn't expose a formal destroy, but removing the DOM
           // children clears its toolbar and editor wrappers.
@@ -929,19 +1005,31 @@
             b.className = 'emoji-quickpicker-item';
             b.addEventListener('click', function (ev) {
               ev.stopPropagation();
-              if (!self.quill) return;
-              // B1: picker steals focus; quillSafeRange synthesises a
-              // range at the document end if Quill's real selection is
-              // still null after the focus bounce.
-              var range = quillSafeRange(self.quill);
-              if (!range) { panel.remove(); return; }
-              try {
-                self.quill.insertText(range.index, e, 'user');
-                self.quill.setSelection(range.index + e.length, 0, 'user');
-              } catch (err) {
-                console.error('Quill emoji insertText failed', err);
-              }
               panel.remove();
+              if (!self.quill) return;
+              // Sprint 15a.1 P2: same defer-and-paste-fallback pattern
+              // as the image upload (P1). The picker also steals focus
+              // and the post-Sprint-15a fix was insufficient on its own.
+              var emojiText = e;
+              setTimeout(function () {
+                if (!self.quill) return;
+                var range = quillSafeRange(self.quill);
+                if (!range) return;
+                try {
+                  self.quill.insertText(range.index, emojiText, 'user');
+                  self.quill.setSelection(range.index + emojiText.length, 0, 'user');
+                } catch (err) {
+                  console.error('Quill emoji insertText failed, trying paste fallback', err);
+                  try {
+                    self.quill.clipboard.dangerouslyPasteHTML(
+                      range.index, emojiText, 'user',
+                    );
+                    self.quill.setSelection(range.index + emojiText.length, 0, 'user');
+                  } catch (err2) {
+                    console.error('Quill emoji paste fallback also failed', err2);
+                  }
+                }
+              }, 0);
             });
             panel.appendChild(b);
           });
@@ -1039,21 +1127,46 @@
               // the embed into Quill has trouble (e.g. stale selection).
               toast('success', 'Image added');
               if (!self.quill) return;
-              try {
-                // B1: the native file dialog ALWAYS drops Quill focus, so
-                // the previous getSelection(true) + setSelection(end)
-                // dance was unreliable. quillSafeRange returns a usable
-                // range (the real one if we can refocus, a synthesised
-                // end-of-document one otherwise) so insertEmbed never
-                // sees null.
+              // Sprint 15a.1 P1: defer to next tick so the file dialog's
+              // post-close focus / blur events have settled before
+              // Quill mutates anything. quillSafeRange already focused
+              // the editor and committed a synthesised selection, but
+              // insertEmbed still ran while the focus was in flight on
+              // the live deploy and crashed inside Quill's selection
+              // update. The setTimeout buys one event-loop turn for
+              // the browser to settle.
+              var imageUrl = res.data.url;
+              setTimeout(function () {
+                if (!self.quill) return;
                 var range = quillSafeRange(self.quill);
-                if (!range) throw new Error('no range');
-                self.quill.insertEmbed(range.index, 'image', res.data.url, 'user');
-                self.quill.setSelection(range.index + 1, 0, 'user');
-              } catch (e) {
-                console.error('Quill insertEmbed failed', e);
-                toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + res.data.url);
-              }
+                if (!range) {
+                  toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + imageUrl);
+                  return;
+                }
+                try {
+                  self.quill.insertEmbed(range.index, 'image', imageUrl, 'user');
+                  self.quill.setSelection(range.index + 1, 0, 'user');
+                } catch (e) {
+                  // Sprint 15a.1 P1 fallback: insertEmbed's internal
+                  // selection update is the line that crashed on live.
+                  // dangerouslyPasteHTML goes through the HTML -> Delta
+                  // path which doesn't touch the same selection code,
+                  // so it's our last-ditch attempt before showing the
+                  // "paste the URL" instruction toast.
+                  console.error('Quill insertEmbed failed, trying paste fallback', e);
+                  try {
+                    self.quill.clipboard.dangerouslyPasteHTML(
+                      range.index,
+                      '<img src="' + imageUrl + '">',
+                      'user',
+                    );
+                    self.quill.setSelection(range.index + 1, 0, 'user');
+                  } catch (e2) {
+                    console.error('Quill paste fallback also failed', e2);
+                    toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + imageUrl);
+                  }
+                }
+              }, 0);
             }).catch(function (err) {
               console.error('Image upload network error', err);
               toast('error', 'Image upload failed (network)');
@@ -1546,11 +1659,22 @@
         // the modal DOM directly. editPostModal() in the base
         // template listens for it, fetches the post, and mounts a
         // Quill instance pre-filled with the current content.
-        el.addEventListener('click', function () {
-          var id = el.dataset.postId;
-          if (!id) return;
+        //
+        // Sprint 15a.1 P4 hardening: stop propagation + prevent
+        // default + validate the parsed id BEFORE dispatch. If a
+        // bubble-up from a nested element ever ends up triggering
+        // this handler with a stray dataset, NaN or 0 is filtered
+        // here and the modal's own openForPost guard catches the
+        // rest.
+        el.addEventListener('click', function (e) {
+          if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          var raw = el.dataset.postId;
+          if (!raw) return;
+          var id = parseInt(raw, 10);
+          if (!id || isNaN(id) || id <= 0) return;
           window.dispatchEvent(new CustomEvent('golab:open-edit-post', {
-            detail: { postId: parseInt(id, 10) }
+            detail: { postId: id }
           }));
         });
       }
@@ -1888,15 +2012,35 @@
       }, 400);
     });
 
-    // Sprint 15a B2 / B3: walk the new subtree with Alpine so every
-    // x-data on the injected card (post actions menu, reaction bar
-    // state, reply compose forms) initialises. Without this the
-    // three-dot dropdown stays dead until a full page reload.
-    // Alpine.initTree is a no-op on trees already initialised, so
-    // running it on the subtree is safe even if Alpine ever walked
-    // it earlier through some other mechanism.
+    // Sprint 15a.1 P3: walk every x-data carrier in the subtree
+    // explicitly. The Sprint 15a fix called Alpine.initTree(newCard)
+    // on the article root, expecting Alpine to discover nested
+    // x-data declarations (the dropdown's `x-data="{open: false}"`
+    // is several levels deep). On the live deploy that walk did NOT
+    // pick up the nested element - the dropdown stayed dead until
+    // a full page reload.
+    //
+    // Alpine 3's recursive walk has a quirk where, depending on the
+    // initialisation timing of the root, descendant x-data nodes
+    // can be skipped. Iterating every [x-data] inside the card
+    // and initTree-ing each one individually is the documented
+    // safer pattern. We also initTree the card itself when its
+    // root has x-data (the post-card article does:
+    // `x-data="{ liked: false, count: ... }"`).
     if (window.Alpine && typeof window.Alpine.initTree === 'function') {
-      try { window.Alpine.initTree(newCard); } catch (e) {
+      try {
+        if (newCard.hasAttribute && newCard.hasAttribute('x-data')) {
+          window.Alpine.initTree(newCard);
+        }
+        var xdataChildren = newCard.querySelectorAll
+          ? newCard.querySelectorAll('[x-data]')
+          : [];
+        xdataChildren.forEach(function (el) {
+          try { window.Alpine.initTree(el); } catch (e) {
+            console.error('Alpine.initTree failed on injected x-data child', e, el);
+          }
+        });
+      } catch (e) {
         console.error('Alpine.initTree failed on new post card', e);
       }
     }
