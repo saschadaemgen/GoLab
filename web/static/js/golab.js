@@ -383,18 +383,52 @@
         postId: 0,
         quill: null,
         _initialHTML: '',
+        _opening: false, // re-entrancy guard: ignore back-to-back opens
+
+        // Sprint 15a.1 P4 diagnostic. The live deploy reports the
+        // modal opens spontaneously when clicking unrelated UI. Source
+        // grep shows exactly one dispatcher and one listener of
+        // golab:open-edit-post, so the bug is not visible to static
+        // review. Set localStorage.golabDebugEditModal = '1' in the
+        // browser to log every open / close transition with a stack
+        // trace, then the trigger source can be identified from the
+        // console without redeploying.
+        _trace: function (label, extra) {
+          try {
+            if (window.localStorage &&
+                window.localStorage.getItem('golabDebugEditModal') === '1') {
+              console.log('[edit-modal] ' + label,
+                          extra || '', new Error().stack);
+            }
+          } catch (e) { /* ignore */ }
+        },
 
         openForPost: function (postId) {
-          if (!postId) return;
+          // Hard guards: only proceed when called with a real numeric
+          // post id. The listener passes
+          // `$event.detail && $event.detail.postId` so a custom event
+          // dispatched without a detail payload now becomes a no-op
+          // here instead of opening an empty modal.
+          if (!postId || typeof postId !== 'number' || postId <= 0) {
+            this._trace('openForPost ignored', { postId: postId });
+            return;
+          }
+          if (this._opening) {
+            this._trace('openForPost re-entrant ignored', { postId: postId });
+            return;
+          }
+          this._opening = true;
           var self = this;
           self.postId = postId;
           self.error = '';
           self.loading = true;
           self.open = true;
+          self._trace('openForPost', { postId: postId });
           // Fetch the freshest post text (an admin might have
           // edited since the user's feed loaded).
           apiJSON('/api/posts/' + postId, 'GET', null).then(function (res) {
             self.loading = false;
+            self._opening = false;
             if (!res.ok || !res.data || !res.data.post) {
               self.error = (res.data && res.data.error) || 'Could not load post';
               return;
@@ -403,6 +437,10 @@
             // Wait one frame so x-show has painted the editor div
             // before Quill measures its host.
             requestAnimationFrame(function () { self._mountQuill(); });
+          }).catch(function () {
+            self.loading = false;
+            self._opening = false;
+            self.error = 'Network error';
           });
         },
 
@@ -483,11 +521,19 @@
         },
 
         close: function () {
+          // Sprint 15a.1 P4: every state field reset, in order. Cancel
+          // and the X button both go through here, the backdrop's
+          // @click.self does too, and Escape on the window. The full
+          // reset means a "spontaneous reopen" (whatever its source)
+          // can't inherit half-stale state from a prior session.
+          this._trace('close');
           this.open = false;
-          this.error = '';
+          this.loading = false;
           this.saving = false;
+          this.error = '';
           this.postId = 0;
           this._initialHTML = '';
+          this._opening = false;
           // Tear down Quill so the next open starts clean. Quill
           // doesn't expose a formal destroy, but removing the DOM
           // children clears its toolbar and editor wrappers.
@@ -1613,11 +1659,22 @@
         // the modal DOM directly. editPostModal() in the base
         // template listens for it, fetches the post, and mounts a
         // Quill instance pre-filled with the current content.
-        el.addEventListener('click', function () {
-          var id = el.dataset.postId;
-          if (!id) return;
+        //
+        // Sprint 15a.1 P4 hardening: stop propagation + prevent
+        // default + validate the parsed id BEFORE dispatch. If a
+        // bubble-up from a nested element ever ends up triggering
+        // this handler with a stray dataset, NaN or 0 is filtered
+        // here and the modal's own openForPost guard catches the
+        // rest.
+        el.addEventListener('click', function (e) {
+          if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          var raw = el.dataset.postId;
+          if (!raw) return;
+          var id = parseInt(raw, 10);
+          if (!id || isNaN(id) || id <= 0) return;
           window.dispatchEvent(new CustomEvent('golab:open-edit-post', {
-            detail: { postId: parseInt(id, 10) }
+            detail: { postId: id }
           }));
         });
       }
