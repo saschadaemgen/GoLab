@@ -1015,6 +1015,20 @@
                 if (!self.quill) return;
                 var range = quillSafeRange(self.quill);
                 if (!range) return;
+                // Sprint 15a.2 P2 root-cause: same listener-detach as
+                // the image path above. insertText fires the Quill
+                // text-change + selection-change events the mention
+                // module subscribes to, and the module's _onSelection
+                // re-enters getSelection() during Quill's post-insert
+                // update. Detaching for the duration of this one call
+                // removes the re-entrant path.
+                var mention = self.mention;
+                var paused = false;
+                if (mention && typeof mention.pause === 'function') {
+                  try { mention.pause(); paused = true; } catch (pe) {
+                    console.error('mention.pause failed', pe);
+                  }
+                }
                 try {
                   self.quill.insertText(range.index, emojiText, 'user');
                   self.quill.setSelection(range.index + emojiText.length, 0, 'user');
@@ -1027,6 +1041,12 @@
                     self.quill.setSelection(range.index + emojiText.length, 0, 'user');
                   } catch (err2) {
                     console.error('Quill emoji paste fallback also failed', err2);
+                  }
+                } finally {
+                  if (paused && mention && typeof mention.resume === 'function') {
+                    try { mention.resume(); } catch (re) {
+                      console.error('mention.resume failed', re);
+                    }
                   }
                 }
               }, 0);
@@ -1143,16 +1163,33 @@
                   toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + imageUrl);
                   return;
                 }
+                // Sprint 15a.2 P1 root-cause: quill-mention.js subscribes
+                // to text-change and selection-change on this same Quill
+                // instance. Both callbacks call quill.getSelection()
+                // again, which is the call the Sprint 15a.1 stack trace
+                // pointed at when insertEmbed crashed with "Cannot read
+                // properties of null (reading 'offset')". Detaching
+                // those two listeners around the mutation removes the
+                // re-entrant getSelection call from Quill's post-insert
+                // update cycle. Resume runs in finally so any thrown
+                // insert path still re-attaches the listeners.
+                var mention = self.mention;
+                var paused = false;
+                if (mention && typeof mention.pause === 'function') {
+                  try { mention.pause(); paused = true; } catch (pe) {
+                    console.error('mention.pause failed', pe);
+                  }
+                }
                 try {
                   self.quill.insertEmbed(range.index, 'image', imageUrl, 'user');
                   self.quill.setSelection(range.index + 1, 0, 'user');
                 } catch (e) {
-                  // Sprint 15a.1 P1 fallback: insertEmbed's internal
-                  // selection update is the line that crashed on live.
+                  // Sprint 15a.1 P1 fallback, preserved: if insertEmbed
+                  // still throws even with mention listeners detached,
                   // dangerouslyPasteHTML goes through the HTML -> Delta
-                  // path which doesn't touch the same selection code,
-                  // so it's our last-ditch attempt before showing the
-                  // "paste the URL" instruction toast.
+                  // path which doesn't touch the same selection update
+                  // code. Last-ditch before we show the paste-the-URL
+                  // toast.
                   console.error('Quill insertEmbed failed, trying paste fallback', e);
                   try {
                     self.quill.clipboard.dangerouslyPasteHTML(
@@ -1164,6 +1201,12 @@
                   } catch (e2) {
                     console.error('Quill paste fallback also failed', e2);
                     toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + imageUrl);
+                  }
+                } finally {
+                  if (paused && mention && typeof mention.resume === 'function') {
+                    try { mention.resume(); } catch (re) {
+                      console.error('mention.resume failed', re);
+                    }
                   }
                 }
               }, 0);
