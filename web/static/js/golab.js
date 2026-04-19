@@ -338,6 +338,17 @@
         saving: false,
         error: '',
         postId: 0,
+        // Sprint 15a.5.1 follow-up: Alpine-reactive mirror of Quill's
+        // content length. Since 15a.5 moved the Quill instance into a
+        // closure variable Alpine can't see, any binding that read
+        // `quill.getText()` directly (here: the save-button's
+        // :disabled="saving || !hasContent()") only evaluated at
+        // initial render and never re-ran. We maintain this length
+        // counter by subscribing to Quill's text-change event in
+        // _mountQuill and writing into a reactive property. The same
+        // pattern works in composeEditor() where `charCount` already
+        // wired this correctly.
+        contentLen: 0,
         _opening: false, // re-entrancy guard: ignore back-to-back opens
 
         openForPost: function (postId) {
@@ -383,6 +394,7 @@
           if (quill) return; // already mounted
           var host = this.$refs.editor;
           if (!host || !window.Quill) return;
+          var self = this;
           quill = new window.Quill(host, {
             theme: 'snow',
             placeholder: "What do you want to say?",
@@ -396,6 +408,13 @@
               ]
             }
           });
+          // Mirror Quill's content length into an Alpine-reactive
+          // property so :disabled bindings that depend on hasContent()
+          // re-evaluate on every keystroke. See the contentLen comment
+          // on the returned object for the Sprint 15a.5.1 backstory.
+          quill.on('text-change', function () {
+            self.contentLen = self._computeLen();
+          });
           // Seed with the current post text. If it looks like HTML
           // (Quill was the original editor) paste it through the
           // clipboard pipeline; otherwise drop it in as plain text
@@ -407,11 +426,24 @@
               quill.setText(initialHTML);
             }
           }
+          // Prime contentLen synchronously from the seeded text. The
+          // text-change subscription fires during the seed pipeline in
+          // most Quill versions, but we do not want to rely on that -
+          // an unfired event would leave the save button disabled on a
+          // post that actually has content and freeze editing.
+          self.contentLen = self._computeLen();
+        },
+
+        _computeLen: function () {
+          if (!quill) return 0;
+          // getText() always terminates in a trailing newline; strip it
+          // plus any surrounding whitespace so a document of only
+          // whitespace / newlines does not look like content.
+          return (quill.getText() || '').replace(/\n$/, '').trim().length;
         },
 
         hasContent: function () {
-          if (!quill) return false;
-          return (quill.getText() || '').replace(/\n$/, '').length > 0;
+          return this.contentLen > 0;
         },
 
         save: function () {
@@ -466,6 +498,7 @@
           this.saving = false;
           this.error = '';
           this.postId = 0;
+          this.contentLen = 0;
           this._opening = false;
           initialHTML = '';
           // Tear down Quill so the next open starts clean. Quill
