@@ -38,32 +38,62 @@
     if (err) err.textContent = message || '';
   }
 
-  // Sprint 15 B1: null-safe Quill selection helper.
+  // Sprint 15a.1 P1 / P2: null-safe Quill selection helper.
   //
-  // Any UI element that steals focus (native file dialog for image
-  // upload, emoji quick-picker, link prompt, modal) leaves Quill
-  // with no active selection when control returns. Before Sprint 15
-  // we called quill.getSelection(true) then branched on null; in
-  // Quill 2.0.3 there's a race where even the "force focus" flag
-  // returns null on first read because focus has not fully settled
-  // inside the editor DOM yet. Result: insertEmbed / insertText
-  // crashes with "Cannot read properties of null (reading 'offset')".
+  // Sprint 15a's first attempt called quill.focus() and synthesised a
+  // range. The synthesised index was correct, but insertEmbed STILL
+  // threw "Cannot read properties of null (reading 'offset')" because
+  // Quill 2.0.3's internal selection update (called as a side effect
+  // of insertEmbed mutating the doc) fetched the live DOM selection,
+  // which was still null - quill.focus() does not reliably move the
+  // browser focus into the editor's DOM root in time.
   //
-  // This helper focuses Quill, reads the selection, and synthesises
-  // a range at the document end if the real range is still missing.
-  // Every insertion path now routes through it.
+  // The new approach has three layers, applied by every caller:
+  //
+  //   1. Focus the EDITOR DOM ELEMENT (quill.root) directly. This is
+  //      the actual contenteditable node and accepts focus deterministically.
+  //   2. Commit the synthesised range to Quill's internal state via
+  //      setSelection(idx, 0, 'silent'). The 'silent' source skips
+  //      the selection-change event so we don't trigger the same
+  //      update path that crashed.
+  //   3. Schedule the actual insertion via setTimeout(fn, 0) so the
+  //      browser finishes its post-file-dialog focus / blur shuffle
+  //      before Quill mutates anything.
+  //
+  // quillSafeRange just returns the chosen range; the focus + commit
+  // happen inside it so callers don't have to remember the dance.
   function quillSafeRange(quill) {
     if (!quill) return null;
-    try { quill.focus(); } catch (e) { /* ignore */ }
+    // 1. Focus the actual DOM editor element. quill.focus() is the
+    //    Quill API call which we ALSO try, but the DOM call is what
+    //    actually puts the cursor into a state where getSelection
+    //    returns a real range.
+    try {
+      if (quill.root && typeof quill.root.focus === 'function') {
+        quill.root.focus();
+      }
+      quill.focus();
+    } catch (e) { /* ignore */ }
+
     var range = null;
     try { range = quill.getSelection(); } catch (e) { range = null; }
-    if (range && typeof range.index === 'number') return range;
-    // Quill's internal length includes a trailing newline; subtract
-    // one so the insertion point sits before it instead of beyond.
+    if (range && typeof range.index === 'number') {
+      return range;
+    }
+
+    // 2. Synthesise an end-of-document range. getLength() includes a
+    //    trailing newline so the editable position is length - 1.
     var len = 0;
     try { len = quill.getLength(); } catch (e) { len = 0; }
     var end = len > 0 ? len - 1 : 0;
-    return { index: end, length: 0 };
+    var fallback = { index: end, length: 0 };
+
+    // 3. Commit the synthesised range to Quill's internal state so
+    //    its next getSelection() (called from inside insertEmbed's
+    //    update pipeline) returns a real value instead of null. The
+    //    'silent' source avoids re-firing the update we just escaped.
+    try { quill.setSelection(end, 0, 'silent'); } catch (e) { /* ignore */ }
+    return fallback;
   }
 
   // ---------- Alpine components ----------
@@ -929,19 +959,31 @@
             b.className = 'emoji-quickpicker-item';
             b.addEventListener('click', function (ev) {
               ev.stopPropagation();
-              if (!self.quill) return;
-              // B1: picker steals focus; quillSafeRange synthesises a
-              // range at the document end if Quill's real selection is
-              // still null after the focus bounce.
-              var range = quillSafeRange(self.quill);
-              if (!range) { panel.remove(); return; }
-              try {
-                self.quill.insertText(range.index, e, 'user');
-                self.quill.setSelection(range.index + e.length, 0, 'user');
-              } catch (err) {
-                console.error('Quill emoji insertText failed', err);
-              }
               panel.remove();
+              if (!self.quill) return;
+              // Sprint 15a.1 P2: same defer-and-paste-fallback pattern
+              // as the image upload (P1). The picker also steals focus
+              // and the post-Sprint-15a fix was insufficient on its own.
+              var emojiText = e;
+              setTimeout(function () {
+                if (!self.quill) return;
+                var range = quillSafeRange(self.quill);
+                if (!range) return;
+                try {
+                  self.quill.insertText(range.index, emojiText, 'user');
+                  self.quill.setSelection(range.index + emojiText.length, 0, 'user');
+                } catch (err) {
+                  console.error('Quill emoji insertText failed, trying paste fallback', err);
+                  try {
+                    self.quill.clipboard.dangerouslyPasteHTML(
+                      range.index, emojiText, 'user',
+                    );
+                    self.quill.setSelection(range.index + emojiText.length, 0, 'user');
+                  } catch (err2) {
+                    console.error('Quill emoji paste fallback also failed', err2);
+                  }
+                }
+              }, 0);
             });
             panel.appendChild(b);
           });
@@ -1039,21 +1081,46 @@
               // the embed into Quill has trouble (e.g. stale selection).
               toast('success', 'Image added');
               if (!self.quill) return;
-              try {
-                // B1: the native file dialog ALWAYS drops Quill focus, so
-                // the previous getSelection(true) + setSelection(end)
-                // dance was unreliable. quillSafeRange returns a usable
-                // range (the real one if we can refocus, a synthesised
-                // end-of-document one otherwise) so insertEmbed never
-                // sees null.
+              // Sprint 15a.1 P1: defer to next tick so the file dialog's
+              // post-close focus / blur events have settled before
+              // Quill mutates anything. quillSafeRange already focused
+              // the editor and committed a synthesised selection, but
+              // insertEmbed still ran while the focus was in flight on
+              // the live deploy and crashed inside Quill's selection
+              // update. The setTimeout buys one event-loop turn for
+              // the browser to settle.
+              var imageUrl = res.data.url;
+              setTimeout(function () {
+                if (!self.quill) return;
                 var range = quillSafeRange(self.quill);
-                if (!range) throw new Error('no range');
-                self.quill.insertEmbed(range.index, 'image', res.data.url, 'user');
-                self.quill.setSelection(range.index + 1, 0, 'user');
-              } catch (e) {
-                console.error('Quill insertEmbed failed', e);
-                toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + res.data.url);
-              }
+                if (!range) {
+                  toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + imageUrl);
+                  return;
+                }
+                try {
+                  self.quill.insertEmbed(range.index, 'image', imageUrl, 'user');
+                  self.quill.setSelection(range.index + 1, 0, 'user');
+                } catch (e) {
+                  // Sprint 15a.1 P1 fallback: insertEmbed's internal
+                  // selection update is the line that crashed on live.
+                  // dangerouslyPasteHTML goes through the HTML -> Delta
+                  // path which doesn't touch the same selection code,
+                  // so it's our last-ditch attempt before showing the
+                  // "paste the URL" instruction toast.
+                  console.error('Quill insertEmbed failed, trying paste fallback', e);
+                  try {
+                    self.quill.clipboard.dangerouslyPasteHTML(
+                      range.index,
+                      '<img src="' + imageUrl + '">',
+                      'user',
+                    );
+                    self.quill.setSelection(range.index + 1, 0, 'user');
+                  } catch (e2) {
+                    console.error('Quill paste fallback also failed', e2);
+                    toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + imageUrl);
+                  }
+                }
+              }, 0);
             }).catch(function (err) {
               console.error('Image upload network error', err);
               toast('error', 'Image upload failed (network)');
