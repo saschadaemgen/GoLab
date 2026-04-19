@@ -38,64 +38,6 @@
     if (err) err.textContent = message || '';
   }
 
-  // Sprint 15a.1 P1 / P2: null-safe Quill selection helper.
-  //
-  // Sprint 15a's first attempt called quill.focus() and synthesised a
-  // range. The synthesised index was correct, but insertEmbed STILL
-  // threw "Cannot read properties of null (reading 'offset')" because
-  // Quill 2.0.3's internal selection update (called as a side effect
-  // of insertEmbed mutating the doc) fetched the live DOM selection,
-  // which was still null - quill.focus() does not reliably move the
-  // browser focus into the editor's DOM root in time.
-  //
-  // The new approach has three layers, applied by every caller:
-  //
-  //   1. Focus the EDITOR DOM ELEMENT (quill.root) directly. This is
-  //      the actual contenteditable node and accepts focus deterministically.
-  //   2. Commit the synthesised range to Quill's internal state via
-  //      setSelection(idx, 0, 'silent'). The 'silent' source skips
-  //      the selection-change event so we don't trigger the same
-  //      update path that crashed.
-  //   3. Schedule the actual insertion via setTimeout(fn, 0) so the
-  //      browser finishes its post-file-dialog focus / blur shuffle
-  //      before Quill mutates anything.
-  //
-  // quillSafeRange just returns the chosen range; the focus + commit
-  // happen inside it so callers don't have to remember the dance.
-  function quillSafeRange(quill) {
-    if (!quill) return null;
-    // 1. Focus the actual DOM editor element. quill.focus() is the
-    //    Quill API call which we ALSO try, but the DOM call is what
-    //    actually puts the cursor into a state where getSelection
-    //    returns a real range.
-    try {
-      if (quill.root && typeof quill.root.focus === 'function') {
-        quill.root.focus();
-      }
-      quill.focus();
-    } catch (e) { /* ignore */ }
-
-    var range = null;
-    try { range = quill.getSelection(); } catch (e) { range = null; }
-    if (range && typeof range.index === 'number') {
-      return range;
-    }
-
-    // 2. Synthesise an end-of-document range. getLength() includes a
-    //    trailing newline so the editable position is length - 1.
-    var len = 0;
-    try { len = quill.getLength(); } catch (e) { len = 0; }
-    var end = len > 0 ? len - 1 : 0;
-    var fallback = { index: end, length: 0 };
-
-    // 3. Commit the synthesised range to Quill's internal state so
-    //    its next getSelection() (called from inside insertEmbed's
-    //    update pipeline) returns a real value instead of null. The
-    //    'silent' source avoids re-firing the update we just escaped.
-    try { quill.setSelection(end, 0, 'silent'); } catch (e) { /* ignore */ }
-    return fallback;
-  }
-
   // ---------- Alpine components ----------
 
   document.addEventListener('alpine:init', function () {
@@ -374,15 +316,59 @@
     // current content, and PATCHes /api/posts/{id} on save. The
     // Quill instance is created on each open and destroyed on
     // close so closing + reopening doesn't stack toolbars.
+    //
+    // Sprint 15a.5 P1 / P2 ROOT-CAUSE FIX: the Quill instance
+    // lives in a CLOSURE variable, not on `this`. Alpine 3 wraps
+    // every property assigned to a component in a deep reactive
+    // Proxy. Quill's internal scroll.find() compares blots via
+    // `n.scroll === this` identity; through Alpine's Proxy those
+    // comparisons fail (the Proxy and its target are not ===),
+    // so scroll.find returns null and normalizedToRange crashes
+    // dereferencing .offset. Storing quill OUTSIDE the Alpine
+    // component state bypasses the Proxy entirely. Alpine can't
+    // wrap what it can't see.
     window.Alpine.data('editPostModal', function () {
+      // Closure-owned, never on `this`. Alpine-invisible.
+      var quill = null;
+      var initialHTML = '';
+      // Sprint 15a.5.3: baselineHTML is the RENDERED state of the
+      // editor right after the seed, NOT the raw server string. Quill's
+      // dangerouslyPasteHTML normalises the markup (collapses empty
+      // <p>, strips unknown tags, canonicalises attributes), so
+      // comparing the live editor innerHTML against initialHTML would
+      // treat every open as "dirty". The baseline is captured in
+      // _mountQuill after the seed runs, and hasChanges flips true
+      // when the user mutates away from it, false when they revert to
+      // byte-identical. See the hasChanges property comment for the
+      // full rationale.
+      var baselineHTML = '';
+
       return {
         open: false,
         loading: false,
         saving: false,
         error: '',
         postId: 0,
-        quill: null,
-        _initialHTML: '',
+        // Sprint 15a.5.1 follow-up: Alpine-reactive mirror of Quill's
+        // content length. Since 15a.5 moved the Quill instance into a
+        // closure variable Alpine can't see, any binding that read
+        // `quill.getText()` directly (here: the save-button's
+        // :disabled="saving || !hasContent()") only evaluated at
+        // initial render and never re-ran. We maintain this length
+        // counter by subscribing to Quill's text-change event in
+        // _mountQuill and writing into a reactive property. The same
+        // pattern works in composeEditor() where `charCount` already
+        // wired this correctly.
+        contentLen: 0,
+        // Sprint 15a.5.3: Alpine-reactive dirty flag. The save button
+        // is disabled while `!hasChanges` so the user can't resubmit
+        // an unchanged post. Flipped true by the text-change handler
+        // whenever quill.root.innerHTML differs from the baseline
+        // captured at seed time, flipped back to false by the same
+        // handler when the user edits a change back to baseline. Any
+        // :disabled binding that reads hasChanges will re-run on that
+        // transition because hasChanges is a tracked property.
+        hasChanges: false,
         _opening: false, // re-entrancy guard: ignore back-to-back opens
 
         openForPost: function (postId) {
@@ -413,7 +399,7 @@
               self.error = (res.data && res.data.error) || 'Could not load post';
               return;
             }
-            self._initialHTML = res.data.post.content || '';
+            initialHTML = res.data.post.content || '';
             // Wait one frame so x-show has painted the editor div
             // before Quill measures its host.
             requestAnimationFrame(function () { self._mountQuill(); });
@@ -425,10 +411,11 @@
         },
 
         _mountQuill: function () {
-          if (this.quill) return; // already mounted
+          if (quill) return; // already mounted
           var host = this.$refs.editor;
           if (!host || !window.Quill) return;
-          this.quill = new window.Quill(host, {
+          var self = this;
+          quill = new window.Quill(host, {
             theme: 'snow',
             placeholder: "What do you want to say?",
             modules: {
@@ -441,28 +428,68 @@
               ]
             }
           });
-          // Seed with the current post text. If it looks like HTML
-          // (Quill was the original editor) paste it through the
-          // clipboard pipeline; otherwise drop it in as plain text
-          // so legacy Markdown posts don't render as mangled HTML.
-          if (this._initialHTML) {
-            if (/^\s*</.test(this._initialHTML)) {
-              this.quill.clipboard.dangerouslyPasteHTML(this._initialHTML);
+          // Seed with the current post text FIRST, before subscribing
+          // to text-change. The subscription below computes hasChanges
+          // against baselineHTML; if we seed after subscribing, the
+          // seed itself would fire text-change events with an empty
+          // baseline and flip hasChanges true during open. Seeding
+          // first keeps the baseline capture and the subscription in
+          // the right order.
+          if (initialHTML) {
+            if (/^\s*</.test(initialHTML)) {
+              quill.clipboard.dangerouslyPasteHTML(initialHTML);
             } else {
-              this.quill.setText(this._initialHTML);
+              quill.setText(initialHTML);
             }
           }
+          // Capture the baseline AFTER Quill has normalised the seed.
+          // See the baselineHTML closure comment: raw initialHTML is
+          // not a safe baseline because Quill rewrites markup at paste
+          // time (empty paragraphs, attribute order, whitespace), so
+          // the first post-seed text-change event would always see
+          // `innerHTML !== initialHTML` and falsely report hasChanges.
+          baselineHTML = quill.root.innerHTML;
+          // Prime contentLen synchronously from the seeded text so the
+          // Save button reflects the seeded state before any user
+          // interaction. Same defence-in-depth rationale as 15a.5.2:
+          // we do not rely on text-change firing during seed.
+          self.contentLen = self._computeLen();
+          // Subscribe AFTER seed + baseline capture. The handler
+          // mirrors content length into reactive contentLen (so
+          // hasContent() updates) and sets reactive hasChanges by
+          // comparing live HTML against the captured baseline (so the
+          // Save button reflects dirty state). Byte-identical HTML ==
+          // not dirty, so editing a change back to baseline flips
+          // hasChanges false again without any explicit revert path.
+          quill.on('text-change', function () {
+            self.contentLen = self._computeLen();
+            self.hasChanges = (quill.root.innerHTML !== baselineHTML);
+          });
+        },
+
+        _computeLen: function () {
+          if (!quill) return 0;
+          // getText() always terminates in a trailing newline; strip it
+          // plus any surrounding whitespace so a document of only
+          // whitespace / newlines does not look like content.
+          return (quill.getText() || '').replace(/\n$/, '').trim().length;
         },
 
         hasContent: function () {
-          if (!this.quill) return false;
-          return (this.quill.getText() || '').replace(/\n$/, '').length > 0;
+          return this.contentLen > 0;
         },
 
         save: function () {
           var self = this;
-          if (!self.quill || self.saving) return;
-          var content = self.quill.root.innerHTML;
+          if (!quill || self.saving) return;
+          // Sprint 15a.5.3 defence-in-depth: the Save button's
+          // :disabled binding already blocks unchanged / empty
+          // submits, but we mirror the same gates here so a keyboard
+          // trigger or a stale binding can never send a redundant
+          // PATCH. Silent return, not an error toast - the user's
+          // intent (nothing to save) is not actually an error.
+          if (!self.hasChanges) return;
+          var content = quill.root.innerHTML;
           if (content === '<p><br></p>') {
             self.error = 'Content cannot be empty';
             return;
@@ -511,12 +538,15 @@
           this.saving = false;
           this.error = '';
           this.postId = 0;
-          this._initialHTML = '';
+          this.contentLen = 0;
+          this.hasChanges = false;
           this._opening = false;
+          initialHTML = '';
+          baselineHTML = '';
           // Tear down Quill so the next open starts clean. Quill
           // doesn't expose a formal destroy, but removing the DOM
           // children clears its toolbar and editor wrappers.
-          this.quill = null;
+          quill = null;
           var host = this.$refs && this.$refs.editor;
           if (host) host.innerHTML = '';
           var parent = host && host.parentElement;
@@ -817,8 +847,31 @@
     // so the user can at least type.
     window.Alpine.data('composeEditor', function (cfg) {
       cfg = cfg || {};
+
+      // Sprint 15a.5 P1 / P2 ROOT-CAUSE FIX: Quill and its
+      // GolabQuillMention satellite live in CLOSURE variables, not
+      // on `this`. Alpine 3 wraps every reactive-component property
+      // in a deep Proxy. Quill's internal scroll.find() compares
+      // blots via `n.scroll === this` identity; through Alpine's
+      // Proxy those comparisons fail because the Proxy object and
+      // its target are not === equal. scroll.find then returns null
+      // and normalizedToRange crashes dereferencing .offset on it.
+      // That is the "Cannot read properties of null (reading
+      // 'offset')" stack we chased across Sprints 15a / 15a.1 /
+      // 15a.2 / 15a.3. Der Prinz pinned it with Prinzessin Mausi
+      // in devtools: `cd.quill === Alpine.raw(cd.quill)` is false,
+      // `cd.quill.scroll.find(p)` returns null, but
+      // `Alpine.raw(cd.quill).scroll.find(p)` finds the blot.
+      //
+      // Storing quill outside the Alpine-visible state bypasses the
+      // Proxy entirely. Alpine can't wrap what it can't see, so
+      // every Quill internal operation runs on the raw instance.
+      // No Alpine.raw() call needed at any insertion site, no
+      // defensive layers, no setTimeout defers.
+      var quill = null;
+      var mention = null;
+
       return {
-        quill: null,
         charCount: 0,
         max: 5000,
         submitting: false,
@@ -846,14 +899,12 @@
           //   2. HTMX hx-boost page swaps leave a stale Quill instance on
           //      a container that Alpine then tries to re-mount.
           // In both cases Quill adds a second toolbar and editor. We check
-          // container state and the stashed Quill reference, and bail out
-          // early if either indicates an existing mount.
+          // container state and the closure-owned Quill reference, and
+          // bail out early if either indicates an existing mount.
           if (container.__quillMounted || container.classList.contains('ql-container')) {
             return;
           }
-          // Also: if Alpine re-runs init on the same component data, this.quill
-          // is already set from the first pass. Skip.
-          if (this.quill) {
+          if (quill) {
             return;
           }
 
@@ -867,7 +918,7 @@
             container.__quillMounted = true;
             return;
           }
-          this.quill = new window.Quill(container, {
+          quill = new window.Quill(container, {
             theme: 'snow',
             placeholder: "What's on your mind?",
             modules: {
@@ -887,7 +938,7 @@
             }
           });
           container.__quillMounted = true;
-          this.quill.on('text-change', function () {
+          quill.on('text-change', function () {
             self.charCount = self.textLength();
           });
 
@@ -896,9 +947,10 @@
           // GolabQuillMention global. We tie it to this Alpine
           // component's lifecycle so teardown cleans up listeners
           // (see destroy path below for the .destroy() call).
+          // Closure-owned for the same Proxy-identity reason as quill.
           if (typeof window.GolabQuillMention === 'function') {
             try {
-              this.mention = new window.GolabQuillMention(this.quill, {
+              mention = new window.GolabQuillMention(quill, {
                 fetchUrl: '/api/users/autocomplete'
               });
             } catch (err) { /* autocomplete is best-effort */ }
@@ -908,7 +960,7 @@
           // Quill's matchers fire during clipboard processing so the URL
           // never lands as plain text first.
           try {
-            this.quill.clipboard.addMatcher(Node.TEXT_NODE, function (node, delta) {
+            quill.clipboard.addMatcher(Node.TEXT_NODE, function (node, delta) {
               var text = node.data || '';
               var gifRe = /\bhttps?:\/\/[^\s<>"']+\.gif(\?[^\s<>"']*)?\b/i;
               var m = text.match(gifRe);
@@ -957,14 +1009,10 @@
 
         // Compact grid picker with 40 of the most-used emoji for
         // a community context. No library, no network, instant open.
-        // We ship the full LC-Emoji-Picker files alongside but the
-        // library isn't on the critical path (we can fall back to
-        // it lazily if the user ever asks for the long tail).
         toggleEmojiPicker: function (anchor) {
           var existing = document.querySelector('.emoji-quickpicker');
           if (existing) { existing.remove(); return; }
 
-          var self = this;
           var panel = document.createElement('div');
           panel.className = 'emoji-quickpicker';
           var common = [
@@ -985,50 +1033,15 @@
             b.addEventListener('click', function (ev) {
               ev.stopPropagation();
               panel.remove();
-              if (!self.quill) return;
-              // Sprint 15a.1 P2: same defer-and-paste-fallback pattern
-              // as the image upload (P1). The picker also steals focus
-              // and the post-Sprint-15a fix was insufficient on its own.
-              var emojiText = e;
-              setTimeout(function () {
-                if (!self.quill) return;
-                var range = quillSafeRange(self.quill);
-                if (!range) return;
-                // Sprint 15a.2 P2 root-cause: same listener-detach as
-                // the image path above. insertText fires the Quill
-                // text-change + selection-change events the mention
-                // module subscribes to, and the module's _onSelection
-                // re-enters getSelection() during Quill's post-insert
-                // update. Detaching for the duration of this one call
-                // removes the re-entrant path.
-                var mention = self.mention;
-                var paused = false;
-                if (mention && typeof mention.pause === 'function') {
-                  try { mention.pause(); paused = true; } catch (pe) {
-                    console.error('mention.pause failed', pe);
-                  }
-                }
-                try {
-                  self.quill.insertText(range.index, emojiText, 'user');
-                  self.quill.setSelection(range.index + emojiText.length, 0, 'user');
-                } catch (err) {
-                  console.error('Quill emoji insertText failed, trying paste fallback', err);
-                  try {
-                    self.quill.clipboard.dangerouslyPasteHTML(
-                      range.index, emojiText, 'user',
-                    );
-                    self.quill.setSelection(range.index + emojiText.length, 0, 'user');
-                  } catch (err2) {
-                    console.error('Quill emoji paste fallback also failed', err2);
-                  }
-                } finally {
-                  if (paused && mention && typeof mention.resume === 'function') {
-                    try { mention.resume(); } catch (re) {
-                      console.error('mention.resume failed', re);
-                    }
-                  }
-                }
-              }, 0);
+              if (!quill) return;
+              // Sprint 15a.5: direct call on the closure-owned Quill.
+              // No Alpine Proxy in the way, no scroll.find null, no
+              // normalizedToRange crash. Use the current selection
+              // if Quill has one, else insert at the end of the doc.
+              var range = quill.getSelection();
+              var idx = range ? range.index : Math.max(0, quill.getLength() - 1);
+              quill.insertText(idx, e, 'user');
+              quill.setSelection(idx + e.length, 0, 'user');
             });
             panel.appendChild(b);
           });
@@ -1066,33 +1079,32 @@
           // Sprint 14: tear down the mention autocomplete so its
           // document-level listeners and dropdown element don't
           // leak past the editor.
-          if (this.mention && typeof this.mention.destroy === 'function') {
-            try { this.mention.destroy(); } catch (e) {}
+          if (mention && typeof mention.destroy === 'function') {
+            try { mention.destroy(); } catch (e) {}
           }
-          this.mention = null;
+          mention = null;
           var container = this.$refs && this.$refs.editor;
           if (container) {
             delete container.__quillMounted;
           }
-          this.quill = null;
+          quill = null;
         },
 
         textLength: function () {
-          if (!this.quill) return 0;
+          if (!quill) return 0;
           // Quill's getText() includes trailing newline; trim it.
-          return (this.quill.getText() || '').replace(/\n$/, '').length;
+          return (quill.getText() || '').replace(/\n$/, '').length;
         },
 
         htmlContent: function () {
-          if (!this.quill) return this.$refs.editor.innerHTML || '';
-          var html = this.quill.root.innerHTML;
+          if (!quill) return this.$refs.editor.innerHTML || '';
+          var html = quill.root.innerHTML;
           // Empty Quill document is '<p><br></p>'. Treat that as empty.
           if (html === '<p><br></p>') return '';
           return html;
         },
 
         uploadImage: function () {
-          var self = this;
           var input = document.createElement('input');
           input.type = 'file';
           input.accept = 'image/*';
@@ -1122,73 +1134,22 @@
                 toast('error', (res.data && res.data.error) || 'Image upload failed (' + res.status + ')');
                 return;
               }
-              // Success toast first so the user sees confirmation even if
-              // the embed into Quill has trouble (e.g. stale selection).
+              if (!quill) {
+                toast('info', 'Image uploaded but editor is gone. URL: ' + res.data.url);
+                return;
+              }
+              // Sprint 15a.5: direct call on the closure-owned Quill.
+              // Use the current selection if Quill still has one (user
+              // clicked image straight from within the editor), else
+              // insert at the end. No setTimeout, no Proxy unwrap, no
+              // clipboard fallback - the root cause was the Alpine
+              // Proxy around this.quill, and routing through the closure
+              // variable removes it from the code path.
+              var range = quill.getSelection();
+              var idx = range ? range.index : Math.max(0, quill.getLength() - 1);
+              quill.insertEmbed(idx, 'image', res.data.url, 'user');
+              quill.setSelection(idx + 1, 0, 'user');
               toast('success', 'Image added');
-              if (!self.quill) return;
-              // Sprint 15a.1 P1: defer to next tick so the file dialog's
-              // post-close focus / blur events have settled before
-              // Quill mutates anything. quillSafeRange already focused
-              // the editor and committed a synthesised selection, but
-              // insertEmbed still ran while the focus was in flight on
-              // the live deploy and crashed inside Quill's selection
-              // update. The setTimeout buys one event-loop turn for
-              // the browser to settle.
-              var imageUrl = res.data.url;
-              setTimeout(function () {
-                if (!self.quill) return;
-                var range = quillSafeRange(self.quill);
-                if (!range) {
-                  toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + imageUrl);
-                  return;
-                }
-                // Sprint 15a.2 P1 root-cause: quill-mention.js subscribes
-                // to text-change and selection-change on this same Quill
-                // instance. Both callbacks call quill.getSelection()
-                // again, which is the call the Sprint 15a.1 stack trace
-                // pointed at when insertEmbed crashed with "Cannot read
-                // properties of null (reading 'offset')". Detaching
-                // those two listeners around the mutation removes the
-                // re-entrant getSelection call from Quill's post-insert
-                // update cycle. Resume runs in finally so any thrown
-                // insert path still re-attaches the listeners.
-                var mention = self.mention;
-                var paused = false;
-                if (mention && typeof mention.pause === 'function') {
-                  try { mention.pause(); paused = true; } catch (pe) {
-                    console.error('mention.pause failed', pe);
-                  }
-                }
-                try {
-                  self.quill.insertEmbed(range.index, 'image', imageUrl, 'user');
-                  self.quill.setSelection(range.index + 1, 0, 'user');
-                } catch (e) {
-                  // Sprint 15a.1 P1 fallback, preserved: if insertEmbed
-                  // still throws even with mention listeners detached,
-                  // dangerouslyPasteHTML goes through the HTML -> Delta
-                  // path which doesn't touch the same selection update
-                  // code. Last-ditch before we show the paste-the-URL
-                  // toast.
-                  console.error('Quill insertEmbed failed, trying paste fallback', e);
-                  try {
-                    self.quill.clipboard.dangerouslyPasteHTML(
-                      range.index,
-                      '<img src="' + imageUrl + '">',
-                      'user',
-                    );
-                    self.quill.setSelection(range.index + 1, 0, 'user');
-                  } catch (e2) {
-                    console.error('Quill paste fallback also failed', e2);
-                    toast('info', 'Image uploaded but could not be inserted - paste the URL: ' + imageUrl);
-                  }
-                } finally {
-                  if (paused && mention && typeof mention.resume === 'function') {
-                    try { mention.resume(); } catch (re) {
-                      console.error('mention.resume failed', re);
-                    }
-                  }
-                }
-              }, 0);
             }).catch(function (err) {
               console.error('Image upload network error', err);
               toast('error', 'Image upload failed (network)');
@@ -1235,7 +1196,7 @@
           apiJSON('/api/posts', 'POST', body).then(function (res) {
             self.submitting = false;
             if (res.ok) {
-              if (self.quill) self.quill.setContents([]);
+              if (quill) quill.setContents([]);
               else self.$refs.editor.innerHTML = '';
               self.charCount = 0;
               toast('success', 'Posted');

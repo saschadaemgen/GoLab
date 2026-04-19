@@ -51,7 +51,7 @@
                 @click.stop.prevent="close()">Cancel</button>
         <button type="button" class="btn btn-primary press-effect"
                 @click.stop.prevent="save()"
-                :disabled="saving || !hasContent()">
+                :disabled="saving || !hasContent() || !hasChanges">
           <span x-show="!saving" x-cloak>Save changes</span>
           <span x-show="saving" x-cloak>Saving...</span>
         </button>

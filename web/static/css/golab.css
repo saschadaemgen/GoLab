@@ -1,6 +1,32 @@
 /* GoLab-specific components: post card, channel card, compose,
    profile, feed layout, sidebar, hero, auth screens. */
 
+/* Sprint 15a.5.1: x-cloak global rule. Alpine's `[x-cloak]`
+   directive requires the host page to provide the CSS rule that
+   actually hides the element. Without it x-cloak is a no-op and
+   the template's `x-cloak` attribute has zero effect on layout.
+
+   We use this rule to hide Alpine-managed elements BEFORE Alpine
+   parses the DOM, so there's no paint-flash of a half-initialised
+   modal on page load. Once Alpine walks the element it strips the
+   x-cloak attribute and this rule stops matching; from that moment
+   on, x-show's inline display overrides (display: none on hide,
+   cleared on show) drive visibility.
+
+   This replaces the Sprint 15a.4 workaround of setting CSS defaults
+   to display:none on modal backdrops. That fix killed the paint
+   flash but silently broke the show path: Alpine's _x_doShow only
+   REMOVES the inline display override, it does not write
+   display:flex. With CSS default display:none the cascade falls
+   straight back to hidden and the modal never appears even though
+   open === true. Live-browser verification confirmed this: with
+   display:none default, `m._x_dataStack[0].open = true` results in
+   inline style null, computed display "none", _x_isShown true
+   (Alpine thinks it showed; CSS disagrees). With display:flex
+   default + this x-cloak rule, the same sequence yields computed
+   display "flex" and the modal is actually visible. */
+[x-cloak] { display: none !important; }
+
 /* ===== Hero (home page) ===== */
 
 .hero {
@@ -826,32 +852,24 @@ img.avatar {
    wider so Quill's toolbar fits on a mobile viewport without
    wrapping more than once.
 
-   Sprint 15a.4 P4 ROOT CAUSE: display MUST default to none. The
-   original rule had display:flex which, combined with Alpine's
-   x-show="open" on the <div>, produced the "ghost modal" bug
-   that chased us across Sprints 15a / 15a.1 / 15a.2. Alpine 3
-   only writes an inline `display: none` into the element's style
-   attribute when x-show's backing expression TRANSITIONS from
-   truthy to falsy. On an element whose initial state is `open: false`
-   but whose CSS default is `display: flex`, Alpine treats the
-   element as already-hidden and never writes an inline override,
-   so the CSS default keeps painting the backdrop across the whole
-   viewport. Any click on the page hit the invisible backdrop, which
-   is a full-viewport element (position:fixed; inset:0) - that felt
-   like the modal opening "spontaneously" from comment links, admin
-   menus, space cards, etc. Manually setting style.display='none'
-   in devtools hid it, but re-renders / reflows re-ran the CSS
-   default and brought the ghost back.
-
-   Fix: default to display:none. Alpine switches to display:flex
-   when open flips to true, and switches back to display:none when
-   open flips to false. Both transitions are now written as inline
-   styles that override the (now harmless) CSS default. */
+   Sprint 15a.5.1: default display:flex is correct; pre-Alpine paint
+   flash is killed by the global `[x-cloak] { display: none
+   !important; }` rule near the top of this file, not by a
+   display:none default here. Sprint 15a.4 tried to use display:none
+   as the default to kill the ghost modal, which succeeded at
+   hiding the unbound element but silently broke the show path -
+   Alpine's x-show only removes the inline display override on
+   _x_doShow, it never writes display:flex, so CSS display:none
+   leaked straight back through and the modal stayed hidden even
+   when open flipped to true. With x-cloak doing the pre-init
+   hiding and display:flex as the shown-state baseline, Alpine's
+   inline-display-none-on-hide / remove-inline-on-show dance works
+   as documented. */
 .edit-post-modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 10500;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
@@ -3685,16 +3703,16 @@ img.avatar {
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
-  /* MUST default to display:none for the same reason as
-     .edit-post-modal-backdrop above (Sprint 15a.4 root cause):
-     Alpine's x-show only writes an inline display override when
-     the backing state TRANSITIONS. On the /admin page this modal
-     starts with importOpen / deleteOpen both false, so Alpine
-     never writes an inline display:none and the CSS default would
-     leak through as the actual rendered style. display:none here
-     is the baseline; Alpine switches to display:flex when the
-     corresponding open flag flips. */
-  display: none;
+  /* Sprint 15a.5.1: display:flex is correct - the global `[x-cloak]
+     { display: none !important; }` rule hides the element before
+     Alpine initialises, and Alpine then controls visibility via
+     inline display writes. 15a.4 used display:none here because the
+     x-cloak rule did not exist and the ghost modal leaked through;
+     that workaround broke the show path (Alpine never wrote
+     display:flex on open, only removed the inline display, which
+     let CSS display:none cascade straight back through). See the
+     large comment at the top of this file for the full story. */
+  display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10400;
