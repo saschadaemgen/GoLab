@@ -385,36 +385,17 @@
         _initialHTML: '',
         _opening: false, // re-entrancy guard: ignore back-to-back opens
 
-        // Sprint 15a.1 P4 diagnostic. The live deploy reports the
-        // modal opens spontaneously when clicking unrelated UI. Source
-        // grep shows exactly one dispatcher and one listener of
-        // golab:open-edit-post, so the bug is not visible to static
-        // review. Set localStorage.golabDebugEditModal = '1' in the
-        // browser to log every open / close transition with a stack
-        // trace, then the trigger source can be identified from the
-        // console without redeploying.
-        _trace: function (label, extra) {
-          try {
-            if (window.localStorage &&
-                window.localStorage.getItem('golabDebugEditModal') === '1') {
-              console.log('[edit-modal] ' + label,
-                          extra || '', new Error().stack);
-            }
-          } catch (e) { /* ignore */ }
-        },
-
         openForPost: function (postId) {
           // Hard guards: only proceed when called with a real numeric
           // post id. The listener passes
           // `$event.detail && $event.detail.postId` so a custom event
           // dispatched without a detail payload now becomes a no-op
-          // here instead of opening an empty modal.
+          // here instead of opening an empty modal. Kept as defence
+          // in depth after the Sprint 15a.4 CSS root-cause fix landed.
           if (!postId || typeof postId !== 'number' || postId <= 0) {
-            this._trace('openForPost ignored', { postId: postId });
             return;
           }
           if (this._opening) {
-            this._trace('openForPost re-entrant ignored', { postId: postId });
             return;
           }
           this._opening = true;
@@ -423,7 +404,6 @@
           self.error = '';
           self.loading = true;
           self.open = true;
-          self._trace('openForPost', { postId: postId });
           // Fetch the freshest post text (an admin might have
           // edited since the user's feed loaded).
           apiJSON('/api/posts/' + postId, 'GET', null).then(function (res) {
@@ -521,12 +501,11 @@
         },
 
         close: function () {
-          // Sprint 15a.1 P4: every state field reset, in order. Cancel
-          // and the X button both go through here, the backdrop's
-          // @click.self does too, and Escape on the window. The full
-          // reset means a "spontaneous reopen" (whatever its source)
-          // can't inherit half-stale state from a prior session.
-          this._trace('close');
+          // Sprint 15a.1 P4 defence-in-depth kept after the 15a.4
+          // CSS root-cause fix: every state field reset, in order.
+          // Cancel, the X button, the backdrop's @click.self, and
+          // Escape on the window all route through here, so a full
+          // reset means a stale field can't leak into the next open.
           this.open = false;
           this.loading = false;
           this.saving = false;

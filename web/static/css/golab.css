@@ -824,12 +824,34 @@ img.avatar {
 /* Sprint 15a B6 edit-post modal. Shares backdrop conventions with
    the admin-db modals (fixed, blurred, high z-index) but a touch
    wider so Quill's toolbar fits on a mobile viewport without
-   wrapping more than once. */
+   wrapping more than once.
+
+   Sprint 15a.4 P4 ROOT CAUSE: display MUST default to none. The
+   original rule had display:flex which, combined with Alpine's
+   x-show="open" on the <div>, produced the "ghost modal" bug
+   that chased us across Sprints 15a / 15a.1 / 15a.2. Alpine 3
+   only writes an inline `display: none` into the element's style
+   attribute when x-show's backing expression TRANSITIONS from
+   truthy to falsy. On an element whose initial state is `open: false`
+   but whose CSS default is `display: flex`, Alpine treats the
+   element as already-hidden and never writes an inline override,
+   so the CSS default keeps painting the backdrop across the whole
+   viewport. Any click on the page hit the invisible backdrop, which
+   is a full-viewport element (position:fixed; inset:0) - that felt
+   like the modal opening "spontaneously" from comment links, admin
+   menus, space cards, etc. Manually setting style.display='none'
+   in devtools hid it, but re-renders / reflows re-ran the CSS
+   default and brought the ghost back.
+
+   Fix: default to display:none. Alpine switches to display:flex
+   when open flips to true, and switches back to display:none when
+   open flips to false. Both transitions are now written as inline
+   styles that override the (now harmless) CSS default. */
 .edit-post-modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 10500;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   padding: 1rem;
@@ -3663,7 +3685,16 @@ img.avatar {
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
-  display: flex;
+  /* MUST default to display:none for the same reason as
+     .edit-post-modal-backdrop above (Sprint 15a.4 root cause):
+     Alpine's x-show only writes an inline display override when
+     the backing state TRANSITIONS. On the /admin page this modal
+     starts with importOpen / deleteOpen both false, so Alpine
+     never writes an inline display:none and the CSS default would
+     leak through as the actual rendered style. display:none here
+     is the baseline; Alpine switches to display:flex when the
+     corresponding open flag flips. */
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 10400;
