@@ -54,6 +54,7 @@
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onDocClick = this._onDocClick.bind(this);
 
+    this._paused = false;
     this.quill.on('text-change', this._onText);
     this.quill.on('selection-change', this._onSelection);
     // Capture phase for keyboard: we must beat Quill's keyboard module.
@@ -71,6 +72,42 @@
       try { this.abortCtrl.abort(); } catch (e) {}
     }
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+  };
+
+  // Sprint 15a.2: pause / resume decouple the Quill-level listeners
+  // (text-change, selection-change) from the host editor without
+  // tearing down the whole module. The use case is the P1 / P2 fix:
+  // the image-upload and emoji-picker paths need to call
+  // quill.insertEmbed / quill.insertText while the mention module's
+  // _onSelection is NOT subscribed, because _onSelection itself
+  // calls quill.getSelection(), and during Quill 2.0.3's internal
+  // post-insert update that inner getSelection crashes on a null
+  // DOM selection when the editor just regained focus from a file
+  // dialog or popup.
+  //
+  // Only the two Quill-event subscriptions are paused. The DOM
+  // keydown listener on quill.root and the document-level mousedown
+  // listener stay active; both are benign during programmatic
+  // inserts (keydown only fires on actual keystrokes, mousedown
+  // on actual mouse events). Keeping them attached means an
+  // in-progress mention dropdown continues to close on outside
+  // clicks even while paused.
+  //
+  // Both methods are idempotent via the _paused flag so nested
+  // pause / resume pairs from defensive callers cannot double-
+  // attach or double-detach.
+  GolabQuillMention.prototype.pause = function () {
+    if (this._paused) return;
+    this._paused = true;
+    try { this.quill.off('text-change', this._onText); } catch (e) { /* ignore */ }
+    try { this.quill.off('selection-change', this._onSelection); } catch (e) { /* ignore */ }
+  };
+
+  GolabQuillMention.prototype.resume = function () {
+    if (!this._paused) return;
+    this._paused = false;
+    try { this.quill.on('text-change', this._onText); } catch (e) { /* ignore */ }
+    try { this.quill.on('selection-change', this._onSelection); } catch (e) { /* ignore */ }
   };
 
   // ---- Quill event hooks ----------------------------------------
