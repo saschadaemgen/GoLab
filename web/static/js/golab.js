@@ -1955,15 +1955,35 @@
       }, 400);
     });
 
-    // Sprint 15a B2 / B3: walk the new subtree with Alpine so every
-    // x-data on the injected card (post actions menu, reaction bar
-    // state, reply compose forms) initialises. Without this the
-    // three-dot dropdown stays dead until a full page reload.
-    // Alpine.initTree is a no-op on trees already initialised, so
-    // running it on the subtree is safe even if Alpine ever walked
-    // it earlier through some other mechanism.
+    // Sprint 15a.1 P3: walk every x-data carrier in the subtree
+    // explicitly. The Sprint 15a fix called Alpine.initTree(newCard)
+    // on the article root, expecting Alpine to discover nested
+    // x-data declarations (the dropdown's `x-data="{open: false}"`
+    // is several levels deep). On the live deploy that walk did NOT
+    // pick up the nested element - the dropdown stayed dead until
+    // a full page reload.
+    //
+    // Alpine 3's recursive walk has a quirk where, depending on the
+    // initialisation timing of the root, descendant x-data nodes
+    // can be skipped. Iterating every [x-data] inside the card
+    // and initTree-ing each one individually is the documented
+    // safer pattern. We also initTree the card itself when its
+    // root has x-data (the post-card article does:
+    // `x-data="{ liked: false, count: ... }"`).
     if (window.Alpine && typeof window.Alpine.initTree === 'function') {
-      try { window.Alpine.initTree(newCard); } catch (e) {
+      try {
+        if (newCard.hasAttribute && newCard.hasAttribute('x-data')) {
+          window.Alpine.initTree(newCard);
+        }
+        var xdataChildren = newCard.querySelectorAll
+          ? newCard.querySelectorAll('[x-data]')
+          : [];
+        xdataChildren.forEach(function (el) {
+          try { window.Alpine.initTree(el); } catch (e) {
+            console.error('Alpine.initTree failed on injected x-data child', e, el);
+          }
+        });
+      } catch (e) {
         console.error('Alpine.initTree failed on new post card', e);
       }
     }
