@@ -331,6 +331,17 @@
       // Closure-owned, never on `this`. Alpine-invisible.
       var quill = null;
       var initialHTML = '';
+      // Sprint 15a.5.3: baselineHTML is the RENDERED state of the
+      // editor right after the seed, NOT the raw server string. Quill's
+      // dangerouslyPasteHTML normalises the markup (collapses empty
+      // <p>, strips unknown tags, canonicalises attributes), so
+      // comparing the live editor innerHTML against initialHTML would
+      // treat every open as "dirty". The baseline is captured in
+      // _mountQuill after the seed runs, and hasChanges flips true
+      // when the user mutates away from it, false when they revert to
+      // byte-identical. See the hasChanges property comment for the
+      // full rationale.
+      var baselineHTML = '';
 
       return {
         open: false,
@@ -349,6 +360,15 @@
         // pattern works in composeEditor() where `charCount` already
         // wired this correctly.
         contentLen: 0,
+        // Sprint 15a.5.3: Alpine-reactive dirty flag. The save button
+        // is disabled while `!hasChanges` so the user can't resubmit
+        // an unchanged post. Flipped true by the text-change handler
+        // whenever quill.root.innerHTML differs from the baseline
+        // captured at seed time, flipped back to false by the same
+        // handler when the user edits a change back to baseline. Any
+        // :disabled binding that reads hasChanges will re-run on that
+        // transition because hasChanges is a tracked property.
+        hasChanges: false,
         _opening: false, // re-entrancy guard: ignore back-to-back opens
 
         openForPost: function (postId) {
@@ -408,17 +428,13 @@
               ]
             }
           });
-          // Mirror Quill's content length into an Alpine-reactive
-          // property so :disabled bindings that depend on hasContent()
-          // re-evaluate on every keystroke. See the contentLen comment
-          // on the returned object for the Sprint 15a.5.1 backstory.
-          quill.on('text-change', function () {
-            self.contentLen = self._computeLen();
-          });
-          // Seed with the current post text. If it looks like HTML
-          // (Quill was the original editor) paste it through the
-          // clipboard pipeline; otherwise drop it in as plain text
-          // so legacy Markdown posts don't render as mangled HTML.
+          // Seed with the current post text FIRST, before subscribing
+          // to text-change. The subscription below computes hasChanges
+          // against baselineHTML; if we seed after subscribing, the
+          // seed itself would fire text-change events with an empty
+          // baseline and flip hasChanges true during open. Seeding
+          // first keeps the baseline capture and the subscription in
+          // the right order.
           if (initialHTML) {
             if (/^\s*</.test(initialHTML)) {
               quill.clipboard.dangerouslyPasteHTML(initialHTML);
@@ -426,12 +442,29 @@
               quill.setText(initialHTML);
             }
           }
-          // Prime contentLen synchronously from the seeded text. The
-          // text-change subscription fires during the seed pipeline in
-          // most Quill versions, but we do not want to rely on that -
-          // an unfired event would leave the save button disabled on a
-          // post that actually has content and freeze editing.
+          // Capture the baseline AFTER Quill has normalised the seed.
+          // See the baselineHTML closure comment: raw initialHTML is
+          // not a safe baseline because Quill rewrites markup at paste
+          // time (empty paragraphs, attribute order, whitespace), so
+          // the first post-seed text-change event would always see
+          // `innerHTML !== initialHTML` and falsely report hasChanges.
+          baselineHTML = quill.root.innerHTML;
+          // Prime contentLen synchronously from the seeded text so the
+          // Save button reflects the seeded state before any user
+          // interaction. Same defence-in-depth rationale as 15a.5.2:
+          // we do not rely on text-change firing during seed.
           self.contentLen = self._computeLen();
+          // Subscribe AFTER seed + baseline capture. The handler
+          // mirrors content length into reactive contentLen (so
+          // hasContent() updates) and sets reactive hasChanges by
+          // comparing live HTML against the captured baseline (so the
+          // Save button reflects dirty state). Byte-identical HTML ==
+          // not dirty, so editing a change back to baseline flips
+          // hasChanges false again without any explicit revert path.
+          quill.on('text-change', function () {
+            self.contentLen = self._computeLen();
+            self.hasChanges = (quill.root.innerHTML !== baselineHTML);
+          });
         },
 
         _computeLen: function () {
@@ -449,6 +482,13 @@
         save: function () {
           var self = this;
           if (!quill || self.saving) return;
+          // Sprint 15a.5.3 defence-in-depth: the Save button's
+          // :disabled binding already blocks unchanged / empty
+          // submits, but we mirror the same gates here so a keyboard
+          // trigger or a stale binding can never send a redundant
+          // PATCH. Silent return, not an error toast - the user's
+          // intent (nothing to save) is not actually an error.
+          if (!self.hasChanges) return;
           var content = quill.root.innerHTML;
           if (content === '<p><br></p>') {
             self.error = 'Content cannot be empty';
@@ -499,8 +539,10 @@
           this.error = '';
           this.postId = 0;
           this.contentLen = 0;
+          this.hasChanges = false;
           this._opening = false;
           initialHTML = '';
+          baselineHTML = '';
           // Tear down Quill so the next open starts clean. Quill
           // doesn't expose a formal destroy, but removing the DOM
           // children clears its toolbar and editor wrappers.
