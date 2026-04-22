@@ -339,9 +339,12 @@
          holds the file picker + CONFIRM gate + warning in one
          dialog so the dangerous path is visually contained. */}}
     {{ if $.User }}{{ if eq $.User.ID 1 }}
-    <div class="admin-db-modal-backdrop" x-show="importOpen" x-cloak
-         @click.self="closeImportModal()"
-         x-transition.opacity>
+    {{/* Sprint 15a.5.4: :style instead of x-show. See the big
+         golab.css comment near .admin-db-modal-backdrop. */}}
+    <div class="admin-db-modal-backdrop"
+         :style="importOpen ? 'display: flex' : 'display: none'"
+         x-cloak
+         @click.self="closeImportModal()">
       <div class="admin-db-modal admin-db-modal-danger">
         <h3>Import database</h3>
         <p class="admin-db-warning">
@@ -389,9 +392,12 @@
     {{/* Delete-backup confirm. Small, single-click confirmation;
          the file is already re-downloadable so we don't need a
          typing gate the way Import does. */}}
-    <div class="admin-db-modal-backdrop" x-show="deleteOpen" x-cloak
-         @click.self="closeDeleteConfirm()"
-         x-transition.opacity>
+    {{/* Sprint 15a.5.4: :style instead of x-show, same reason as
+         the import modal above. */}}
+    <div class="admin-db-modal-backdrop"
+         :style="deleteOpen ? 'display: flex' : 'display: none'"
+         x-cloak
+         @click.self="closeDeleteConfirm()">
       <div class="admin-db-modal admin-db-modal-small">
         <h3>Delete backup?</h3>
         <p>This permanently removes <code x-text="deleteTarget"></code> from the server. This cannot be undone.</p>
