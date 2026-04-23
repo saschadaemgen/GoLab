@@ -2034,7 +2034,83 @@
 
   // ---------- HTMX hooks ----------
 
-  document.body.addEventListener('htmx:afterSwap', function () {
+  // Sprint 15a.5.5: Alpine re-init on HTMX swap.
+  //
+  // base.html sets `hx-boost="true"` on the body so every internal
+  // link fetches the destination via AJAX and swaps the rendered
+  // HTML into place. HTMX by default does an innerHTML swap of the
+  // target (for boosted links that's effectively the whole body),
+  // which destroys the old DOM and inserts a new tree. Alpine 3's
+  // `alpine:init` event ONLY fires on initial page load; it does
+  // NOT re-run on swapped-in HTML. Without explicit wiring the
+  // swapped-in components stay as static markup: x-data is never
+  // evaluated, x-show / :style bindings never run, x-cloak never
+  // gets stripped, and custom event listeners like
+  // `@golab:open-edit-post.window` never register.
+  //
+  // Der Prinz confirmed the failure on lab.simplego.dev:
+  //   document.querySelector('.edit-post-modal-backdrop')._x_dataStack
+  //   // -> undefined AFTER the first htmx:afterSwap
+  //
+  // The eventually-visible ghost modal that chased us across
+  // 15a.1 / 15a.3 / 15a.4 / 15a.5.4 happened when a LATER swap or
+  // some unrelated DOM activity stripped the stale x-cloak
+  // attribute off the orphaned modal. With no Alpine binding
+  // driving inline display, the CSS default became the rendered
+  // state (display:flex pre-15a.5.4; harmless display:none now)
+  // and the full-viewport backdrop painted over the page.
+  //
+  // Fix pattern from Sprint 15a.1 P3 (WS-injected post cards):
+  // walk every [x-data] descendant of the swapped target and call
+  // Alpine.initTree on each. The explicit walk is needed because
+  // Alpine 3's recursive initTree can skip nested x-data carriers
+  // depending on the root's state at call time (documented above
+  // in the WS-injected injection path). Also destroyTree the old
+  // subtree before swap so the outgoing components release their
+  // listeners and effects; without this, long-lived subscriptions
+  // (e.g. GolabQuillMention's document-level mousedown, Quill's
+  // internal observers) would leak across every boost navigation.
+  document.body.addEventListener('htmx:beforeSwap', function (evt) {
+    var target = evt && evt.detail && evt.detail.target;
+    if (!target || !window.Alpine ||
+        typeof window.Alpine.destroyTree !== 'function') return;
+    try {
+      if (target.hasAttribute && target.hasAttribute('x-data')) {
+        window.Alpine.destroyTree(target);
+      }
+      var nodes = target.querySelectorAll
+        ? target.querySelectorAll('[x-data]')
+        : [];
+      nodes.forEach(function (el) {
+        try { window.Alpine.destroyTree(el); } catch (e) {
+          console.error('Alpine.destroyTree failed on x-data child', e, el);
+        }
+      });
+    } catch (e) {
+      console.error('Alpine.destroyTree failed on swap target', e);
+    }
+  });
+
+  document.body.addEventListener('htmx:afterSwap', function (evt) {
+    var target = evt && evt.detail && evt.detail.target;
+    if (target && window.Alpine &&
+        typeof window.Alpine.initTree === 'function') {
+      try {
+        if (target.hasAttribute && target.hasAttribute('x-data')) {
+          window.Alpine.initTree(target);
+        }
+        var nodes = target.querySelectorAll
+          ? target.querySelectorAll('[x-data]')
+          : [];
+        nodes.forEach(function (el) {
+          try { window.Alpine.initTree(el); } catch (e) {
+            console.error('Alpine.initTree failed on x-data child', e, el);
+          }
+        });
+      } catch (e) {
+        console.error('Alpine.initTree failed on swap target', e);
+      }
+    }
     bindAll();
   });
 
