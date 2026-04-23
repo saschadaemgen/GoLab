@@ -129,6 +129,14 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "content must be 1-5000 characters")
 		return
 	}
+	// Sprint 15a B8 Nit 4: reject the Quill-empty "<p><br></p>" and
+	// similar tag-only bodies that pass the raw byte-length check.
+	// The client's hasContent() gate catches this for the happy
+	// path, but a direct curl bypasses it. See IsSemanticallyEmpty.
+	if render.IsSemanticallyEmpty(req.Content) {
+		writeError(w, http.StatusBadRequest, "content cannot be empty")
+		return
+	}
 
 	// Validate channel membership if posting to a channel
 	if req.ChannelID != nil {
@@ -347,6 +355,20 @@ func (h *PostHandler) Get(w http.ResponseWriter, r *http.Request) {
 		hasReacted, _ = h.Reactions.HasReacted(r.Context(), user.ID, post.ID)
 	}
 
+	// Sprint 15a B8 Nit 5: attach EditedAt so the single-post
+	// endpoint is consistent with every other read path (feed,
+	// channel, space, tag, profile, thread). Without this the
+	// edit-post modal's openForPost path lost access to the edit
+	// timestamp, and external API consumers saw a field that
+	// randomly appeared on some endpoints and not others.
+	if h.EditHistory != nil {
+		if t, err := h.EditHistory.LastEditAt(r.Context(), post.ID); err == nil && !t.IsZero() {
+			post.EditedAt = &t
+		} else if err != nil {
+			slog.Warn("get post: attach edited_at", "error", err, "post", post.ID)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"post":        post,
 		"has_reacted": hasReacted,
@@ -411,6 +433,13 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Content) < 1 || len(req.Content) > 5000 {
 		writeError(w, http.StatusBadRequest, "content must be 1-5000 characters")
+		return
+	}
+	// Sprint 15a B8 Nit 4: mirror the Create check. "<p><br></p>"
+	// and similar tag-only bodies would wipe the post to empty
+	// server-side even though the client save path rejects them.
+	if render.IsSemanticallyEmpty(req.Content) {
+		writeError(w, http.StatusBadRequest, "content cannot be empty")
 		return
 	}
 

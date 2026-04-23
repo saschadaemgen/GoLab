@@ -62,19 +62,35 @@ func (s *PostEditHistoryStore) Record(ctx context.Context, tx pgx.Tx, h PostEdit
 // this post, or the zero time if no edits exist. Used by the
 // post-card template to decide whether to render the "edited"
 // badge next to the timestamp.
+//
+// Sprint 15a B8 Nit 3: the previous implementation scanned SELECT
+// MAX(...) into a bare time.Time. MAX() on an empty set returns one
+// row whose column is NULL (not zero rows), so ErrNoRows never
+// fired; pgx's decoder tried to decode NULL into a non-nullable
+// time.Time and returned a generic scan error instead. Callers
+// then saw a "last edit at: scanning ..." error instead of the
+// documented zero-time sentinel. Scanning into *time.Time makes
+// pgx leave the destination nil on NULL, which we then translate
+// to the documented contract.
 func (s *PostEditHistoryStore) LastEditAt(ctx context.Context, postID int64) (time.Time, error) {
-	var t time.Time
+	var t *time.Time
 	err := s.DB.QueryRow(ctx,
 		`SELECT MAX(created_at) FROM post_edit_history WHERE post_id = $1`,
 		postID,
 	).Scan(&t)
 	if err == pgx.ErrNoRows {
+		// Defensive: an aggregate over an empty set normally still
+		// returns one row with NULL. Kept for symmetry with other
+		// stores in this file.
 		return time.Time{}, nil
 	}
 	if err != nil {
 		return time.Time{}, fmt.Errorf("last edit at: %w", err)
 	}
-	return t, nil
+	if t == nil {
+		return time.Time{}, nil
+	}
+	return *t, nil
 }
 
 // AttachEditedAt is the feed-friendly batch version of LastEditAt.

@@ -72,3 +72,32 @@ func LooksLikeHTML(s string) bool {
 	// Look for a closing tag anywhere - plain "<foo" isn't valid HTML.
 	return strings.Contains(trimmed, ">")
 }
+
+// stripAllPolicy is bluemonday's StrictPolicy: removes every tag,
+// leaves only text content. Used by IsSemanticallyEmpty below to
+// turn a Quill-HTML blob like "<p><br></p>" into "" so we can
+// reject it as empty content.
+var stripAllPolicy = bluemonday.StrictPolicy()
+
+// IsSemanticallyEmpty reports whether `s` contains no user text
+// once HTML tags and whitespace are removed. Sprint 15a B8 Nit 4:
+// the old len(req.Content) < 1 check only caught the completely
+// empty string. Quill's "empty" editor submits `<p><br></p>`
+// (11 bytes) and the client-side hasContent() catches it, but a
+// direct curl to /api/posts would slip past, write an empty post,
+// and leave a blank card in the feed. StrictPolicy strips every
+// tag leaving only the text nodes; after trimming NBSP/zero-width/
+// whitespace, anything still there is real content.
+func IsSemanticallyEmpty(s string) bool {
+	if strings.TrimSpace(s) == "" {
+		return true
+	}
+	text := stripAllPolicy.Sanitize(s)
+	// bluemonday leaves encoded entities (&nbsp;, &#xA0;, etc) as
+	// their literal text. Replace the usual invisible suspects so
+	// "<p>&nbsp;</p>" and similar render as empty.
+	for _, ws := range []string{"\u00A0", "\u200B", "\u200C", "\u200D", "\uFEFF"} {
+		text = strings.ReplaceAll(text, ws, "")
+	}
+	return strings.TrimSpace(text) == ""
+}
