@@ -399,7 +399,24 @@
               self.error = (res.data && res.data.error) || 'Could not load post';
               return;
             }
-            initialHTML = res.data.post.content || '';
+            // Sprint 15a B7 Bug 2: seed with content_html (rendered +
+            // sanitised) NOT content (the raw markdown the server
+            // originally received). The raw markdown was being
+            // detected as "not HTML" by _mountQuill's regex
+            // `/^\s*</` test, dropped into Quill as plain text via
+            // setText, and then echoed back to the server on save as
+            // `<p># Heading</p>` - at which point LooksLikeHTML on
+            // the server returned true and goldmark was bypassed, so
+            // the original heading / bold / list markup was lost on
+            // the first edit. content_html is the same bytes the
+            // feed renders from, round-trips cleanly through
+            // Quill's clipboard pipeline, and preserves formatting.
+            // The `|| post.content` fallback handles the edge case
+            // of posts created before content_html population
+            // (there shouldn't be any in prod, but keep the fallback
+            // so a historical nil does not crash the edit flow).
+            initialHTML = res.data.post.content_html ||
+                          res.data.post.content || '';
             // Wait one frame so x-show has painted the editor div
             // before Quill measures its host.
             requestAnimationFrame(function () { self._mountQuill(); });
@@ -494,9 +511,19 @@
             self.error = 'Content cannot be empty';
             return;
           }
+          // Sprint 15a B7 Bug 5: capture the post id we are saving
+          // into a local const. self.postId is reactive Alpine state
+          // and will flip to another value if the user closes this
+          // modal and reopens it on a different post while this
+          // PATCH is in flight (close() resets to 0, the next
+          // openForPost sets it to the new id). Without the capture
+          // the .then() callback would update the wrong card's
+          // DOM and we'd silently overwrite post B's content block
+          // with post A's new HTML.
+          var savingPostId = self.postId;
           self.saving = true;
           self.error = '';
-          apiJSON('/api/posts/' + self.postId, 'PATCH', { content: content })
+          apiJSON('/api/posts/' + savingPostId, 'PATCH', { content: content })
             .then(function (res) {
               self.saving = false;
               if (!res.ok) {
@@ -507,7 +534,10 @@
               // Update the card in place if it's visible on the
               // current page. Full re-render would be cleaner but
               // also more invasive; this keeps scroll position.
-              var card = document.getElementById('post-' + self.postId);
+              // Uses the captured savingPostId, not self.postId, so
+              // a mid-flight modal swap cannot redirect this DOM
+              // write to the wrong card.
+              var card = document.getElementById('post-' + savingPostId);
               if (card && res.data.post) {
                 var body = card.querySelector('.post-content');
                 if (body) body.innerHTML = res.data.post.content_html || '';
@@ -519,7 +549,16 @@
                   meta.appendChild(span);
                 }
               }
-              self.close();
+              // Only close the modal if the user has not already
+              // moved on to a different post. If they have, the
+              // modal is showing a new edit session for post B and
+              // closing it here would throw away their in-progress
+              // edits of B. self.postId is the currently-open post
+              // in the modal at this moment; compare to what we
+              // were saving.
+              if (self.postId === savingPostId) {
+                self.close();
+              }
             })
             .catch(function () {
               self.saving = false;
@@ -1200,18 +1239,23 @@
               else self.$refs.editor.innerHTML = '';
               self.charCount = 0;
               toast('success', 'Posted');
+              // Sprint 15a B7 Bug 1: the POST response carries a
+              // post-card fragment rendered with the author's user
+              // context (dropdown included), because the WS broadcast
+              // fragment is anonymous by design (one render, N
+              // viewers). Prepend it now so the author sees their
+              // own edit/delete menu immediately; the WS echo
+              // arrives shortly after with the anonymous render and
+              // is skipped by the self-echo guard in injectNewPost
+              // (it sees the post-<id> already in the DOM).
+              //
               // Sprint 15a.5.6: no window.location.reload() here.
-              // The WebSocket hub (internal/handler/ws.go) broadcasts
-              // every new post to the "global" topic and every client
-              // auto-subscribes to "global" on connect, so the author's
-              // own socket receives the new_post message and
-              // handleWSMessage -> injectNewPost prepends the rendered
-              // card at the top of #feed-posts with the post-enter
-              // animation. The self-echo guard in injectNewPost
-              // (document.getElementById(newCard.id)) prevents a
-              // duplicate if this path ever grows a client-side
-              // prepend. Removing the reload kills the white-flash
-              // after every post and preserves scroll position.
+              // For non-authors, the WebSocket hub still broadcasts
+              // new_post to the "global" topic and injectNewPost does
+              // the insert + Alpine.initTree on their side.
+              if (res.data && res.data.html) {
+                injectNewPost(res.data.html);
+              }
             } else {
               toast('error', res.data.error || 'Could not post');
               form.classList.add('shake');
@@ -1961,6 +2005,36 @@
           if (card) {
             card.classList.add('post-leave');
             setTimeout(function () { card.remove(); }, 220);
+          }
+        }
+        break;
+      case 'post_updated':
+        // Sprint 15a B7 Bug 3: patch the content block in place when
+        // another tab / device edits a post we're currently viewing.
+        // Payload is structured: {id, content_html, edited_at}. We
+        // only touch the .post-content block and the edited badge;
+        // dropdown / reactions / header are already correct for the
+        // current viewer from the original render, so we do not need
+        // the full card re-rendered (which would drag in the
+        // dropdown-user-context issue PublishNewPost deals with).
+        if (msg.data && msg.data.id != null) {
+          var editCard = document.getElementById('post-' + msg.data.id);
+          if (editCard) {
+            var editBody = editCard.querySelector('.post-content');
+            if (editBody && typeof msg.data.content_html === 'string') {
+              editBody.innerHTML = msg.data.content_html;
+              editBody.classList.add('number-bump');
+              setTimeout(function () {
+                editBody.classList.remove('number-bump');
+              }, 320);
+            }
+            var editMeta = editCard.querySelector('.post-meta');
+            if (editMeta && !editMeta.querySelector('.post-edited')) {
+              var editSpan = document.createElement('span');
+              editSpan.className = 'post-edited';
+              editSpan.textContent = 'edited';
+              editMeta.appendChild(editSpan);
+            }
           }
         }
         break;
