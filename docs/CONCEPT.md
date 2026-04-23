@@ -3,8 +3,11 @@
 
 **Project:** GoLab (part of SimpleGo ecosystem)
 **Author:** Sascha Daemgen / IT and More Systems
-**Date:** April 16, 2026
-**Status:** Season 1 - Concept
+**Original date:** April 16, 2026
+**Last review:** April 23, 2026
+**Status:** Phase 1 live at lab.simplego.dev — Phase 2 planning
+
+**Companion document:** [ARCHITECTURE.md](./ARCHITECTURE.md) describes the Phase 1 implementation in detail: Go + PostgreSQL + HTMX + Alpine + WebSocket, the patterns that keep the code coherent, and the pitfalls already paid for. Read ARCHITECTURE.md first if you want to touch code today; read this document if you want to understand where GoLab is going.
 
 ---
 
