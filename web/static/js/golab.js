@@ -1200,7 +1200,18 @@
               else self.$refs.editor.innerHTML = '';
               self.charCount = 0;
               toast('success', 'Posted');
-              setTimeout(function () { window.location.reload(); }, 250);
+              // Sprint 15a.5.6: no window.location.reload() here.
+              // The WebSocket hub (internal/handler/ws.go) broadcasts
+              // every new post to the "global" topic and every client
+              // auto-subscribes to "global" on connect, so the author's
+              // own socket receives the new_post message and
+              // handleWSMessage -> injectNewPost prepends the rendered
+              // card at the top of #feed-posts with the post-enter
+              // animation. The self-echo guard in injectNewPost
+              // (document.getElementById(newCard.id)) prevents a
+              // duplicate if this path ever grows a client-side
+              // prepend. Removing the reload kills the white-flash
+              // after every post and preserves scroll position.
             } else {
               toast('error', res.data.error || 'Could not post');
               form.classList.add('shake');
