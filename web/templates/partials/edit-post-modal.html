@@ -12,15 +12,25 @@
   "golab:open-edit-post" with the post id. This component listens
   for that event and populates itself.
 */}}
+<!--
+  Sprint 15a.5.4: visibility is driven by :style NOT x-show. See
+  the large comment in golab.css near .edit-post-modal-backdrop for
+  the full rationale. Short version: x-show's hide path has a
+  timing dependency that produced a ghost modal on production
+  (not reproducible locally). :style writes display explicitly on
+  every open/close and CSS default display:none is the defence-in-
+  depth. x-transition.opacity is dropped because it hooks into
+  x-show and has no effect when paired with :style. The UX trade
+  is: no fade in/out, but the modal never ghosts.
+-->
 <div id="edit-post-modal"
      class="edit-post-modal-backdrop"
      x-data="editPostModal()"
-     x-show="open"
+     :style="open ? 'display: flex' : 'display: none'"
      x-cloak
      @golab:open-edit-post.window="openForPost($event.detail && $event.detail.postId)"
      @keydown.escape.window="close()"
-     @click.self="close()"
-     x-transition.opacity>
+     @click.self="close()">
   <div class="edit-post-modal" @click.stop>
     <header class="edit-post-modal-head">
       <h3>Edit post</h3>

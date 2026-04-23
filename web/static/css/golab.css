@@ -3,29 +3,43 @@
 
 /* Sprint 15a.5.1: x-cloak global rule. Alpine's `[x-cloak]`
    directive requires the host page to provide the CSS rule that
-   actually hides the element. Without it x-cloak is a no-op and
-   the template's `x-cloak` attribute has zero effect on layout.
-
-   We use this rule to hide Alpine-managed elements BEFORE Alpine
-   parses the DOM, so there's no paint-flash of a half-initialised
-   modal on page load. Once Alpine walks the element it strips the
-   x-cloak attribute and this rule stops matching; from that moment
-   on, x-show's inline display overrides (display: none on hide,
-   cleared on show) drive visibility.
-
-   This replaces the Sprint 15a.4 workaround of setting CSS defaults
-   to display:none on modal backdrops. That fix killed the paint
-   flash but silently broke the show path: Alpine's _x_doShow only
-   REMOVES the inline display override, it does not write
-   display:flex. With CSS default display:none the cascade falls
-   straight back to hidden and the modal never appears even though
-   open === true. Live-browser verification confirmed this: with
-   display:none default, `m._x_dataStack[0].open = true` results in
-   inline style null, computed display "none", _x_isShown true
-   (Alpine thinks it showed; CSS disagrees). With display:flex
-   default + this x-cloak rule, the same sequence yields computed
-   display "flex" and the modal is actually visible. */
+   actually hides the element. Without it x-cloak is a no-op.
+   This rule hides Alpine-managed elements BEFORE Alpine parses
+   the DOM so there's no paint-flash of a half-initialised modal
+   on page load. Alpine strips the x-cloak attribute after init
+   and the rule stops matching. */
 [x-cloak] { display: none !important; }
+
+/* Sprint 15a.5.4: modal backdrop defaults are `display: none` and
+   visibility is driven by an explicit `:style="open ? 'display:
+   flex' : 'display: none'"` Alpine binding, NOT by x-show.
+
+   Background: Der Prinz saw the edit-post modal and the admin-db
+   modals painting visibly on page load in production after the
+   15a.5.3 series deployed. The symptom did not reproduce on
+   localhost; MutationObserver timelines on dev showed Alpine
+   writing inline `display: none;` at t~5ms and removing x-cloak
+   at t~6ms, with no visible gap. But Der Prinz' browser console
+   on lab.simplego.dev showed `display: flex` / `inline: null` /
+   `x-cloak: false` / `_x_isShown: false` all at once - an
+   Alpine x-show failure mode where the initial-bind hide path
+   never wrote inline display:none AND the x-cloak cleanup still
+   ran. The class of bug: x-show's hide path has a timing
+   dependency (leave-transition runs an RAF cycle on initial
+   bind; if x-cloak is cleared in that window the element
+   becomes visible) and Alpine 3 skips the initial doHide write
+   on some code paths we could not enumerate without live-prod
+   access.
+
+   Option A from the briefing is implemented below: use
+   x-bind:style (an Alpine directive that writes the resolved
+   inline value synchronously during its effect) to set the
+   element's display directly, and drop x-show + x-transition on
+   those elements. The CSS default `display: none` gives
+   defence-in-depth: even if Alpine failed to evaluate the :style
+   binding entirely, the backdrop stays hidden. The show path
+   (Alpine writes inline `display: flex`) now wins via specificity
+   without depending on Alpine removing a hide inline override. */
 
 /* ===== Hero (home page) ===== */
 
@@ -852,24 +866,19 @@ img.avatar {
    wider so Quill's toolbar fits on a mobile viewport without
    wrapping more than once.
 
-   Sprint 15a.5.1: default display:flex is correct; pre-Alpine paint
-   flash is killed by the global `[x-cloak] { display: none
-   !important; }` rule near the top of this file, not by a
-   display:none default here. Sprint 15a.4 tried to use display:none
-   as the default to kill the ghost modal, which succeeded at
-   hiding the unbound element but silently broke the show path -
-   Alpine's x-show only removes the inline display override on
-   _x_doShow, it never writes display:flex, so CSS display:none
-   leaked straight back through and the modal stayed hidden even
-   when open flipped to true. With x-cloak doing the pre-init
-   hiding and display:flex as the shown-state baseline, Alpine's
-   inline-display-none-on-hide / remove-inline-on-show dance works
-   as documented. */
+   Sprint 15a.5.4: default display:none. The template uses a
+   :style="open ? 'display: flex' : 'display: none'" binding (NOT
+   x-show) to drive visibility; see the x-cloak rule comment at
+   the top of this file for the full rationale. display:none as
+   the CSS default is the defence-in-depth: if Alpine never runs
+   the :style binding (JS error, module load failure, mutation
+   observer race), the backdrop stays hidden instead of painting
+   a full-viewport click sink over the page. */
 .edit-post-modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 10500;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   padding: 1rem;
@@ -3703,16 +3712,12 @@ img.avatar {
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
-  /* Sprint 15a.5.1: display:flex is correct - the global `[x-cloak]
-     { display: none !important; }` rule hides the element before
-     Alpine initialises, and Alpine then controls visibility via
-     inline display writes. 15a.4 used display:none here because the
-     x-cloak rule did not exist and the ghost modal leaked through;
-     that workaround broke the show path (Alpine never wrote
-     display:flex on open, only removed the inline display, which
-     let CSS display:none cascade straight back through). See the
-     large comment at the top of this file for the full story. */
-  display: flex;
+  /* Sprint 15a.5.4: default display:none with defence-in-depth.
+     The templates use :style bindings (NOT x-show) keyed off
+     importOpen / deleteOpen. If Alpine fails to evaluate the
+     binding, the backdrop stays hidden instead of trapping clicks
+     on /admin. See the top-of-file comment for the full story. */
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 10400;
