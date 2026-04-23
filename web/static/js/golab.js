@@ -541,12 +541,14 @@
               if (card && res.data.post) {
                 var body = card.querySelector('.post-content');
                 if (body) body.innerHTML = res.data.post.content_html || '';
-                var meta = card.querySelector('.post-meta');
-                if (meta && res.data.post.edited_at && !meta.querySelector('.post-edited')) {
-                  var span = document.createElement('span');
-                  span.className = 'post-edited';
-                  span.textContent = 'edited';
-                  meta.appendChild(span);
+                // Sprint 15a B8 Nit 2: use attachEditedBadge so the
+                // in-session badge position + title match the
+                // post-card.html template.
+                if (res.data.post.edited_at) {
+                  attachEditedBadge(
+                    card.querySelector('.post-meta'),
+                    res.data.post.edited_at
+                  );
                 }
               }
               // Only close the modal if the user has not already
@@ -2049,13 +2051,14 @@
                 editBody.classList.remove('number-bump');
               }, 320);
             }
-            var editMeta = editCard.querySelector('.post-meta');
-            if (editMeta && !editMeta.querySelector('.post-edited')) {
-              var editSpan = document.createElement('span');
-              editSpan.className = 'post-edited';
-              editSpan.textContent = 'edited';
-              editMeta.appendChild(editSpan);
-            }
+            // Sprint 15a B8 Nit 2: use attachEditedBadge. Also
+            // refreshes the title tooltip when the post is
+            // edited a second time (old code bailed via the
+            // duplicate-guard, leaving a stale timestamp).
+            attachEditedBadge(
+              editCard.querySelector('.post-meta'),
+              msg.data.edited_at
+            );
           }
         }
         break;
@@ -2076,6 +2079,63 @@
           }
         }
         break;
+    }
+  }
+
+  // Sprint 15a B8 Nit 2: shared helper for the in-session "edited"
+  // badge placement. Two call sites (editPostModal.save and the
+  // post_updated WS handler) previously used `.post-meta
+  // .appendChild(span)`, which put the badge AFTER .post-meta-row
+  // on a new visual line when the post had a space or non-discussion
+  // post_type badge, not inline with the author / handle / time
+  // like the server template renders it. The duplicate-guard also
+  // meant a second edit in the same session left a stale title
+  // attribute.
+  //
+  // post-card.html (server template) puts the badge at the same
+  // level as .post-handle and .post-time, BEFORE any .post-meta-row
+  // child that holds the space / post_type badges:
+  //
+  //   <div class="post-meta">
+  //     <a class="post-author">...</a>
+  //     <span class="post-handle">...</span>
+  //     <span class="post-time">...</span>
+  //     <span class="post-edited" title="...">edited</span>
+  //     <div class="post-meta-row"> ... space + type badges ... </div>
+  //   </div>
+  //
+  // This helper mirrors that placement: reuse an existing .post-
+  // edited if one is already in the DOM, otherwise insert before
+  // .post-meta-row when it exists, otherwise append to .post-meta.
+  // title is always set to the server-provided timestamp so a
+  // repeat edit refreshes the tooltip. Accepts edited_at as either
+  // a Unix-seconds number (post_updated WS payload) or an ISO
+  // string (PATCH response .post.edited_at).
+  function attachEditedBadge(meta, editedAtValue) {
+    if (!meta) return;
+    var isoTitle = 'Edited';
+    if (editedAtValue) {
+      var d = typeof editedAtValue === 'number'
+        ? new Date(editedAtValue * 1000)
+        : new Date(editedAtValue);
+      if (!isNaN(d.getTime())) {
+        isoTitle = 'Edited ' + d.toISOString();
+      }
+    }
+    var existing = meta.querySelector('.post-edited');
+    if (existing) {
+      existing.setAttribute('title', isoTitle);
+      return;
+    }
+    var span = document.createElement('span');
+    span.className = 'post-edited';
+    span.textContent = 'edited';
+    span.setAttribute('title', isoTitle);
+    var row = meta.querySelector('.post-meta-row');
+    if (row) {
+      meta.insertBefore(span, row);
+    } else {
+      meta.appendChild(span);
     }
   }
 
