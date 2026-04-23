@@ -1243,17 +1243,38 @@
               // post-card fragment rendered with the author's user
               // context (dropdown included), because the WS broadcast
               // fragment is anonymous by design (one render, N
-              // viewers). Prepend it now so the author sees their
-              // own edit/delete menu immediately; the WS echo
-              // arrives shortly after with the anonymous render and
-              // is skipped by the self-echo guard in injectNewPost
-              // (it sees the post-<id> already in the DOM).
+              // viewers).
+              //
+              // Sprint 15a B7 Bug 1 follow-up: race-proof variant.
+              // The initial implementation assumed the HTTP response
+              // would always arrive before the WS echo, so a simple
+              // injectNewPost(res.data.html) combined with the
+              // self-echo guard would do the job. In practice the
+              // WS frame sometimes beats the HTTP response (the
+              // broadcast is a non-blocking channel send right after
+              // Posts.Create returns, often before the JSON body
+              // finishes writing), so the anonymous render landed
+              // first and the author-context version was then
+              // dropped by the self-echo guard. Result: author sees
+              // the no-dropdown render on their own card.
+              //
+              // Fix: when the HTTP response arrives, if a card with
+              // the same id is already in the DOM, remove it first.
+              // The author-context version then always wins the
+              // race. Non-authors never hit this path (no HTTP
+              // response to race with); they keep the WS render.
               //
               // Sprint 15a.5.6: no window.location.reload() here.
               // For non-authors, the WebSocket hub still broadcasts
               // new_post to the "global" topic and injectNewPost does
               // the insert + Alpine.initTree on their side.
               if (res.data && res.data.html) {
+                if (res.data.post && res.data.post.id) {
+                  var racedCard = document.getElementById(
+                    'post-' + res.data.post.id
+                  );
+                  if (racedCard) racedCard.remove();
+                }
                 injectNewPost(res.data.html);
               }
             } else {
