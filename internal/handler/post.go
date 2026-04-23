@@ -297,7 +297,14 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Broadcast to WebSocket subscribers
+	// Broadcast to WebSocket subscribers. The broadcast is rendered
+	// without a user context (see PublishNewPost commentary) so the
+	// edit/delete dropdown gate does not leak to non-authors. For the
+	// author's own client we render a second time WITH the user
+	// context and return it inline so the .then() on the client can
+	// prepend it immediately; the WS echo arriving after is deduped
+	// by the self-echo guard in injectNewPost.
+	var ownHTML string
 	if h.Hub != nil {
 		var slug string
 		if req.ChannelID != nil {
@@ -306,9 +313,13 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		h.Hub.PublishNewPost(post, slug)
+		ownHTML = h.Hub.RenderPostCard(post, user)
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{"post": post})
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"post": post,
+		"html": ownHTML, // Sprint 15a B7 Bug 1: author-context fragment
+	})
 }
 
 func (h *PostHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -490,6 +501,24 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("post edited", "id", id, "author", user.Username)
+
+	// Sprint 15a B7 Bug 3: broadcast the edit so any open tab /
+	// device viewing this post patches its content block in place
+	// instead of showing the stale text until reload. The payload
+	// is structured (id + content_html + edited_at) not a full HTML
+	// fragment - the target card already exists in every viewer's
+	// DOM, so we only need the content delta, which sidesteps the
+	// user-context dropdown issue PublishNewPost has to solve with
+	// a second render.
+	if h.Hub != nil {
+		var slug string
+		if updated.ChannelID != nil {
+			if ch, err := h.Channels.FindByID(r.Context(), *updated.ChannelID); err == nil && ch != nil {
+				slug = ch.Slug
+			}
+		}
+		h.Hub.PublishPostUpdated(updated, slug)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"post": updated})
 }

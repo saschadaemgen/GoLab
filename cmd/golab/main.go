@@ -325,7 +325,14 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			)).Post("/posts", postH.Create)
 			// Sprint 15a B6: author self-edit. Admin path will live
 			// under /admin/posts/{id} in Sprint 15c.
-			r.Patch("/posts/{id}", postH.Update)
+			// Sprint 15a B7 Bug 4: same 30/min/user rate limit as
+			// Create. The edit path is actually more expensive than
+			// create (sanitise + mention-extract + history-insert in
+			// a transaction), so leaving it uncapped was a DoS vector.
+			r.With(httprate.Limit(30, time.Minute,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Patch("/posts/{id}", postH.Update)
 			r.Delete("/posts/{id}", postH.Delete)
 			r.Post("/posts/{id}/react", postH.React)
 			r.Delete("/posts/{id}/react", postH.Unreact)
