@@ -1,6 +1,6 @@
 # GoLab Architecture
 
-**Last updated:** 2026-04-23
+**Last updated:** 2026-04-23 (expanded with B7/B8 lessons)
 **Scope:** This document describes how GoLab is built *today* (Phase 1): the technology choices behind each layer, the patterns that keep the codebase coherent, and the pitfalls we have already paid for. It is the first document a new contributor should read before touching code.
 
 **Companion document:** [CONCEPT.md](./CONCEPT.md) describes the long-term strategic vision — E2E-encrypted community over SimpleX SMP transport with GoUNITY certificate identity and GoKey hardware security. CONCEPT.md is *where GoLab is going* (Phase 2 onward). This document is *where GoLab is now*.
@@ -332,6 +332,51 @@ The WebSocket hub echoes every new post back to its author's own connection. The
 ### 7.7 `deploy.sh` wipes docker-compose.yml
 
 `git reset --hard` in `deploy.sh` overwrites secret values in `docker-compose.yml`. The current workaround is a manual `sed` block after each deploy. The clean fix is to move secrets into `/opt/GoLab/.env.production` (outside Git, not touched by deploy.sh) and have docker-compose read from it via `env_file:`. This is in the backlog.
+
+### 7.8 WebSocket echo can arrive before the HTTP response
+
+After Sprint 15a.5.6 removed the post-submit reload and the app relied on the WebSocket echo for the new-post insertion, a subtler problem surfaced. The hub broadcast uses `User: nil` when rendering the post card (so non-authors do not get Edit/Delete buttons leaked to them). This means the broadcast version of the card has no dropdown. But for the author's own browser, we want the dropdown to appear.
+
+The original plan was: server includes a second author-context render in the HTTP POST response, client prepends that version (with dropdown). In practice, **the WebSocket frame often arrives at the browser before the HTTP response completes.** The client's `handleWSMessage` runs first, inserts the anonymous (no-dropdown) version, and by the time the HTTP `.then` callback fires, the self-echo guard (`document.getElementById(newCard.id)` is truthy) blocks the author-context render.
+
+**Fix:** The author's own submit path explicitly removes any existing card with the same ID before inserting the author-context version. The normal `injectNewPost` used by the WebSocket handler stays as "insert if not already there". Only the author-own-submit flow knows it has the authoritative render and may overwrite.
+
+**Code pattern (in composeEditor.submit `.then` callback):**
+```js
+if (res.data && res.data.html && res.data.post) {
+  var racedCard = document.getElementById('post-' + res.data.post.id);
+  if (racedCard) racedCard.remove();  // let author-context win the race
+  injectNewPost(res.data.html);
+}
+```
+
+**Generalizing:** whenever a WebSocket broadcast renders with less context than the initiating user has access to, and the initiating user needs the higher-privilege render, the HTTP response must carry that richer version and the client must forcibly replace whatever the WebSocket already put in place.
+
+### 7.9 Empty content check must be semantic, not byte-length
+
+The original post-creation path checked `len(content) > 0` to reject empty posts. Quill's empty editor state produces `<p><br></p>` — 11 bytes, passes the check, gets stored as a visually-empty post. Users do not reach this path through the normal UI (the client has its own `hasContent()` check that keeps Save disabled), but a direct curl against `/api/posts` or a scripted attack bypasses both the client check and the byte-length check.
+
+**Fix:** `internal/render/sanitize.go` now exposes `IsSemanticallyEmpty(html string) bool` which:
+
+1. Runs the input through bluemonday's `StrictPolicy` (strips all tags, keeps only text)
+2. Strips whitespace including NBSP (`\u00a0`, `&nbsp;`), zero-width characters (`\u200b`, `\u200c`, `\u200d`), and BOM (`\ufeff`)
+3. Returns true if nothing is left
+
+Used in both `PostHandler.Create` and `PostHandler.Update`. Unit tests in `sanitize_test.go` lock the behavior against 14 representative edge cases including `<p><br></p>`, entity-NBSP, zero-width variants, and nested-empty markup.
+
+**Known limitation:** an image-only post (no text, one `<img>` tag) is currently rejected because `StrictPolicy` strips the image tag. If image-only posts should be allowed, a separate media-presence check needs to run before the emptiness check. That is a Phase 2 concern when attachments are fully designed.
+
+### 7.10 Editable post response must include edit metadata consistently
+
+When a field like `EditedAt` is introduced on a post, it must appear in **every** read path, not just the primary feed. Sprint 15a added `edited_at` to the feed render and the PATCH response but missed `GET /api/posts/{id}`. API consumers got inconsistent payloads depending on which endpoint they hit.
+
+**Pattern to follow when adding a post-level field:**
+1. Extend the model struct and scan path
+2. Extend the JSON serialization
+3. Grep for every handler that returns a post: `GET /api/posts/:id`, `GET /api/feed`, `POST /api/posts`, `PATCH /api/posts/:id`, WebSocket card renders
+4. Confirm each path populates the field
+
+The missing path in 15a was the single-post GET, which is used by the edit modal to seed the editor. It did not fail loudly — it just missed a field that API consumers would expect.
 
 ---
 
