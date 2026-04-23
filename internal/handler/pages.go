@@ -302,13 +302,23 @@ func (h *PageHandler) ThreadPage(w http.ResponseWriter, r *http.Request) {
 		}
 		rootWrap := []model.Post{*post}
 		if h.Reactions != nil {
-			_ = h.Reactions.AttachTo(r.Context(), viewerID, rootWrap)
+			// Sprint 15a B8 Nit 1: log root-post attach errors the
+			// same way as the reply branch right below. Silencing
+			// them with `_ =` had no justification beyond "the
+			// template will still render" - when the call does
+			// fail the root card silently loses its reaction
+			// counts and the failure never surfaces.
+			if err := h.Reactions.AttachTo(r.Context(), viewerID, rootWrap); err != nil {
+				slog.Warn("thread: attach reactions root", "error", err, "post", post.ID)
+			}
 			if err := h.Reactions.AttachTo(r.Context(), viewerID, replies); err != nil {
 				slog.Warn("thread: attach reactions", "error", err)
 			}
 		}
 		if h.EditHistory != nil {
-			_ = h.EditHistory.AttachEditedAt(r.Context(), rootWrap)
+			if err := h.EditHistory.AttachEditedAt(r.Context(), rootWrap); err != nil {
+				slog.Warn("thread: attach edited_at root", "error", err, "post", post.ID)
+			}
 			if err := h.EditHistory.AttachEditedAt(r.Context(), replies); err != nil {
 				slog.Warn("thread: attach edited_at", "error", err)
 			}
