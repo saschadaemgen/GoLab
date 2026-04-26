@@ -375,6 +375,36 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sprint X.2: handler-level first-user promote. The model's
+	// Create() already short-circuits to power_level=100 + status
+	// active when COUNT(users) reads 0 right before the INSERT, but
+	// Der Prinz reported on a fresh DB the first registrant landed
+	// at power_level=10 anyway, locking themselves out of /admin.
+	// Possible causes include migration 012 leaving zombie rows,
+	// transaction-snapshot weirdness on the COUNT, or any future
+	// refactor of Create that drops the bootstrap branch silently.
+	// Re-applying the promote AFTER the user is in the DB removes
+	// the dependency on Create's COUNT branch firing correctly:
+	// id == 1 is observable post-INSERT and the UPDATE is idempotent.
+	//
+	// Auto-approve as well: require_approval is forced on by
+	// migration 026 so the first user would otherwise be stuck
+	// on /pending with nobody to approve them. Failures are logged
+	// but do not abort registration; the user's row is already
+	// committed and the worst case is a follow-up manual fix.
+	if user.ID == 1 {
+		if err := h.Users.Promote(r.Context(), user.ID, 100); err != nil {
+			slog.Error("register: promote first user", "error", err)
+		} else {
+			user.PowerLevel = 100
+		}
+		if err := h.Users.SetStatus(r.Context(), user.ID, model.UserStatusActive, user.ID); err != nil {
+			slog.Error("register: auto-approve first user", "error", err)
+		} else {
+			user.Status = model.UserStatusActive
+		}
+	}
+
 	// Session is created either way - pending users can log in and see
 	// a read-only view of the platform until admins approve them.
 	sessionID, err := h.Sessions.Create(r.Context(), user.ID)

@@ -3843,10 +3843,17 @@ img.avatar {
      minimum).
    - .form-error: inline per-field error rendered below the input
      when the server returns a structured field validation error.
-     The top-of-form .flash-error already covers non-field errors. */
+     The top-of-form .flash-error already covers non-field errors.
+
+   Sprint X.2 lifted the base counter color from --text-muted (too
+   close to the page background, applicants reported they could
+   not see the counter at all) to --accent so the live count is
+   immediately visible. The near-limit / over-limit overrides
+   still take precedence as the count climbs. */
 .form-counter {
   font-size: 0.82rem;
-  color: var(--text-muted);
+  color: var(--accent);
+  font-weight: 500;
   text-align: right;
   margin-top: 0.25rem;
   font-variant-numeric: tabular-nums;

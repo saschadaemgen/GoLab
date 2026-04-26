@@ -166,6 +166,25 @@ func (s *UserStore) ListPending(ctx context.Context, limit int) ([]User, error) 
 	return out, nil
 }
 
+// Promote sets a user's power_level. Sprint X.2: extracted from the
+// inline UPDATE that lived in Create's belt-and-suspenders branch
+// so the registration handler can call it explicitly for the first
+// user without re-implementing the SQL. Used as defence in depth
+// alongside the userCount==0 branch in Create; even if Create's
+// branch ever fails to fire (count race, transaction wrinkle), the
+// handler-level promotion still lifts the bootstrapping admin to
+// Owner level.
+func (s *UserStore) Promote(ctx context.Context, userID int64, level int) error {
+	_, err := s.DB.Exec(ctx,
+		`UPDATE users SET power_level = $2, updated_at = NOW() WHERE id = $1`,
+		userID, level,
+	)
+	if err != nil {
+		return fmt.Errorf("promoting user: %w", err)
+	}
+	return nil
+}
+
 // SetStatus updates a user's moderation state and records who made
 // the decision and when.
 func (s *UserStore) SetStatus(ctx context.Context, userID int64, status string, reviewerID int64) error {

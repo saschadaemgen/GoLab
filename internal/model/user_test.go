@@ -48,6 +48,30 @@ func TestUser_HasApplicationFields(t *testing.T) {
 	}
 }
 
+// TestUserStore_HasPromoteMethod guards the Sprint X.2 Promote
+// method's existence and signature. The auth handler's first-user
+// auto-promote path calls h.Users.Promote(ctx, id, level) without
+// going through the model.UserCreateParams shape; if a future
+// refactor accidentally drops the method or changes its signature,
+// the handler would still compile until exercise but the test
+// catches it before the binary boots.
+func TestUserStore_HasPromoteMethod(t *testing.T) {
+	tt := reflect.TypeOf(&UserStore{})
+	m, ok := tt.MethodByName("Promote")
+	if !ok {
+		t.Fatal("UserStore is missing the Promote method added in Sprint X.2")
+	}
+	// Expected signature: (ctx, userID int64, level int) error
+	// reflect.Method's Type includes the receiver as arg 0.
+	ft := m.Type
+	if ft.NumIn() != 4 {
+		t.Errorf("Promote takes %d args, want 4 (recv + ctx + id + level)", ft.NumIn())
+	}
+	if ft.NumOut() != 1 {
+		t.Errorf("Promote returns %d values, want 1 (error)", ft.NumOut())
+	}
+}
+
 // TestUser_StatusConstants is a sanity check that the moderation
 // constants stay matched to the values stored in the DB (lowercase
 // strings the migration 021 INSERT seeds).

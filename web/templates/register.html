@@ -12,16 +12,26 @@
       colour at 90% of the limit (warning) and over the limit
       (error)
 
-  The form lives inside an Alpine x-data="registerForm()" scope.
+  The form lives inside an Alpine x-data="registerForm" scope.
   Each textarea then nests its own tiny x-data with a `count`
   property that updates on @input. The parent scope holds
   `errors` (field name -> message) and the `submit` handler.
   Counters and errors share the parent scope via Alpine's
   prototypal lookup.
+
+  Sprint X.2 dropped the call-parens after the production browser
+  console reported "registerForm is not defined". The other
+  Alpine.data registrations in the codebase use the parens form
+  successfully, but on /register we hit the bare-name failure
+  mode (likely Alpine 3 evaluating the name lookup before the
+  data-map lookup in some script-load orderings). Switching to
+  `x-data="registerForm"` lets Alpine resolve the registered
+  factory directly through its data map and skips the JS
+  expression eval. Same effect, less surface.
 */}}
 <div class="auth-container fade-in">
   <div class="auth-card auth-card-wide"
-       x-data="registerForm()">
+       x-data="registerForm">
     <h1 class="auth-title">Apply to GoLab</h1>
     <p class="auth-subtitle">
       GoLab is the developer community for the SimpleGo ecosystem
