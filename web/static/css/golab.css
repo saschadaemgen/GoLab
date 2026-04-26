@@ -4344,12 +4344,19 @@ img.avatar {
 }
 
 /* ---- Main column ---- */
+/* Sprint Y.4: min-height keeps the column tall enough to host
+   the column-background gradient on tall viewports without
+   stretching the inner content. Content takes its natural
+   height; .wiz-footer adds a 4rem margin-top so it sits at
+   "last content + 4rem", not at the viewport bottom. */
 .wiz-main {
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
   position: relative;
   overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh; /* dvh on mobile when supported */
 }
 @media (min-width: 1024px) {
   .wiz-main { padding: 4rem; }
@@ -4389,8 +4396,16 @@ img.avatar {
 }
 
 .wiz-content {
-  flex: 1;
+  /* Sprint Y.4 layout fix: do NOT stretch to fill the column.
+     A short step (e.g. Account with two inputs) should leave
+     the footer just below the inputs, not pushed to the
+     viewport bottom. The 4rem (64px) breathing room below
+     comes from .wiz-footer's margin-top, not from a flex
+     stretch here. The pane stays position: relative because
+     the leaving step needs an anchor for its absolute
+     positioning during the slide transition. */
   position: relative;
+  flex: 0 0 auto;
 }
 .wiz-step-pane {
   /* Each step is its own pane; absolute positioning during
@@ -4674,12 +4689,21 @@ img.avatar {
 .wiz-choice-text { font-size: 0.95rem; }
 
 /* ---- Footer (action row) ---- */
+/* Sprint Y.4: footer sits naturally below content with a 4rem
+   breathing room (margin-top), NOT pushed to the bottom of the
+   viewport via margin-top: auto. On a 1080px screen with two
+   form inputs the footer sits ~80px below the last input; on a
+   long review step it sits below the summary blocks. The card
+   shrinks to its natural content height; the .wiz-main flex
+   column gives the page a min-height of 100vh so the
+   background extends to the viewport edge, but content does
+   not stretch. */
 .wiz-footer {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  margin-top: 4rem;
   padding-top: 2rem;
-  margin-top: auto;
   border-top: 1px solid var(--border);
 }
 @media (min-width: 768px) {
@@ -4872,4 +4896,42 @@ img.avatar {
 /* ---- Reveal animation for textarea after choice picker ---- */
 .wiz-reveal {
   animation: wizardFadeInUp 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+/* Sprint Y.4 status-pill + meta row for the live username
+   availability check on step 1 of the wizard. Replaces the
+   plain .wiz-counter on the username input. The pill on the
+   left tells the applicant whether the handle is free; the
+   counter on the right keeps the character count visible. */
+.wiz-input-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+.wiz-status-muted   { color: var(--text-muted); }
+.wiz-status-info    { color: var(--accent); display: inline-flex; align-items: center; gap: 0.35rem; }
+.wiz-status-success { color: var(--success, #2ea043); }
+.wiz-status-danger  { color: var(--danger); }
+.wiz-status-warning { color: #d29922; }
+.wiz-counter-tail   { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+@keyframes wizSpin { to { transform: rotate(360deg); } }
+.wiz-spin-small {
+  animation: wizSpin 800ms linear infinite;
+  display: inline-block;
+}
+
+/* Sprint Y.4 personalisation: an inline accent span used inside
+   step headlines to colour the @username and brand tokens
+   without restructuring the headline element. Reads as the
+   accent color, slightly bolder than surrounding text. */
+.wiz-accent {
+  color: var(--accent);
+  font-weight: inherit;
 }

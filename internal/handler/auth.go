@@ -374,6 +374,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, "username must be 3-32 alphanumeric characters or underscores")
 		return
 	}
+	// Sprint Y.4: server-side reserved-list enforcement so a direct
+	// API submitter cannot bypass the wizard's live check.
+	if isReservedUsername(req.Username) {
+		errorRedirectOrJSON(w, r, "/register", http.StatusConflict, "username is reserved")
+		return
+	}
 
 	// Validate password per NIST SP 800-63B: length only, 8-128 chars.
 	if err := validatePassword(req.Password); err != nil {
@@ -554,6 +560,100 @@ var (
 type passwordError struct{ msg string }
 
 func (e *passwordError) Error() string { return e.msg }
+
+// reservedUsernames is the list of handles that registration rejects
+// regardless of DB state. Sprint Y.4: introduced for the live
+// availability check on /register so an applicant cannot park on
+// "admin" / "support" / etc and surface that only at final submit.
+// Lower-case only; the comparison normalises both sides.
+//
+// Two categories:
+//  - role / system-sounding handles ("admin", "moderator",
+//    "system", "support", "api", "dev") that would confuse other
+//    users into thinking the account speaks for the platform
+//  - product / brand reservation ("golab", "simplego") so the
+//    real product handles never end up belonging to a random
+//    registrant
+//
+// "anonymous" / "null" / "undefined" are listed as well; they are
+// the kind of handle that breaks downstream tooling (a search for
+// "@anonymous" might unintentionally match every nameless action).
+var reservedUsernames = map[string]bool{
+	"admin":     true,
+	"root":      true,
+	"system":    true,
+	"moderator": true,
+	"support":   true,
+	"api":       true,
+	"www":       true,
+	"mail":      true,
+	"info":      true,
+	"golab":     true,
+	"simplego":  true,
+	"anonymous": true,
+	"null":      true,
+	"undefined": true,
+	"test":      true,
+	"dev":       true,
+	"staging":   true,
+}
+
+// isReservedUsername reports whether `u` is on the reserved-list
+// (case-insensitive). Used by CheckUsernameAvailable below and
+// implicitly by the registration flow because a reserved name
+// will hit the same DB-uniqueness check at INSERT time anyway.
+// Surfacing it earlier saves the applicant from typing a long
+// password just to find out the handle is unusable.
+func isReservedUsername(u string) bool {
+	return reservedUsernames[strings.ToLower(u)]
+}
+
+// CheckUsernameAvailable powers the live availability check on
+// the registration wizard's Account step. Public endpoint
+// (no auth) so an applicant can verify before they create an
+// account. Rate-limited at the route level (30/min/IP) so a
+// scraper cannot enumerate the user table.
+//
+// Response shape is always 200 OK with a body that tells the
+// caller WHY a name is unavailable:
+//
+//   { "available": true }
+//   { "available": false, "reason": "invalid"   }  - bad chars / length
+//   { "available": false, "reason": "reserved"  }  - on the reserved list
+//   { "available": false, "reason": "taken"     }  - exists in users table
+//   { "available": false, "reason": "empty"     }  - no `u` query param
+//   { "available": false, "reason": "error"     }  - DB blew up
+//
+// We deliberately do NOT 4xx on invalid input; the wizard expects
+// a JSON body either way and a non-200 would force two response
+// branches client-side. The HTTP status itself is reserved for
+// rate-limit (429) and genuine server failures (500).
+func (h *AuthHandler) CheckUsernameAvailable(w http.ResponseWriter, r *http.Request) {
+	username := strings.TrimSpace(r.URL.Query().Get("u"))
+	if username == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "empty"})
+		return
+	}
+	if !usernameRegex.MatchString(username) {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "invalid"})
+		return
+	}
+	if isReservedUsername(username) {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "reserved"})
+		return
+	}
+	exists, err := h.Users.UsernameExists(r.Context(), username)
+	if err != nil {
+		slog.Error("check username available", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"available": false, "reason": "error"})
+		return
+	}
+	if exists {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "taken"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"available": true})
+}
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeLogin(r)

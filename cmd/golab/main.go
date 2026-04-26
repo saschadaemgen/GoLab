@@ -286,6 +286,19 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			))
 			r.Post("/login", authH.Login)
 		})
+		// Sprint Y.4: live username availability for the registration
+		// wizard. Public (no auth) because an applicant has not
+		// registered yet. 30/min/IP cap keeps a scraper from
+		// enumerating the user table - the same shape as the
+		// authenticated /users/check-username route used inside
+		// /settings, just IP-bucketed instead of user-bucketed.
+		r.Group(func(r chi.Router) {
+			r.Use(httprate.Limit(30, time.Minute,
+				httprate.WithKeyFuncs(httprate.KeyByRealIP),
+				httprate.WithLimitHandler(handler.RateLimited),
+			))
+			r.Get("/auth/username-available", authH.CheckUsernameAvailable)
+		})
 
 		// Auth (protected)
 		r.Group(func(r chi.Router) {

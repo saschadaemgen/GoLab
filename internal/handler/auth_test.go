@@ -2,6 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -514,6 +517,153 @@ func TestValidateApplication(t *testing.T) {
 		})
 	}
 }
+
+// TestIsReservedUsername pins the Sprint Y.4 reserved-list. The
+// list is a security boundary: a registrant must never be able
+// to claim a role-sounding handle that would impersonate the
+// platform. Comparison is case-insensitive.
+func TestIsReservedUsername(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		// Reserved (must be true)
+		{"admin", true},
+		{"Admin", true},   // case-insensitive
+		{"ADMIN", true},
+		{"root", true},
+		{"system", true},
+		{"moderator", true},
+		{"support", true},
+		{"api", true},
+		{"www", true},
+		{"mail", true},
+		{"info", true},
+		{"golab", true},
+		{"GOLAB", true},
+		{"simplego", true},
+		{"anonymous", true},
+		{"null", true},
+		{"undefined", true},
+		{"test", true},
+		{"dev", true},
+		{"staging", true},
+
+		// Free (must be false)
+		{"maria", false},
+		{"prinz", false},
+		{"hardware_hacker", false},
+		{"admin1", false},     // not exactly "admin"
+		{"administrator", false}, // not exactly "admin"
+		{"my_admin", false},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			if got := isReservedUsername(c.in); got != c.want {
+				t.Errorf("isReservedUsername(%q) = %v, want %v", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// TestUsernameAvailable_RejectsInvalid pins the format-rejection
+// path of CheckUsernameAvailable: handles that fail the regex
+// (too short, bad chars, too long) come back with reason
+// "invalid". The endpoint MUST NOT 4xx for these - the caller
+// expects a 200 OK with a JSON body so the wizard's status
+// pill can flip without a fetch error branch.
+func TestUsernameAvailable_RejectsInvalid(t *testing.T) {
+	cases := []struct {
+		name     string
+		username string
+	}{
+		{"too short (2 chars)", "ab"},
+		{"empty after trim", "   "},
+		{"contains space", "my user"},
+		{"contains hyphen", "my-user"},
+		{"contains dot", "user.name"},
+		{"too long (33 chars)", "abcdefghijklmnopqrstuvwxyz0123456"},
+		{"emoji", "user☃"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// url-encode the test username so spaces / unicode do
+			// not break NewRequest's URL parsing. The handler
+			// reads via r.URL.Query().Get which decodes back.
+			req := httptest.NewRequest("GET",
+				"/api/auth/username-available?u="+
+					url.QueryEscape(c.username), nil)
+			rec := httptest.NewRecorder()
+			h := &AuthHandler{} // Users not needed for invalid path
+			h.CheckUsernameAvailable(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			var body struct {
+				Available bool   `json:"available"`
+				Reason    string `json:"reason"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body.Available {
+				t.Errorf("Available = true, want false")
+			}
+			// Empty string takes the "empty" path; everything else
+			// goes through "invalid".
+			if c.username == "   " {
+				if body.Reason != "empty" {
+					t.Errorf("Reason = %q, want %q", body.Reason, "empty")
+				}
+			} else if body.Reason != "invalid" {
+				t.Errorf("Reason = %q, want %q", body.Reason, "invalid")
+			}
+		})
+	}
+}
+
+// TestUsernameAvailable_RejectsReserved pins the reserved-list
+// path: an applicant typing "admin" must see reason "reserved",
+// not "taken". The DB is not consulted on this path.
+func TestUsernameAvailable_RejectsReserved(t *testing.T) {
+	cases := []string{"admin", "moderator", "golab", "system", "Root"}
+	for _, name := range cases {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest("GET",
+				"/api/auth/username-available?u="+name, nil)
+			rec := httptest.NewRecorder()
+			h := &AuthHandler{} // Users.UsernameExists is never called
+			h.CheckUsernameAvailable(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			var body struct {
+				Available bool   `json:"available"`
+				Reason    string `json:"reason"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body.Available {
+				t.Errorf("Available = true, want false")
+			}
+			if body.Reason != "reserved" {
+				t.Errorf("Reason = %q, want %q", body.Reason, "reserved")
+			}
+		})
+	}
+}
+
+// TestUsernameAvailable_AcceptsAvailable / RejectsTaken need a
+// real DB to exercise the UsernameExists call. They live in the
+// integration suite (build-tagged "integration") next to the
+// other Sprint X.2 register integration tests, opt-in via:
+//
+//   GOLAB_TEST_DB=postgres://... go test -tags integration ./internal/handler/...
+//
+// The tests above cover the validation paths that do not touch
+// the DB; the remaining two paths run on demand with a real
+// connection.
 
 // TestHasValidHTTPSURL pins the helper used by validateApplication
 // so its acceptance criteria stay obvious. github / codeberg /

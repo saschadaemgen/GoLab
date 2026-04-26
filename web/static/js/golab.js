@@ -355,6 +355,15 @@
         submitError: '',
         fieldErrors: {},
 
+        // Sprint Y.4: live username availability check. Status is
+        // one of: idle | checking | available | taken | reserved
+        // | invalid | error. Drives the UI pills on step 1 and
+        // gates the Continue button (only "available" lets the
+        // user advance). Debounced 400ms via usernameCheckTimer
+        // so we do not slam the endpoint on every keystroke.
+        usernameStatus: 'idle',
+        usernameCheckTimer: null,
+
         // The step list drives the sidebar render and the
         // Skip/Continue button visibility. `required: true`
         // hides the Skip button on that step.
@@ -403,21 +412,26 @@
 
         // sidebarQuote returns a contextual one-liner displayed
         // in the bottom of the sidebar. Each step has its own
-        // editorial line; the user has something to read while
-        // typing.
+        // editorial line; from step 3 onward we drop the
+        // applicant's @handle into the quote so the panel feels
+        // like a private side-channel ("welcome notes" for the
+        // reviewer, but addressed at this specific applicant).
+        // Steps 0-2 stay neutral because we may not have a
+        // valid handle yet at those points.
         sidebarQuote: function () {
+          var name = this.displayName();
           var quotes = [
             '"Read access is open. Write access is reviewed personally. We do not optimise for growth."',
             '"Your handle is permanent. Pick something you would want to read on a security advisory three years from now."',
             '"A blank links field is fine. Padding it with random GitHub stars is not."',
-            '"Specific beats general. \'I run a relay\' beats \'I care about privacy.\'"',
-            '"Tell us what you would do, not what you would consume."',
-            '"The first post you would write tells us more than your CV."',
+            '"Substance, not buzzwords ' + name + '. Be specific."',
+            '"What perspective will ' + name + ' bring? \'I care about privacy\' is not one."',
+            '"Tell us, ' + name + ', what you would do - not what you would consume."',
             '"Optional. If there is nothing extra, do not invent some."',
-            '"We test thinking, not memorisation. Wrong-but-thoughtful is the goal."',
-            '"\'No\' is a complete answer. We will not penalise honesty."',
+            '"We test how ' + name + ' thinks, not what ' + name + ' has memorised."',
+            '"\'No\' is a complete answer, ' + name + '. Honesty weighs more than padding."',
             '"Be specific or skip. \'Big Tech\' is a non-answer."',
-            '"Read it once. Submit. We will be in touch within seven days."'
+            '"Looking good, ' + name + '. Read it once. Submit. We respond within seven days."'
           ];
           return quotes[this.step] || quotes[0];
         },
@@ -444,7 +458,18 @@
 
         // ---- Per-step validation ----
 
+        // Sprint Y.4: usernameValid is now driven by the live
+        // availability check, not just the format regex. The
+        // pattern is enforced on the watchUsername() side so
+        // the local-validation pill can flip to "INVALID FORMAT"
+        // before the network round trip; here we only return
+        // true when the server has confirmed the name is free.
         usernameValid: function () {
+          return this.usernameStatus === 'available';
+        },
+        // usernameFormatValid is the cheap regex check used by
+        // watchUsername to short-circuit the network call.
+        usernameFormatValid: function () {
           return /^[A-Za-z0-9_]{3,32}$/.test(this.data.username || '');
         },
         passwordValid: function () {
@@ -452,10 +477,77 @@
           return p.length >= 8 && p.length <= 128;
         },
 
+        // watchUsername fires on @input on the username field.
+        // Cancels any pending check, runs the cheap regex check
+        // immediately, then debounces 400ms before hitting the
+        // backend. The 400ms is enough time for a typing burst
+        // to settle without the user feeling like they have to
+        // wait. Status transitions: idle -> checking -> one of
+        // available / taken / reserved / invalid / error.
+        watchUsername: function () {
+          var self = this;
+          if (self.usernameCheckTimer) {
+            clearTimeout(self.usernameCheckTimer);
+            self.usernameCheckTimer = null;
+          }
+          var u = (self.data.username || '').trim();
+          if (!u) {
+            self.usernameStatus = 'idle';
+            return;
+          }
+          if (!self.usernameFormatValid()) {
+            self.usernameStatus = 'invalid';
+            return;
+          }
+          self.usernameStatus = 'checking';
+          self.usernameCheckTimer = setTimeout(function () {
+            fetch('/api/auth/username-available?u=' + encodeURIComponent(u), {
+              credentials: 'same-origin'
+            }).then(function (r) {
+              if (r.status === 429) {
+                self.usernameStatus = 'error';
+                return null;
+              }
+              return r.text().then(function (text) {
+                var body = {};
+                try { body = JSON.parse(text); } catch (e) { /* ignore */ }
+                return { ok: r.ok, body: body };
+              });
+            }).then(function (res) {
+              if (!res) return; // 429 already handled
+              // Stale-response guard: if the user kept typing while
+              // the check was in flight, only honour the response
+              // when the value still matches what we sent.
+              if ((self.data.username || '').trim() !== u) return;
+              if (res.body && res.body.available) {
+                self.usernameStatus = 'available';
+                return;
+              }
+              self.usernameStatus = (res.body && res.body.reason) || 'taken';
+            }).catch(function () {
+              self.usernameStatus = 'error';
+            });
+          }, 400);
+        },
+
+        // displayName powers the Sprint Y.4 personalization in step
+        // headlines + sidebar quotes. Returns "@<username>" once the
+        // applicant has typed a valid handle, "you" otherwise so
+        // copy reads naturally on the empty-input case.
+        displayName: function () {
+          var u = (this.data.username || '').trim();
+          if (!u) return 'you';
+          return '@' + u;
+        },
+
         isCurrentStepValid: function () {
           var d = this.data;
           switch (this.step) {
             case 0: return true; // Welcome (no fields)
+            // Sprint Y.4: usernameValid() now demands the live
+            // availability check has resolved to 'available' -
+            // an applicant with a "TAKEN" or "RESERVED" status
+            // pill cannot click Continue.
             case 1: return this.usernameValid() && this.passwordValid();
             case 2: return d.external_links.length <= 500;
             case 3: return d.ecosystem_connection.length >= 30 && d.ecosystem_connection.length <= 800;

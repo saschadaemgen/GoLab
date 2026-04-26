@@ -35,6 +35,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -128,5 +129,63 @@ func TestRegister_SecondUserGetsDefault(t *testing.T) {
 	}
 	if user.Status != model.UserStatusPending {
 		t.Errorf("second user status = %q, want %q", user.Status, model.UserStatusPending)
+	}
+}
+
+// Sprint Y.4 username-available DB-dependent paths. The pure-
+// function tests in auth_test.go cover invalid-format and
+// reserved-list rejections; the two cases below need a real
+// users table to exercise the UsernameExists call.
+
+func TestUsernameAvailable_AcceptsAvailable(t *testing.T) {
+	h, pool := setupTestHandler(t)
+	defer pool.Close()
+
+	req := httptest.NewRequest("GET",
+		"/api/auth/username-available?u=brandnewhandle", nil)
+	rec := httptest.NewRecorder()
+	h.CheckUsernameAvailable(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var body struct {
+		Available bool   `json:"available"`
+		Reason    string `json:"reason"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.Available {
+		t.Errorf("Available = false (reason=%q), want true", body.Reason)
+	}
+}
+
+func TestUsernameAvailable_RejectsTaken(t *testing.T) {
+	h, pool := setupTestHandler(t)
+	defer pool.Close()
+
+	if resp := postRegister(t, h, "takenname", "supersecretpw"); resp.StatusCode >= 400 {
+		t.Fatalf("seed register returned %d", resp.StatusCode)
+	}
+
+	req := httptest.NewRequest("GET",
+		"/api/auth/username-available?u=takenname", nil)
+	rec := httptest.NewRecorder()
+	h.CheckUsernameAvailable(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var body struct {
+		Available bool   `json:"available"`
+		Reason    string `json:"reason"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Available {
+		t.Errorf("Available = true, want false (reason should be 'taken')")
+	}
+	if body.Reason != "taken" {
+		t.Errorf("Reason = %q, want %q", body.Reason, "taken")
 	}
 }
