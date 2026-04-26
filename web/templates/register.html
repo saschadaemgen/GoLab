@@ -1,189 +1,710 @@
 {{ define "content" }}
 {{/*
-  Sprint X.1 application form. Three UX changes from the original
-  Sprint X version:
-    - external_links is optional (no asterisk in the label)
-    - the form keeps its values on a 400 response: instead of the
-      browser's native form-POST + server-redirect cycle (which
-      replaces the page with an empty fresh /register), we submit
-      via fetch() and render any field-specific error inline next
-      to the offending textarea
-    - every long-form field has a live character counter that flips
-      colour at 90% of the limit (warning) and over the limit
-      (error)
+  Sprint Y.3 brutalist registration wizard. Replaces the Sprint
+  Y.2 cinematic-card wizard. Same eleven form fields as before
+  (Sprint Y.1 schema + validation, unchanged), but split across
+  11 wizard indices so each step focuses on exactly one prompt:
 
-  The form lives inside an Alpine x-data="registerForm" scope.
-  Each textarea then nests its own tiny x-data with a `count`
-  property that updates on @input. The parent scope holds
-  `errors` (field name -> message) and the `submit` handler.
-  Counters and errors share the parent scope via Alpine's
-  prototypal lookup.
+      0  Welcome
+      1  Account                 username + password (single
+                                  step, two inputs)
+      2  External links          optional
+      3  Ecosystem connection    required, 30-800
+      4  Community contribution  required, 30-600
+      5  Current focus           optional, 0-400
+      6  Application notes       optional, 0-300
+      7  Technical depth         choice picker + answer 100-500
+      8  Practical experience    optional, 0-400
+      9  Critical thinking       optional, 0-400
+     10  Review and submit
 
-  Sprint X.2 dropped the call-parens after the production browser
-  console reported "registerForm is not defined". The other
-  Alpine.data registrations in the codebase use the parens form
-  successfully, but on /register we hit the bare-name failure
-  mode (likely Alpine 3 evaluating the name lookup before the
-  data-map lookup in some script-load orderings). Switching to
-  `x-data="registerForm"` lets Alpine resolve the registered
-  factory directly through its data map and skips the JS
-  expression eval. Same effect, less surface.
+  All step state and form values live in one Alpine component
+  (`registrationWizardBrutalist`). Direction-aware slide
+  transitions (forward / backward) are driven by :data-direction
+  on the .wiz-root, matching the CSS rules in golab.css.
+
+  Keyboard:
+    Enter inside any non-textarea input -> next()
+    Esc anywhere -> back()
+
+  Server-side validation, schema and submit endpoint identical
+  to Sprint Y.1. Field error mapping after a 400 jumps to the
+  step that owns the offending input via stepForField().
 */}}
-<div class="auth-container fade-in">
-  <div class="auth-card auth-card-wide"
-       x-data="registerForm">
-    <h1 class="auth-title">Apply to GoLab</h1>
-    <p class="auth-subtitle">
-      GoLab is the developer community for the SimpleGo ecosystem
-      (SimpleGo, GoChat, GoBot, GoUNITY, GoKey, SimpleGoX). Read
-      access is open. Write access is granted by application. We
-      review every application personally and reply within seven
-      days.
-    </p>
+<div class="wiz-root"
+     x-data="registrationWizardBrutalist"
+     x-init="init()"
+     :data-direction="direction"
+     @keydown.window.escape.prevent="back()"
+     @keydown.enter="onEnter($event)">
 
-    {{ if .Content }}{{ with .Content }}{{ if .Error }}
-    <div class="flash flash-error" role="alert">{{ .Error }}</div>
-    {{ end }}{{ end }}{{ end }}
+  {{/* Top progress bar - always visible. Width tracks step. */}}
+  <div class="wiz-progress-bar">
+    <div class="wiz-progress-fill" :style="`width: ${progressPct()}%`"></div>
+  </div>
 
-    {{/* Generic top-of-form error from Alpine - shown when the
-         server returns 500 or a non-field error. Field-specific
-         errors render inline below their input instead. */}}
-    <div class="flash flash-error" role="alert"
-         x-show="formError" x-cloak x-text="formError"></div>
+  <div class="wiz-layout">
 
-    <form id="register-form"
-          @submit.prevent="submit($event)"
-          autocomplete="off"
-          novalidate>
-      <div class="form-group" x-data="{ count: 0, max: 32 }">
-        <label class="form-label" for="reg-username">Username</label>
-        <input class="form-input" type="text" id="reg-username" name="username"
-               required minlength="3" maxlength="32"
-               pattern="[A-Za-z0-9_]+"
-               autocomplete="username"
-               placeholder="yourhandle"
-               @input="count = $event.target.value.length">
-        <div class="form-counter"
-             :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                       'over-limit': count > max }">
-          <span x-text="count">0</span> / <span x-text="max">32</span>
-        </div>
-        <div class="form-hint">3-32 characters, letters, numbers and underscores. Cannot be changed later by you.</div>
-        <div class="form-error" x-show="errors.username" x-cloak x-text="errors.username"></div>
+    {{/* ===== Sidebar (desktop only, hidden < 1024px) ===== */}}
+    <aside class="wiz-sidebar">
+      <div class="wiz-sidebar-header">
+        <strong>GOLAB</strong>
+        APPLICATION<br>
+        v1 &middot; lab.simplego.dev
       </div>
 
-      <div class="form-group">
-        <label class="form-label" for="reg-password">Password</label>
-        <input class="form-input" type="password" id="reg-password" name="password"
-               required minlength="8" maxlength="128"
-               autocomplete="new-password"
-               placeholder="At least 8 characters">
-        <div class="form-error" x-show="errors.password" x-cloak x-text="errors.password"></div>
+      <div class="wiz-sidebar-steps">
+        <template x-for="(s, idx) in steps" :key="idx">
+          <div class="wiz-step-row"
+               :class="{
+                 'wiz-step-completed': idx < step,
+                 'wiz-step-active':    idx === step,
+                 'wiz-step-pending':   idx > step
+               }"
+               @click="idx < step && goToStep(idx)">
+            <span class="wiz-step-marker">
+              <template x-if="idx < step">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </template>
+              <template x-if="idx === step">
+                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>
+              </template>
+              <template x-if="idx > step">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/></svg>
+              </template>
+            </span>
+            <span class="wiz-step-num"
+                  x-text="String(idx).padStart(2, '0')"></span>
+            <span class="wiz-step-label" x-text="s.label"></span>
+          </div>
+        </template>
       </div>
 
-      <div class="form-group" x-data="{ count: 0, max: 500 }">
-        <label class="form-label" for="reg-external-links">Where can we see your work?</label>
-        <textarea class="form-input form-textarea" id="reg-external-links"
-                  name="external_links"
-                  maxlength="500"
-                  rows="2"
-                  @input="count = $event.target.value.length"
-                  placeholder="https://github.com/yourhandle  https://yourdomain.com  https://codeberg.org/yourhandle"></textarea>
-        <div class="form-counter"
-             :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                       'over-limit': count > max }">
-          <span x-text="count">0</span> / <span x-text="max">500</span>
-        </div>
-        <div class="form-hint">Optional. GitHub, Codeberg, GitLab, or personal site. Helps us evaluate.</div>
-        <div class="form-error" x-show="errors.external_links" x-cloak x-text="errors.external_links"></div>
+      <div class="wiz-sidebar-quote">
+        <p x-text="sidebarQuote()"></p>
+        <div class="wiz-sidebar-divider"></div>
+        <div class="wiz-sidebar-quote-label">REVIEW NOTES</div>
       </div>
+    </aside>
 
-      <div class="form-group" x-data="{ count: 0, max: 800 }">
-        <label class="form-label" for="reg-ecosystem">How are you connected to the SimpleGo ecosystem?</label>
-        <textarea class="form-input form-textarea" id="reg-ecosystem"
-                  name="ecosystem_connection"
-                  required minlength="30" maxlength="800"
-                  rows="4"
-                  @input="count = $event.target.value.length"
-                  placeholder="Are you using SimpleGo, GoChat, SimpleGoX, or any of the other components? Building something with them? Researching the underlying tech? Be specific."></textarea>
-        <div class="form-counter"
-             :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                       'over-limit': count > max }">
-          <span x-text="count">0</span> / <span x-text="max">800</span>
-          <template x-if="count > 0 && count < 30">
-            <span class="form-hint-inline">(at least 30 characters)</span>
-          </template>
-        </div>
-        <div class="form-hint">Required. 30-800 characters.</div>
-        <div class="form-error" x-show="errors.ecosystem_connection" x-cloak x-text="errors.ecosystem_connection"></div>
-      </div>
+    {{/* ===== Main column ===== */}}
+    <main class="wiz-main">
 
-      <div class="form-group" x-data="{ count: 0, max: 600 }">
-        <label class="form-label" for="reg-contribution">What would you contribute to this community?</label>
-        <textarea class="form-input form-textarea" id="reg-contribution"
-                  name="community_contribution"
-                  required minlength="30" maxlength="600"
-                  rows="4"
-                  @input="count = $event.target.value.length"
-                  placeholder="Examples: protocol-level discussion, hardware integration, security review, deployment notes, documentation."></textarea>
-        <div class="form-counter"
-             :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                       'over-limit': count > max }">
-          <span x-text="count">0</span> / <span x-text="max">600</span>
-          <template x-if="count > 0 && count < 30">
-            <span class="form-hint-inline">(at least 30 characters)</span>
-          </template>
-        </div>
-        <div class="form-hint">Required. 30-600 characters.</div>
-        <div class="form-error" x-show="errors.community_contribution" x-cloak x-text="errors.community_contribution"></div>
-      </div>
-
-      <div class="form-group" x-data="{ count: 0, max: 400 }">
-        <label class="form-label" for="reg-focus">What is your current focus or open question?</label>
-        <textarea class="form-input form-textarea" id="reg-focus"
-                  name="current_focus"
-                  maxlength="400"
-                  rows="3"
-                  @input="count = $event.target.value.length"
-                  placeholder="The thing you would actually post about in your first week."></textarea>
-        <div class="form-counter"
-             :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                       'over-limit': count > max }">
-          <span x-text="count">0</span> / <span x-text="max">400</span>
-        </div>
-        <div class="form-hint">Optional. Up to 400 characters.</div>
-        <div class="form-error" x-show="errors.current_focus" x-cloak x-text="errors.current_focus"></div>
-      </div>
-
-      <div class="form-group" x-data="{ count: 0, max: 300 }">
-        <label class="form-label" for="reg-notes">Anything else we should know?</label>
-        <textarea class="form-input form-textarea" id="reg-notes"
-                  name="application_notes"
-                  maxlength="300"
-                  rows="2"
-                  @input="count = $event.target.value.length"
-                  placeholder=""></textarea>
-        <div class="form-counter"
-             :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                       'over-limit': count > max }">
-          <span x-text="count">0</span> / <span x-text="max">300</span>
-        </div>
-        <div class="form-hint">Optional. Up to 300 characters.</div>
-        <div class="form-error" x-show="errors.application_notes" x-cloak x-text="errors.application_notes"></div>
-      </div>
-
-      <div class="auth-submit-row">
-        <button type="submit" class="btn btn-primary btn-lg"
-                :disabled="submitting">
-          <span x-show="!submitting">Submit application</span>
-          <span x-show="submitting" x-cloak>Submitting...</span>
+      <header class="wiz-header" x-show="step > 0" x-cloak>
+        <button type="button" class="wiz-back-btn" @click="back()">
+          &larr; BACK
         </button>
-      </div>
-    </form>
+        <div class="wiz-progress-text">
+          <span x-text="String(step + 1).padStart(2, '0')"></span> OF
+          <span x-text="String(steps.length).padStart(2, '0')"></span>
+          &middot;
+          <span x-text="progressPct()"></span>% COMPLETE
+        </div>
+      </header>
 
-    <div class="auth-footer">
-      Already a member? <a href="/login" hx-boost="true">Log in</a>
-    </div>
+      <section class="wiz-content">
+
+        {{/* ----- Step 0: Welcome ----- */}}
+        <template x-if="step === 0">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+
+            <h1 class="wiz-welcome-headline">
+              Apply to <em>GoLab</em>.<br>
+              We read every word.
+            </h1>
+            <p class="wiz-welcome-lede">
+              GoLab is the developer community for the SimpleGo
+              ecosystem. Read access is open. Write access is
+              granted by application. Eleven short prompts; we
+              reply within seven days.
+            </p>
+
+            <div class="wiz-welcome-stats">
+              <div class="wiz-stat-cell">
+                <div class="wiz-stat-num">11</div>
+                <div class="wiz-stat-label">Prompts</div>
+                <div class="wiz-stat-detail">~10 minutes. Substance over length.</div>
+              </div>
+              <div class="wiz-stat-cell">
+                <div class="wiz-stat-num">7</div>
+                <div class="wiz-stat-label">Days reply</div>
+                <div class="wiz-stat-detail">Personal review by an admin.</div>
+              </div>
+              <div class="wiz-stat-cell">
+                <div class="wiz-stat-num">0</div>
+                <div class="wiz-stat-label">Bots</div>
+                <div class="wiz-stat-detail">No captcha. No tracking. No noise.</div>
+              </div>
+            </div>
+
+            <div class="wiz-ecosystem-row">
+              <span>SimpleGo</span>
+              <span>GoChat</span>
+              <span>GoBot</span>
+              <span>GoUNITY</span>
+              <span>GoKey</span>
+              <span>SimpleGoX</span>
+            </div>
+
+            <button type="button" class="wiz-begin-btn" @click="next()">
+              <span>BEGIN APPLICATION</span>
+              <span class="wiz-begin-arrow">&rarr;</span>
+            </button>
+
+            <p class="wiz-welcome-footer">
+              Already a member? <a href="/login" hx-boost="true">Log in</a>.
+            </p>
+          </div>
+        </template>
+
+        {{/* ----- Step 1: Account ----- */}}
+        <template x-if="step === 1">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+
+            <p class="wiz-prompt-eyebrow">Step 02 &middot; ACCOUNT</p>
+            <h2 class="wiz-prompt-headline">Pick your handle.</h2>
+            <p class="wiz-prompt-helper">
+              This is how the community will see you. Cannot be
+              changed by you later.
+            </p>
+
+            <div class="wiz-input-block">
+              <label class="wiz-input-label" for="wiz-username">
+                Username
+                <span class="wiz-input-checkmark" :class="{ shown: usernameStatus === 'available' }">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </span>
+              </label>
+              <input type="text" id="wiz-username" class="wiz-input"
+                     x-model="data.username"
+                     @input="watchUsername()"
+                     minlength="3" maxlength="32"
+                     pattern="[A-Za-z0-9_]+"
+                     autocomplete="username"
+                     placeholder="yourhandle"
+                     x-ref="usernameInput">
+              {{/* Sprint Y.4: live availability pill. Replaces the
+                   simple counter row with a status indicator that
+                   cycles idle -> checking -> available / taken /
+                   reserved / invalid / error. The character count
+                   stays visible on the right so the applicant can
+                   still see they are within bounds. */}}
+              <div class="wiz-input-meta">
+                <span class="wiz-status-muted" x-show="usernameStatus === 'idle'">READY</span>
+                <span class="wiz-status-info" x-show="usernameStatus === 'checking'">
+                  <svg class="wiz-spin-small" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                  CHECKING
+                </span>
+                <span class="wiz-status-success" x-show="usernameStatus === 'available'">&#10003; AVAILABLE</span>
+                <span class="wiz-status-danger" x-show="usernameStatus === 'taken'">&#10005; ALREADY TAKEN</span>
+                <span class="wiz-status-danger" x-show="usernameStatus === 'reserved'">&#10005; RESERVED NAME</span>
+                <span class="wiz-status-warning" x-show="usernameStatus === 'invalid'">INVALID FORMAT</span>
+                <span class="wiz-status-warning" x-show="usernameStatus === 'error'">CHECK FAILED, TRY AGAIN</span>
+                <span class="wiz-counter-tail">
+                  <span x-text="data.username.length">0</span> / 32
+                </span>
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.username" x-cloak x-text="fieldErrors.username"></div>
+            </div>
+
+            <div class="wiz-input-block">
+              <label class="wiz-input-label" for="wiz-password">
+                Password
+                <span class="wiz-input-checkmark" :class="{ shown: passwordValid() }">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </span>
+              </label>
+              <input type="password" id="wiz-password" class="wiz-input"
+                     x-model="data.password"
+                     minlength="8" maxlength="128"
+                     autocomplete="new-password"
+                     placeholder="At least 8 characters">
+              <div class="wiz-counter"
+                   :class="{ 'wiz-counter-near': data.password.length > 100, 'wiz-counter-over': data.password.length > 128 }">
+                <span x-text="data.password.length">0</span> / 128 &middot; min 8, no composition rules
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.password" x-cloak x-text="fieldErrors.password"></div>
+            </div>
+          </div>
+        </template>
+
+        {{/* ----- Step 2: External links (optional) ----- */}}
+        <template x-if="step === 2">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+            <p class="wiz-prompt-eyebrow">Step 03 &middot; EXTERNAL LINKS &middot; OPTIONAL</p>
+            <h2 class="wiz-prompt-headline">Where can we see your work?</h2>
+            <p class="wiz-prompt-helper">
+              Optional but very helpful. GitHub, Codeberg, GitLab,
+              personal site, anywhere with code or technical
+              writing. Helps us evaluate your track record.
+              <strong>Skip if you have nothing to share yet.</strong>
+            </p>
+            <div class="wiz-input-block">
+              <textarea class="wiz-input wiz-textarea"
+                        x-model="data.external_links"
+                        maxlength="500" rows="3"
+                        placeholder="https://github.com/yourhandle  https://yourdomain.com"></textarea>
+              <div class="wiz-counter"
+                   :class="{ 'wiz-counter-near': data.external_links.length > 450, 'wiz-counter-over': data.external_links.length > 500 }">
+                <span x-text="data.external_links.length">0</span> / 500
+              </div>
+              <div class="wiz-link-detector" :class="{ 'wiz-link-detected': linkCount() > 0 }">
+                <span x-text="linkCount()">0</span> LINK<span x-show="linkCount() !== 1">S</span> DETECTED
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.external_links" x-cloak x-text="fieldErrors.external_links"></div>
+            </div>
+          </div>
+        </template>
+
+        {{/* ----- Step 3: Ecosystem connection (required) ----- */}}
+        <template x-if="step === 3">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+            <p class="wiz-prompt-eyebrow">Step 04 &middot; ECOSYSTEM CONNECTION &middot; REQUIRED</p>
+            <h2 class="wiz-prompt-headline">
+              Tell us, <span class="wiz-accent" x-text="displayName()"></span>,
+              how you connect to <span class="wiz-accent">SimpleGo</span>.
+            </h2>
+            <p class="wiz-prompt-helper">
+              Are you using SimpleGo, GoChat, SimpleGoX, or
+              researching the underlying tech (SimpleX, SMP,
+              hardware security)? <strong>Be specific.</strong>
+              Vague answers ("I care about privacy") do not pass.
+            </p>
+            <div class="wiz-input-block">
+              <label class="wiz-input-label">
+                Your story
+                <span class="wiz-input-checkmark" :class="{ shown: data.ecosystem_connection.length >= 30 && data.ecosystem_connection.length <= 800 }">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </span>
+              </label>
+              <textarea class="wiz-input wiz-textarea"
+                        x-model="data.ecosystem_connection"
+                        minlength="30" maxlength="800" rows="6"
+                        placeholder="I have been running a SimpleX SMP relay for six months and have written notes on..."></textarea>
+              <div class="wiz-counter"
+                   :class="{ 'wiz-counter-near': data.ecosystem_connection.length > 720, 'wiz-counter-over': data.ecosystem_connection.length > 800 }">
+                <template x-if="data.ecosystem_connection.length > 0 && data.ecosystem_connection.length < 30">
+                  <span class="wiz-counter-min">need at least 30</span>
+                </template>
+                <span x-text="data.ecosystem_connection.length">0</span> / 800
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.ecosystem_connection" x-cloak x-text="fieldErrors.ecosystem_connection"></div>
+            </div>
+          </div>
+        </template>
+
+        {{/* ----- Step 4: Community contribution (required) ----- */}}
+        <template x-if="step === 4">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+            <p class="wiz-prompt-eyebrow">Step 05 &middot; CONTRIBUTION &middot; REQUIRED</p>
+            <h2 class="wiz-prompt-headline">What would you contribute?</h2>
+            <p class="wiz-prompt-helper">
+              What perspective would
+              <span class="wiz-accent" x-text="displayName()"></span>
+              bring to this community? Examples:
+              protocol-level discussion, hardware integration,
+              security review, deployment notes, documentation.
+              <strong>Specific beats general.</strong>
+            </p>
+            <div class="wiz-input-block">
+              <label class="wiz-input-label">
+                Your contribution
+                <span class="wiz-input-checkmark" :class="{ shown: data.community_contribution.length >= 30 && data.community_contribution.length <= 600 }">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </span>
+              </label>
+              <textarea class="wiz-input wiz-textarea"
+                        x-model="data.community_contribution"
+                        minlength="30" maxlength="600" rows="6"
+                        placeholder="I write up hardware-integration notes on..."></textarea>
+              <div class="wiz-counter"
+                   :class="{ 'wiz-counter-near': data.community_contribution.length > 540, 'wiz-counter-over': data.community_contribution.length > 600 }">
+                <template x-if="data.community_contribution.length > 0 && data.community_contribution.length < 30">
+                  <span class="wiz-counter-min">need at least 30</span>
+                </template>
+                <span x-text="data.community_contribution.length">0</span> / 600
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.community_contribution" x-cloak x-text="fieldErrors.community_contribution"></div>
+            </div>
+          </div>
+        </template>
+
+        {{/* ----- Step 5: Current focus (optional) ----- */}}
+        <template x-if="step === 5">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+            <p class="wiz-prompt-eyebrow">Step 06 &middot; CURRENT FOCUS &middot; OPTIONAL</p>
+            <h2 class="wiz-prompt-headline">What would you post first?</h2>
+            <p class="wiz-prompt-helper">
+              The thing you would actually post about in your
+              first week. Helps us see what you bring to recent
+              discussions.
+            </p>
+            <div class="wiz-input-block">
+              <textarea class="wiz-input wiz-textarea"
+                        x-model="data.current_focus"
+                        maxlength="400" rows="4"
+                        placeholder="Cross-compiling SimpleGoX for ARM SBCs and the bootstrap-relay handshake quirks I have been hitting..."></textarea>
+              <div class="wiz-counter"
+                   :class="{ 'wiz-counter-near': data.current_focus.length > 360, 'wiz-counter-over': data.current_focus.length > 400 }">
+                <span x-text="data.current_focus.length">0</span> / 400
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.current_focus" x-cloak x-text="fieldErrors.current_focus"></div>
+            </div>
+          </div>
+        </template>
+
+        {{/* ----- Step 6: Application notes (optional) ----- */}}
+        <template x-if="step === 6">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+            <p class="wiz-prompt-eyebrow">Step 07 &middot; NOTES &middot; OPTIONAL</p>
+            <h2 class="wiz-prompt-headline">Anything else?</h2>
+            <p class="wiz-prompt-helper">
+              Other communities you contribute to, projects you
+              maintain, languages you work in. Skip if there is
+              nothing extra.
+            </p>
+            <div class="wiz-input-block">
+              <textarea class="wiz-input wiz-textarea"
+                        x-model="data.application_notes"
+                        maxlength="300" rows="3"
+                        placeholder=""></textarea>
+              <div class="wiz-counter"
+                   :class="{ 'wiz-counter-near': data.application_notes.length > 270, 'wiz-counter-over': data.application_notes.length > 300 }">
+                <span x-text="data.application_notes.length">0</span> / 300
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.application_notes" x-cloak x-text="fieldErrors.application_notes"></div>
+            </div>
+          </div>
+        </template>
+
+        {{/* ----- Step 7: Technical depth (required, choice picker) ----- */}}
+        <template x-if="step === 7">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+            <p class="wiz-prompt-eyebrow">Step 08 &middot; TECHNICAL DEPTH &middot; REQUIRED</p>
+            <h2 class="wiz-prompt-headline">Pick one. Answer it.</h2>
+            <p class="wiz-prompt-helper">
+              <span class="wiz-accent" x-text="displayName()"></span>,
+              pick ONE sub-question and answer in your own words.
+              We test whether you understand the protocols, not
+              whether you can quote the spec.
+              <strong>Wrong-but-thoughtful beats right-but-shallow.</strong>
+            </p>
+
+            <div class="wiz-choice-list" role="radiogroup">
+              <button type="button" class="wiz-choice-row"
+                      :class="{ 'wiz-choice-selected': data.technical_depth_choice === 'a' }"
+                      :aria-pressed="data.technical_depth_choice === 'a' ? 'true' : 'false'"
+                      @click="data.technical_depth_choice = 'a'">
+                <span class="wiz-choice-letter">A.</span>
+                <span class="wiz-choice-text">
+                  What is your biggest critique of the Double
+                  Ratchet algorithm as used in Signal or SimpleX?
+                </span>
+              </button>
+              <button type="button" class="wiz-choice-row"
+                      :class="{ 'wiz-choice-selected': data.technical_depth_choice === 'b' }"
+                      :aria-pressed="data.technical_depth_choice === 'b' ? 'true' : 'false'"
+                      @click="data.technical_depth_choice = 'b'">
+                <span class="wiz-choice-letter">B.</span>
+                <span class="wiz-choice-text">
+                  Why did Matrix choose Megolm over Olm for group
+                  chats? What trade-offs does this introduce?
+                </span>
+              </button>
+              <button type="button" class="wiz-choice-row"
+                      :class="{ 'wiz-choice-selected': data.technical_depth_choice === 'c' }"
+                      :aria-pressed="data.technical_depth_choice === 'c' ? 'true' : 'false'"
+                      @click="data.technical_depth_choice = 'c'">
+                <span class="wiz-choice-letter">C.</span>
+                <span class="wiz-choice-text">
+                  SimpleX claims "no user identifiers." Where does
+                  this hit limits in practice (directory services,
+                  bots, persistent contacts)?
+                </span>
+              </button>
+            </div>
+
+            <div class="wiz-reveal" x-show="data.technical_depth_choice" x-cloak :key="data.technical_depth_choice">
+              <div class="wiz-input-block">
+                <label class="wiz-input-label">
+                  Your answer
+                  <span class="wiz-input-checkmark" :class="{ shown: data.technical_depth_answer.length >= 100 && data.technical_depth_answer.length <= 500 }">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </span>
+                </label>
+                <textarea class="wiz-input wiz-textarea"
+                          x-model="data.technical_depth_answer"
+                          minlength="100" maxlength="500" rows="6"
+                          placeholder="Your answer in 100-500 characters..."></textarea>
+                <div class="wiz-counter"
+                     :class="{ 'wiz-counter-near': data.technical_depth_answer.length > 450, 'wiz-counter-over': data.technical_depth_answer.length > 500 }">
+                  <template x-if="data.technical_depth_answer.length > 0 && data.technical_depth_answer.length < 100">
+                    <span class="wiz-counter-min">need at least 100</span>
+                  </template>
+                  <span x-text="data.technical_depth_answer.length">0</span> / 500
+                </div>
+              </div>
+            </div>
+
+            <div class="wiz-input-error" x-show="fieldErrors.technical_depth_choice" x-cloak x-text="fieldErrors.technical_depth_choice"></div>
+            <div class="wiz-input-error" x-show="fieldErrors.technical_depth_answer" x-cloak x-text="fieldErrors.technical_depth_answer"></div>
+          </div>
+        </template>
+
+        {{/* ----- Step 8: Practical experience (optional) ----- */}}
+        <template x-if="step === 8">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+            <p class="wiz-prompt-eyebrow">Step 09 &middot; PRACTICAL &middot; OPTIONAL</p>
+            <h2 class="wiz-prompt-headline">Run any of this stack?</h2>
+            <p class="wiz-prompt-helper">
+              Have you actually run a SimpleX server, GoChat node,
+              hardware-security stack, or similar privacy
+              infrastructure? <strong>Honest "no" is fine.</strong>
+              We will not hold it against you alone, but it
+              weighs in evaluation. Lying will be obvious.
+            </p>
+            <div class="wiz-input-block">
+              <textarea class="wiz-input wiz-textarea"
+                        x-model="data.practical_experience"
+                        maxlength="400" rows="4"
+                        placeholder="Optional. 'no' is a valid answer."></textarea>
+              <div class="wiz-counter"
+                   :class="{ 'wiz-counter-near': data.practical_experience.length > 360, 'wiz-counter-over': data.practical_experience.length > 400 }">
+                <span x-text="data.practical_experience.length">0</span> / 400
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.practical_experience" x-cloak x-text="fieldErrors.practical_experience"></div>
+            </div>
+          </div>
+        </template>
+
+        {{/* ----- Step 9: Critical thinking (optional) ----- */}}
+        <template x-if="step === 9">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+            <p class="wiz-prompt-eyebrow">Step 10 &middot; CRITICAL THINKING &middot; OPTIONAL</p>
+            <h2 class="wiz-prompt-headline">Where is privacy theater?</h2>
+            <p class="wiz-prompt-helper">
+              Where in the privacy / messaging space do you see
+              the gap between marketing and reality? Specific
+              examples beat broad accusations.
+              <strong>"Big Tech" is not an answer.</strong>
+            </p>
+            <div class="wiz-input-block">
+              <textarea class="wiz-input wiz-textarea"
+                        x-model="data.critical_thinking"
+                        maxlength="400" rows="4"
+                        placeholder="Pick a specific product / protocol / claim and explain the gap."></textarea>
+              <div class="wiz-counter"
+                   :class="{ 'wiz-counter-near': data.critical_thinking.length > 360, 'wiz-counter-over': data.critical_thinking.length > 400 }">
+                <span x-text="data.critical_thinking.length">0</span> / 400
+              </div>
+              <div class="wiz-input-error" x-show="fieldErrors.critical_thinking" x-cloak x-text="fieldErrors.critical_thinking"></div>
+            </div>
+          </div>
+        </template>
+
+        {{/* ----- Step 10: Review and submit ----- */}}
+        <template x-if="step === 10">
+          <div class="wiz-step-pane" x-cloak
+               x-transition:enter="wiz-step-enter"
+               x-transition:enter-start="wiz-step-enter-start"
+               x-transition:enter-end="wiz-step-enter-end"
+               x-transition:leave="wiz-step-leave"
+               x-transition:leave-start="wiz-step-leave-start"
+               x-transition:leave-end="wiz-step-leave-end">
+
+            <p class="wiz-prompt-eyebrow">Step 11 &middot; REVIEW</p>
+            <h2 class="wiz-prompt-headline">
+              Looking good, <span class="wiz-accent" x-text="displayName()"></span>.
+              Look it over.
+            </h2>
+            <p class="wiz-prompt-helper">
+              Read your answers carefully. After submit you cannot
+              edit your application.
+            </p>
+
+            <div class="wiz-submit-banner" x-show="submitError" x-cloak x-text="submitError"></div>
+
+            <div class="wiz-review-block">
+              <div class="wiz-review-block-head">
+                <h3>ACCOUNT</h3>
+                <button type="button" class="wiz-review-edit" @click="goToStep(1)">EDIT</button>
+              </div>
+              <dl>
+                <div class="wiz-review-row"><dt>Username</dt><dd x-text="data.username || ''"></dd></div>
+                <div class="wiz-review-row"><dt>Password</dt><dd x-text="data.password ? '••••••••' : ''"></dd></div>
+              </dl>
+            </div>
+
+            <div class="wiz-review-block">
+              <div class="wiz-review-block-head">
+                <h3>ABOUT YOU</h3>
+                <button type="button" class="wiz-review-edit" @click="goToStep(2)">EDIT</button>
+              </div>
+              <dl>
+                <div class="wiz-review-row">
+                  <dt>External links</dt>
+                  <dd :class="{ 'wiz-muted': !data.external_links }"
+                      x-text="data.external_links || 'Not provided (optional)'"></dd>
+                </div>
+                <div class="wiz-review-row">
+                  <dt>Ecosystem connection</dt>
+                  <dd x-text="data.ecosystem_connection || ''"></dd>
+                </div>
+                <div class="wiz-review-row">
+                  <dt>Community contribution</dt>
+                  <dd x-text="data.community_contribution || ''"></dd>
+                </div>
+                <div class="wiz-review-row">
+                  <dt>Current focus</dt>
+                  <dd :class="{ 'wiz-muted': !data.current_focus }"
+                      x-text="data.current_focus || 'Not provided (optional)'"></dd>
+                </div>
+                <div class="wiz-review-row">
+                  <dt>Application notes</dt>
+                  <dd :class="{ 'wiz-muted': !data.application_notes }"
+                      x-text="data.application_notes || 'Not provided (optional)'"></dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="wiz-review-block">
+              <div class="wiz-review-block-head">
+                <h3>KNOWLEDGE</h3>
+                <button type="button" class="wiz-review-edit" @click="goToStep(7)">EDIT</button>
+              </div>
+              <dl>
+                <div class="wiz-review-row">
+                  <dt>Technical depth</dt>
+                  <dd>
+                    <span x-text="'Choice ' + (data.technical_depth_choice || '?').toUpperCase() + ': '"></span>
+                    <span x-text="data.technical_depth_answer || ''"></span>
+                  </dd>
+                </div>
+                <div class="wiz-review-row">
+                  <dt>Practical experience</dt>
+                  <dd :class="{ 'wiz-muted': !data.practical_experience }"
+                      x-text="data.practical_experience || 'Not provided (optional)'"></dd>
+                </div>
+                <div class="wiz-review-row">
+                  <dt>Critical thinking</dt>
+                  <dd :class="{ 'wiz-muted': !data.critical_thinking }"
+                      x-text="data.critical_thinking || 'Not provided (optional)'"></dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="wiz-submit-area">
+              <button type="button" class="wiz-submit-btn"
+                      @click="submit()"
+                      :disabled="submitting || submitted"
+                      :aria-busy="submitting ? 'true' : 'false'">
+                <template x-if="!submitting && !submitted">
+                  <span>SUBMIT APPLICATION &nbsp; &rarr;</span>
+                </template>
+                <template x-if="submitting">
+                  <span>SUBMITTING&hellip;</span>
+                </template>
+                <template x-if="submitted">
+                  <span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px"><polyline points="20 6 9 17 4 12"/></svg>
+                    &nbsp; SENT
+                  </span>
+                </template>
+              </button>
+            </div>
+          </div>
+        </template>
+
+      </section>
+
+      {{/* ===== Footer with keyboard hint + skip/continue actions.
+            Hidden on Welcome (step 0) and Review (step 10). ===== */}}
+      <footer class="wiz-footer" x-show="step > 0 && step < 10" x-cloak>
+        <div class="wiz-keyboard-hint">
+          <span class="wiz-kbd">&crarr;</span> ENTER TO CONTINUE
+          <span class="wiz-divider">&middot;</span>
+          <span class="wiz-kbd">ESC</span> TO GO BACK
+        </div>
+        <div class="wiz-action-group">
+          <button type="button" class="wiz-action-secondary"
+                  x-show="!steps[step].required" x-cloak
+                  @click="skip()">
+            SKIP
+          </button>
+          <button type="button" class="wiz-action-primary"
+                  @click="next()"
+                  :disabled="!isCurrentStepValid()">
+            <span>CONTINUE</span>
+            <span class="wiz-action-arrow">&rarr;</span>
+          </button>
+        </div>
+      </footer>
+
+    </main>
   </div>
 </div>
 {{ end }}

@@ -1,6 +1,7 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -155,7 +156,75 @@ func funcMap() template.FuncMap {
 		"contains":      contains,
 		// Sprint X application helpers.
 		"renderApplicationLinks": renderApplicationLinks,
+		// Sprint Y rating widget helpers.
+		"ratingDim":     ratingDim,
+		"ratingAverage": ratingAverage,
+		"ratingCount":   ratingCount,
+		"ratingNotesJS": ratingNotesJS,
 	}
+}
+
+// ratingDim returns the integer value of a named dimension on an
+// ApplicationRating, or 0 when the dimension is nil. Templates use
+// it to feed the per-field star widget its initial value:
+//   {{ template "rating-widget.html" (dict ... "Value" (ratingDim $r "track_record")) }}
+//
+// The widget interprets 0 as "unrated" and renders no filled stars;
+// any 1-10 value renders that many filled stars. Centralising the
+// pointer-deref here keeps the template branchless.
+func ratingDim(r *model.ApplicationRating, dimension string) int {
+	if r == nil {
+		return 0
+	}
+	var v *int
+	switch dimension {
+	case "track_record":
+		v = r.TrackRecord
+	case "ecosystem_fit":
+		v = r.EcosystemFit
+	case "contribution_potential":
+		v = r.ContributionPotential
+	case "relevance":
+		v = r.Relevance
+	case "communication":
+		v = r.Communication
+	}
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+// ratingAverage is a thin template wrapper around
+// ApplicationRating.Average so the admin template stays free of
+// nil-receiver branches. Returns 0 when r is nil.
+func ratingAverage(r *model.ApplicationRating) float64 {
+	return r.Average()
+}
+
+// ratingCount is the template-side counterpart of
+// ApplicationRating.RatedCount. Same nil-handling story.
+func ratingCount(r *model.ApplicationRating) int {
+	return r.RatedCount()
+}
+
+// ratingNotesJS escapes the rating notes string for safe embedding
+// as an Alpine factory argument. The notes blob is user-controlled
+// (admin types into a textarea) and gets injected into a script-
+// expression context: x-data="ratingNotes(<id>, <notes>)". A
+// newline or quote in the notes would break the expression and
+// could in principle be hijacked. We marshal as JSON so the result
+// is always a valid JS string literal with embedded newlines and
+// quotes properly escaped.
+func ratingNotesJS(r *model.ApplicationRating) template.JS {
+	if r == nil {
+		return template.JS(`""`)
+	}
+	b, err := json.Marshal(r.Notes)
+	if err != nil {
+		return template.JS(`""`)
+	}
+	return template.JS(b)
 }
 
 // renderApplicationLinks turns the user-submitted ExternalLinks blob

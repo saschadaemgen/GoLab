@@ -3871,3 +3871,1124 @@ img.avatar {
   font-size: 0.88rem;
   margin-top: 0.25rem;
 }
+
+/* Sprint Y application rating widget. Lives inside .admin-pending-app
+   below each application field. Star buttons are unstyled buttons
+   with an inline SVG; filled state uses --accent. The whole row
+   sits in a flex container so the value badge and "saved" indicator
+   tail behind the stars on a single line. */
+.rating-widget {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.rating-widget .stars {
+  display: inline-flex;
+  gap: 0.125rem;
+}
+.rating-widget .star-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.125rem;
+  color: var(--border, #d0d7de);
+  transition: color 0.1s, transform 0.1s;
+  line-height: 0;
+}
+.rating-widget .star-btn:hover {
+  color: var(--accent);
+  transform: scale(1.12);
+}
+.rating-widget .star-btn.filled {
+  color: var(--accent);
+}
+.rating-widget .star-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.rating-widget .rating-value {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 3em;
+}
+.rating-widget .rating-saved,
+.rating-notes-status .rating-saved {
+  color: var(--success, #3fa46a);
+  font-size: 0.85rem;
+}
+
+/* Bottom-of-card running average + rated count. Sprint Y. The
+   .rating-summary class also has a margin-top so it visually
+   separates from the last application field's widget. */
+.rating-summary {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.rating-summary .rating-count {
+  color: var(--text-dim);
+  margin-left: 0.5rem;
+}
+
+/* Admin notes textarea below the rating summary. Reuses
+   .form-textarea but adds a status row beneath for the saving /
+   saved / error indicators that ratingNotes() drives. */
+.rating-notes-block {
+  margin-top: 1rem;
+}
+.rating-notes-status {
+  margin-top: 0.25rem;
+  min-height: 1.2rem; /* prevent layout jump when the row goes empty */
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* Sprint Y.1 register page redesign.
+   Two-column layout >=1024px (40% framing copy + 60% form),
+   stacks to single column on smaller screens. The framing copy
+   becomes sticky on desktop so it stays visible while the
+   applicant scrolls the long form.
+
+   .register-layout replaces .auth-container as the page-level
+   wrapper specifically for /register; .auth-container is still
+   used by /login. */
+.register-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  max-width: 1100px;
+  margin: 0 auto;
+  gap: 2rem;
+  padding: 2rem 1rem;
+}
+@media (min-width: 1024px) {
+  .register-layout {
+    grid-template-columns: 40% 1fr;
+    gap: 3rem;
+    padding: 3rem 2rem;
+  }
+}
+.register-intro {
+  color: var(--text);
+}
+@media (min-width: 1024px) {
+  .register-intro {
+    position: sticky;
+    top: 5rem;
+    align-self: start;
+  }
+}
+.register-intro h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+  color: var(--text-bright);
+}
+.register-intro p {
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0 0 1rem;
+}
+.ecosystem-icons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+.ecosystem-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Form column container. Each section gets its own card so the
+   long form has visual rhythm. */
+.register-form-col {
+  min-width: 0; /* allow textarea shrink inside grid */
+}
+.register-form-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.register-form-section h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-bright);
+}
+.register-form-section .section-intro {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0 0 1.5rem;
+}
+.register-form-section .section-intro strong {
+  color: var(--text);
+}
+
+/* Tooltip system for "?" icons next to form labels. The trigger
+   is inline-flex so it sits centered next to the label text. The
+   popover is absolutely positioned above it; pointer-events:none
+   prevents the popover from interfering with hover-out detection
+   on the trigger. */
+.tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  margin-left: 0.4rem;
+  cursor: help;
+  vertical-align: middle;
+}
+.tooltip-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+.tooltip-trigger:hover .tooltip-icon,
+.tooltip-trigger[aria-expanded="true"] .tooltip-icon {
+  color: var(--accent);
+}
+.tooltip-popover {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  z-index: 100;
+  pointer-events: none;
+  font-weight: normal;
+}
+@media (max-width: 480px) {
+  .tooltip-popover {
+    width: 240px;
+    left: 0;
+    transform: none;
+  }
+}
+
+/* Choice picker for the technical_depth question. Three buttons
+   stacked vertically; selected one has the accent border + tinted
+   background. Buttons are full text-aligned so long question
+   bodies wrap cleanly. */
+.choice-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.choice-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.choice-btn:hover {
+  border-color: var(--accent);
+}
+.choice-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle, rgba(26, 125, 90, 0.1));
+}
+.choice-label {
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.choice-text {
+  flex: 1;
+}
+.knowledge-question textarea[name="technical_depth_answer"] {
+  margin-top: 0.5rem;
+}
+
+/* Full-width submit button variant. Sprint Y.1 register page
+   spans this across the form column for visual weight. */
+.btn-block {
+  display: inline-block;
+  width: 100%;
+}
+
+/* Sprint Y.1 admin knowledge-answer blocks. Read-only paragraphs
+   below the rating widgets, with a heading per question and a
+   "evaluate substance" intro paragraph above all three. */
+.knowledge-answers {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.knowledge-answers .knowledge-intro {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  margin: 0 0 1rem;
+  font-style: italic;
+}
+.knowledge-answer-block {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.knowledge-answer-block h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--text-bright);
+}
+.knowledge-answer-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  line-height: 1.55;
+}
+.knowledge-answer-text.muted {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* =============================================================
+   Sprint Y.3 brutalist registration wizard
+   =============================================================
+   Replaces the Sprint Y.2 cinematic-card wizard with a tighter,
+   more technical aesthetic: monospace step indicators, all-caps
+   action labels, sharp borders, and a left sidebar carrying
+   step list + a contextual review-notes quote. Mobile collapses
+   the sidebar; the top progress bar substitutes.
+
+   Every class lives under the .wiz- namespace so it does not
+   collide with .wizard-* (Sprint Y.2, removed in this slice),
+   .form-*, .btn-* or anything else the rest of the app uses.
+
+   Animation tokens reuse the --wizard-* set defined elsewhere
+   in this file. */
+
+.wiz-root {
+  /* Sprint Y.5 layout v2: NO min-height. The wizard collapses to
+     its content height. The page background outside the wizard
+     is provided by the body / particle layer behind it. */
+  position: relative;
+  background: var(--bg, #0d1117);
+  color: var(--text, #c9d1d9);
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.wiz-progress-bar {
+  position: sticky;
+  top: 0;
+  height: 3px;
+  background: var(--border);
+  z-index: 10;
+}
+.wiz-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wiz-layout {
+  /* Sprint Y.5: no min-height. align-items: stretch (the grid
+     default) keeps the sidebar same height as the main column,
+     so the right column drives the height of both. */
+  display: grid;
+  grid-template-columns: 1fr;
+  max-width: 1280px;
+  margin: 0 auto;
+  align-items: stretch;
+}
+@media (min-width: 1024px) {
+  .wiz-layout { grid-template-columns: 320px 1fr; }
+}
+
+/* ---- Sidebar ---- */
+.wiz-sidebar {
+  display: none;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  padding: 2rem 1.5rem;
+  background: var(--bg-card, #161b22);
+}
+@media (min-width: 1024px) {
+  .wiz-sidebar { display: flex; }
+}
+
+.wiz-sidebar-header {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 2.5rem;
+  line-height: 1.6;
+}
+.wiz-sidebar-header strong {
+  display: block;
+  color: var(--accent);
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}
+
+.wiz-sidebar-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+.wiz-step-row {
+  display: grid;
+  grid-template-columns: 18px 28px 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.5rem;
+  border-left: 2px solid transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  cursor: default;
+  transition: color 200ms, border-color 200ms, background 200ms;
+}
+.wiz-step-row.wiz-step-pending {
+  opacity: 0.55;
+}
+.wiz-step-row.wiz-step-completed {
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.wiz-step-row.wiz-step-completed:hover {
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.03));
+  color: var(--text);
+}
+.wiz-step-row.wiz-step-active {
+  border-left-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle, rgba(26, 125, 90, 0.08));
+}
+.wiz-step-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+.wiz-step-marker svg { width: 14px; height: 14px; }
+.wiz-step-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.wiz-step-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wiz-sidebar-quote {
+  /* Sprint Y.5: pin to the bottom of the sidebar via auto top
+     margin. The sidebar is a flex column (parent rule); auto
+     consumes any unused vertical space above the quote so it
+     always sits at the foot of the column even when the step
+     list does not fill the height. Min-margin keeps a 32px
+     breathing room when the list IS tall enough to push the
+     quote down naturally. */
+  margin-top: auto;
+  padding: 1rem;
+  background: var(--accent-subtle, rgba(26, 125, 90, 0.06));
+  border-left: 2px solid var(--accent);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.wiz-sidebar-quote p {
+  margin: 0 0 0.75rem;
+  font-style: italic;
+}
+.wiz-sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.5rem 0;
+}
+.wiz-sidebar-quote-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+}
+
+/* ---- Main column ---- */
+/* Sprint Y.5 layout v2: content drives the height. No min-height
+   stretch - on a tall viewport with a short step (e.g. Welcome,
+   Account) the wizard ends naturally below the footer instead
+   of pinning the footer to the viewport bottom with hundreds of
+   pixels of dead space above it. The column is a flex container
+   so direct children stack vertically; .wiz-footer's margin-top
+   is now 32px (down from 64px in Y.4) since the visual rhythm
+   reads better with content-sized cards. */
+.wiz-main {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+@media (min-width: 1024px) {
+  .wiz-main { padding: 4rem; }
+}
+
+.wiz-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+}
+.wiz-back-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0.5rem 0.85rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition: border-color 150ms, color 150ms, background 150ms;
+}
+.wiz-back-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle, rgba(26, 125, 90, 0.06));
+}
+.wiz-progress-text {
+  color: var(--text-muted);
+}
+.wiz-progress-text span:first-child {
+  color: var(--accent);
+}
+
+.wiz-content {
+  /* Sprint Y.4 layout fix: do NOT stretch to fill the column.
+     A short step (e.g. Account with two inputs) should leave
+     the footer just below the inputs, not pushed to the
+     viewport bottom. The 4rem (64px) breathing room below
+     comes from .wiz-footer's margin-top, not from a flex
+     stretch here. The pane stays position: relative because
+     the leaving step needs an anchor for its absolute
+     positioning during the slide transition. */
+  position: relative;
+  flex: 0 0 auto;
+}
+.wiz-step-pane {
+  /* Each step is its own pane; absolute positioning during
+     transitions via the wiz-step-leave rule below. */
+}
+
+/* ---- Step transitions (direction-aware, like Sprint Y.2) ---- */
+.wiz-step-enter {
+  transition: transform 350ms cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 350ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: 100ms;
+}
+.wiz-step-leave {
+  transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: absolute;
+  inset: 0;
+}
+[data-direction="forward"]  .wiz-step-enter-start { transform: translateX(40px);  opacity: 0; }
+[data-direction="forward"]  .wiz-step-enter-end   { transform: translateX(0);     opacity: 1; }
+[data-direction="forward"]  .wiz-step-leave-start { transform: translateX(0);     opacity: 1; }
+[data-direction="forward"]  .wiz-step-leave-end   { transform: translateX(-40px); opacity: 0; }
+[data-direction="backward"] .wiz-step-enter-start { transform: translateX(-40px); opacity: 0; }
+[data-direction="backward"] .wiz-step-enter-end   { transform: translateX(0);     opacity: 1; }
+[data-direction="backward"] .wiz-step-leave-start { transform: translateX(0);     opacity: 1; }
+[data-direction="backward"] .wiz-step-leave-end   { transform: translateX(40px);  opacity: 0; }
+
+/* ---- Welcome step content ---- */
+.wiz-welcome-headline {
+  font-size: 4rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: var(--text-bright);
+  margin: 0 0 1rem;
+}
+@media (max-width: 1024px) {
+  .wiz-welcome-headline { font-size: 2.5rem; }
+}
+.wiz-welcome-headline em {
+  color: var(--accent);
+  font-style: normal;
+}
+.wiz-welcome-lede {
+  font-size: 1.15rem;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0 0 3rem;
+  max-width: 60ch;
+}
+
+.wiz-welcome-stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  margin-bottom: 3rem;
+}
+@media (min-width: 600px) {
+  .wiz-welcome-stats { grid-template-columns: repeat(3, 1fr); }
+}
+.wiz-stat-cell {
+  background: var(--bg-card);
+  padding: 1.25rem;
+}
+.wiz-stat-num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+.wiz-stat-label {
+  margin-top: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.wiz-stat-detail {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.wiz-ecosystem-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 3rem;
+}
+.wiz-ecosystem-row span {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.wiz-begin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 1rem 1.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 150ms, background 150ms, box-shadow 200ms;
+}
+.wiz-begin-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px var(--accent-subtle, rgba(26, 125, 90, 0.4));
+}
+.wiz-begin-arrow { font-size: 1rem; }
+
+.wiz-welcome-footer {
+  margin-top: 2rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.wiz-welcome-footer a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent);
+}
+.wiz-welcome-footer a:hover { border-bottom-style: solid; }
+
+/* ---- Form step: prompt + input + counter + helper ---- */
+.wiz-prompt-eyebrow {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin: 0 0 0.5rem;
+}
+.wiz-prompt-headline {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text-bright);
+  margin: 0 0 1rem;
+}
+@media (max-width: 1024px) {
+  .wiz-prompt-headline { font-size: 1.75rem; }
+}
+.wiz-prompt-helper {
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 65ch;
+  margin: 0 0 2rem;
+}
+.wiz-prompt-helper strong {
+  color: var(--text);
+}
+
+.wiz-input-block {
+  margin-bottom: 1.75rem;
+}
+.wiz-input-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+.wiz-input-checkmark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--success, #2ea043);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.wiz-input-checkmark.shown {
+  opacity: 1;
+  transform: scale(1);
+}
+.wiz-input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  background: var(--bg-card, #0d1117);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.wiz-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle, rgba(26, 125, 90, 0.15));
+}
+.wiz-textarea {
+  min-height: 8rem;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.55;
+}
+.wiz-counter {
+  margin-top: 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: color 200ms;
+}
+.wiz-counter.wiz-counter-near { color: #d29922; }
+.wiz-counter.wiz-counter-over { color: var(--danger); font-weight: 600; }
+.wiz-counter-min {
+  float: left;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.wiz-input-error {
+  display: block;
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---- Choice picker ---- */
+.wiz-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.wiz-choice-row {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  transition: border-color 200ms, background 200ms, opacity 200ms;
+  line-height: 1.55;
+}
+.wiz-choice-row:hover { border-color: var(--accent); }
+.wiz-choice-row.wiz-choice-selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle, rgba(26, 125, 90, 0.1));
+}
+.wiz-choice-list:has(.wiz-choice-selected) .wiz-choice-row:not(.wiz-choice-selected) {
+  opacity: 0.55;
+}
+.wiz-choice-letter {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+.wiz-choice-text { font-size: 0.95rem; }
+
+/* ---- Footer (action row) ---- */
+/* Sprint Y.5: 32px breathing room (was 64px in Y.4). With the
+   column no longer stretched to viewport height, the visual
+   weight reads better with a tighter footer-to-content gap.
+   On short steps the footer sits ~32px below the last input;
+   on long steps (Review) it follows the summary blocks. */
+.wiz-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+@media (min-width: 768px) {
+  .wiz-footer { flex-direction: row; justify-content: space-between; align-items: center; }
+}
+.wiz-keyboard-hint {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.wiz-kbd {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.72rem;
+  margin: 0 0.15rem;
+}
+.wiz-divider { color: var(--text-muted); margin: 0 0.4rem; }
+
+.wiz-action-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+.wiz-action-secondary {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0.65rem 1.1rem;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: color 150ms, border-color 150ms, background 150ms;
+}
+.wiz-action-secondary:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.wiz-action-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  padding: 0.7rem 1.5rem;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: transform 150ms, box-shadow 200ms, opacity 200ms;
+}
+.wiz-action-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px var(--accent-subtle, rgba(26, 125, 90, 0.4));
+}
+.wiz-action-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.wiz-action-arrow { font-size: 1rem; line-height: 1; }
+
+/* ---- Review step ---- */
+.wiz-review-block {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+.wiz-review-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.wiz-review-block-head h3 {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.wiz-review-edit {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0.3rem 0.7rem;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: color 150ms, border-color 150ms;
+}
+.wiz-review-edit:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.wiz-review-row {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 0.5rem 1.25rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
+}
+@media (max-width: 768px) {
+  .wiz-review-row { grid-template-columns: 1fr; gap: 0.15rem; }
+}
+.wiz-review-row dt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.wiz-review-row dd {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.wiz-review-row dd.wiz-muted { color: var(--text-muted); font-style: italic; }
+
+.wiz-submit-area {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+.wiz-submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1.25rem 2rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 150ms, box-shadow 200ms, opacity 200ms;
+}
+.wiz-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px var(--accent-subtle, rgba(26, 125, 90, 0.5));
+}
+.wiz-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.wiz-submit-banner {
+  background: rgba(217, 33, 33, 0.1);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 0.85rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+/* ---- Counter detector for external_links ---- */
+.wiz-link-detector {
+  margin-top: 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.wiz-link-detector.wiz-link-detected {
+  color: var(--success, #2ea043);
+}
+
+/* ---- Reveal animation for textarea after choice picker ---- */
+.wiz-reveal {
+  animation: wizardFadeInUp 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+/* Sprint Y.4 status-pill + meta row for the live username
+   availability check on step 1 of the wizard. Replaces the
+   plain .wiz-counter on the username input. The pill on the
+   left tells the applicant whether the handle is free; the
+   counter on the right keeps the character count visible. */
+.wiz-input-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+.wiz-status-muted   { color: var(--text-muted); }
+.wiz-status-info    { color: var(--accent); display: inline-flex; align-items: center; gap: 0.35rem; }
+.wiz-status-success { color: var(--success, #2ea043); }
+.wiz-status-danger  { color: var(--danger); }
+.wiz-status-warning { color: #d29922; }
+.wiz-counter-tail   { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+@keyframes wizSpin { to { transform: rotate(360deg); } }
+.wiz-spin-small {
+  animation: wizSpin 800ms linear infinite;
+  display: inline-block;
+}
+
+/* Sprint Y.4 personalisation: an inline accent span used inside
+   step headlines to colour the @username and brand tokens
+   without restructuring the headline element. Reads as the
+   accent color, slightly bolder than surrounding text. */
+.wiz-accent {
+  color: var(--accent);
+  font-weight: inherit;
+}
+
+
+/* =============================================================
+   Sprint Y.5 wizard cascade animations
+   =============================================================
+   Each step's direct children fade up sequentially when the step
+   becomes active, so a step "assembles" itself in front of the
+   user instead of all elements appearing at once. Total cascade
+   time ~1100ms which feels like a film transition rather than a
+   form load.
+
+   The cascade re-fires on every step change because each step is
+   wrapped in <template x-if="step === N"> in register.html: when
+   step changes, Alpine destroys the previous element and mounts
+   the new one. CSS animations fire on the freshly-mounted DOM
+   nodes.
+
+   `backwards` fill mode is critical: it keeps each child invisible
+   during its delay (otherwise children flash visible at t=0 then
+   animate in, which looks broken). */
+@keyframes wiz-element-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wiz-step-pane > * {
+  animation: wiz-element-enter 500ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Stagger by direct-child position. The :nth-child sequence is
+   tuned so the cascade reads as: badge -> headline -> helper ->
+   input -> meta. Steps with more elements (Review) extend the
+   sequence naturally. */
+.wiz-step-pane > *:nth-child(1) { animation-delay: 60ms;   animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(2) { animation-delay: 220ms;  animation-duration: 500ms; }
+.wiz-step-pane > *:nth-child(3) { animation-delay: 380ms;  animation-duration: 500ms; }
+.wiz-step-pane > *:nth-child(4) { animation-delay: 540ms;  animation-duration: 500ms; }
+.wiz-step-pane > *:nth-child(5) { animation-delay: 700ms;  animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(6) { animation-delay: 860ms;  animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(7) { animation-delay: 1020ms; animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(8) { animation-delay: 1180ms; animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(9) { animation-delay: 1340ms; animation-duration: 400ms; }

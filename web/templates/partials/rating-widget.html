@@ -1,0 +1,51 @@
+{{ define "rating-widget.html" }}
+{{/*
+  Sprint Y reusable star rating widget.
+
+  Inputs (passed via the dict template helper):
+    .UserID      int64  - the applicant's id
+    .Dimension   string - one of model.AllowedRatingDimensions keys
+    .Value       int    - the current saved rating (0 = unrated)
+
+  Behaviour:
+    - 10 star buttons, 1-10 left-to-right
+    - clicking a star fires PUT /api/admin/users/<id>/rating with
+      {dimension, value}; auto-save, no separate Save button
+    - the widget dispatches a "rating-changed" custom event on
+      success so the parent .rating-summary scope can refresh the
+      average + rated count without re-rendering the page
+    - clicking the currently-selected value clears it (sends null)
+      so an admin can correct an accidental click without picking a
+      different number
+
+  Initial value attribute is `:value="..."` not `value=` because
+  Alpine 3 evaluates the initial expression on the registered data
+  factory's first call - using the JS null literal rather than an
+  unquoted Go integer keeps the JSON valid when Value is 0/null.
+*/}}
+<div class="rating-widget"
+     x-data="ratingWidget({{ .UserID }}, '{{ .Dimension }}', {{ if .Value }}{{ .Value }}{{ else }}null{{ end }})">
+  <div class="stars" role="radiogroup" :aria-label="'Rating for ' + dimension">
+    <template x-for="n in 10" :key="n">
+      <button type="button"
+              class="star-btn"
+              :class="{ filled: value !== null && n <= value }"
+              :aria-pressed="value === n ? 'true' : 'false'"
+              :aria-label="'Rate ' + n + ' of 10'"
+              @click="rate(n)">
+        <svg viewBox="0 0 24 24" width="16" height="16"
+             fill="currentColor" aria-hidden="true">
+          <path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.4L12 16.8 5.7 21.2 8 13.8 2 9.4h7.6L12 2z"/>
+        </svg>
+      </button>
+    </template>
+  </div>
+  <span class="rating-value" x-show="value !== null" x-cloak>
+    <span x-text="value">0</span>/10
+  </span>
+  <span class="rating-saved"
+        x-show="saved" x-cloak
+        x-transition.opacity.duration.300ms>saved</span>
+  <span class="form-error" x-show="error" x-cloak x-text="error"></span>
+</div>
+{{ end }}

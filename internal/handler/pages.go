@@ -448,6 +448,11 @@ func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	profile.CommunityContribution = ""
 	profile.CurrentFocus = ""
 	profile.ApplicationNotes = ""
+	// Sprint Y.1 knowledge questions: same moderation-only treatment.
+	profile.TechnicalDepthChoice = ""
+	profile.TechnicalDepthAnswer = ""
+	profile.PracticalExperience = ""
+	profile.CriticalThinking = ""
 
 	data := h.newPageData(r, profile.Username+" - GoLab")
 	data.Content = profileContent{

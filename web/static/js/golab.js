@@ -309,47 +309,331 @@
       };
     });
 
-    // Sprint X.1 application registration form. Replaces the native
-    // form-POST + server-redirect cycle so a 400 from validation
-    // does not wipe the user's input. Submit goes via fetch(); on
-    // 200 we redirect to /pending; on 400 we map the structured
-    // {field, code, message} response to an inline error next to
-    // the offending textarea; on 5xx / network failure we show a
-    // generic top-of-form error and leave every field intact.
+    // Sprint Y.3 brutalist registration wizard. Replaces the
+    // Sprint Y.2 5-step cinematic-card variant. Same eleven
+    // form fields, but now split across 11 wizard indices so
+    // each step focuses on exactly one prompt. Carries every
+    // Sprint X.1 / Y.1 contract forward (fetch submit, typed
+    // {field, code, message} errors, optional external_links,
+    // four knowledge fields).
     //
-    // Per-field counters live in nested `x-data="{ count, max }"`
-    // scopes inside register.html and are independent of this
-    // component - they react purely on @input. They keep working
-    // across a 400 response because the DOM values are never
-    // cleared.
-    window.Alpine.data('registerForm', function () {
+    // The whole wizard is one component; per-step Alpine sub-
+    // scopes are only used for transient UI state. All form
+    // values live on this.data so the Review step can reflect
+    // them and the final submit() can serialize them all in
+    // one POST.
+    //
+    // 11 step indices:
+    //   0 Welcome              required = false (no fields)
+    //   1 Account               required (username + password)
+    //   2 External links        optional
+    //   3 Ecosystem connection  required
+    //   4 Community contribution required
+    //   5 Current focus         optional
+    //   6 Application notes     optional
+    //   7 Technical depth       required (choice + answer)
+    //   8 Practical experience  optional
+    //   9 Critical thinking     optional
+    //  10 Review                no fields, just the submit
+    //
+    // direction is "forward" or "backward"; the wizard root has
+    // :data-direction so CSS in golab.css can pick the right
+    // slide animation per step transition. Set BEFORE the step
+    // mutation so the attribute is in place when x-transition
+    // reads the surrounding state.
+    //
+    // Keyboard handling: Esc anywhere -> back(). Enter inside
+    // an INPUT (not TEXTAREA - the latter must keep newline
+    // behaviour) -> next(). Wired via @keydown in the template
+    // root.
+    window.Alpine.data('registrationWizardBrutalist', function () {
       return {
+        step: 0,
+        direction: 'forward',
         submitting: false,
-        // errors maps field name -> message. Looked up by template
-        // expressions like `errors.ecosystem_connection`. Cleared
-        // before each submit so a successful re-try removes any
-        // previous inline error.
-        errors: {},
-        // formError is the top-of-form banner for non-field issues
-        // (network failure, 5xx, response without a `field` key).
-        formError: '',
+        submitted: false,
+        submitError: '',
+        fieldErrors: {},
 
-        submit: function (e) {
+        // Sprint Y.4: live username availability check. Status is
+        // one of: idle | checking | available | taken | reserved
+        // | invalid | error. Drives the UI pills on step 1 and
+        // gates the Continue button (only "available" lets the
+        // user advance). Debounced 400ms via usernameCheckTimer
+        // so we do not slam the endpoint on every keystroke.
+        usernameStatus: 'idle',
+        usernameCheckTimer: null,
+
+        // The step list drives the sidebar render and the
+        // Skip/Continue button visibility. `required: true`
+        // hides the Skip button on that step.
+        steps: [
+          { label: 'Welcome',        required: false },
+          { label: 'Account',        required: true  },
+          { label: 'External links', required: false },
+          { label: 'Ecosystem',      required: true  },
+          { label: 'Contribution',   required: true  },
+          { label: 'Current focus',  required: false },
+          { label: 'Notes',          required: false },
+          { label: 'Technical',      required: true  },
+          { label: 'Practical',      required: false },
+          { label: 'Critical',       required: false },
+          { label: 'Review',         required: false }
+        ],
+
+        data: {
+          username: '',
+          password: '',
+          external_links: '',
+          ecosystem_connection: '',
+          community_contribution: '',
+          current_focus: '',
+          application_notes: '',
+          technical_depth_choice: '',
+          technical_depth_answer: '',
+          practical_experience: '',
+          critical_thinking: ''
+        },
+
+        init: function () {
+          // No-op for now; placeholder for any future deep-link
+          // hash handling (e.g. /register#step=4 to jump back
+          // into a partial application).
+        },
+
+        // ---- Progress + sidebar quote ----
+
+        progressPct: function () {
+          // Step 0 (welcome) reads 0%. Step N>0 reads (N / 10) * 100.
+          // 10 because step 10 is the review-and-submit step; once
+          // the user hits review we say 100% complete.
+          return Math.round((this.step / (this.steps.length - 1)) * 100);
+        },
+
+        // sidebarQuote returns a contextual one-liner displayed
+        // in the bottom of the sidebar. Each step has its own
+        // editorial line; from step 3 onward we drop the
+        // applicant's @handle into the quote so the panel feels
+        // like a private side-channel ("welcome notes" for the
+        // reviewer, but addressed at this specific applicant).
+        // Steps 0-2 stay neutral because we may not have a
+        // valid handle yet at those points.
+        sidebarQuote: function () {
+          var name = this.displayName();
+          var quotes = [
+            '"Read access is open. Write access is reviewed personally. We do not optimise for growth."',
+            '"Your handle is permanent. Pick something you would want to read on a security advisory three years from now."',
+            '"A blank links field is fine. Padding it with random GitHub stars is not."',
+            '"Substance, not buzzwords ' + name + '. Be specific."',
+            '"What perspective will ' + name + ' bring? \'I care about privacy\' is not one."',
+            '"Tell us, ' + name + ', what you would do - not what you would consume."',
+            '"Optional. If there is nothing extra, do not invent some."',
+            '"We test how ' + name + ' thinks, not what ' + name + ' has memorised."',
+            '"\'No\' is a complete answer, ' + name + '. Honesty weighs more than padding."',
+            '"Be specific or skip. \'Big Tech\' is a non-answer."',
+            '"Looking good, ' + name + '. Read it once. Submit. We respond within seven days."'
+          ];
+          return quotes[this.step] || quotes[0];
+        },
+
+        // linkCount counts how many https URLs are present in
+        // the external_links blob. Used by the step-2 link
+        // detector. Same tokenization the server uses
+        // (whitespace + comma split, https scheme required).
+        linkCount: function () {
+          var s = this.data.external_links || '';
+          if (!s) return 0;
+          var n = 0;
+          var tokens = s.split(/[\s,]+/);
+          for (var i = 0; i < tokens.length; i++) {
+            var t = tokens[i].trim();
+            if (!t) continue;
+            try {
+              var u = new URL(t);
+              if (u.protocol === 'https:' && u.host) n++;
+            } catch (e) { /* not a URL, skip */ }
+          }
+          return n;
+        },
+
+        // ---- Per-step validation ----
+
+        // Sprint Y.4: usernameValid is now driven by the live
+        // availability check, not just the format regex. The
+        // pattern is enforced on the watchUsername() side so
+        // the local-validation pill can flip to "INVALID FORMAT"
+        // before the network round trip; here we only return
+        // true when the server has confirmed the name is free.
+        usernameValid: function () {
+          return this.usernameStatus === 'available';
+        },
+        // usernameFormatValid is the cheap regex check used by
+        // watchUsername to short-circuit the network call.
+        usernameFormatValid: function () {
+          return /^[A-Za-z0-9_]{3,32}$/.test(this.data.username || '');
+        },
+        passwordValid: function () {
+          var p = this.data.password || '';
+          return p.length >= 8 && p.length <= 128;
+        },
+
+        // watchUsername fires on @input on the username field.
+        // Cancels any pending check, runs the cheap regex check
+        // immediately, then debounces 400ms before hitting the
+        // backend. The 400ms is enough time for a typing burst
+        // to settle without the user feeling like they have to
+        // wait. Status transitions: idle -> checking -> one of
+        // available / taken / reserved / invalid / error.
+        watchUsername: function () {
           var self = this;
-          var form = e.target;
-          self.submitting = true;
-          self.errors = {};
-          self.formError = '';
+          if (self.usernameCheckTimer) {
+            clearTimeout(self.usernameCheckTimer);
+            self.usernameCheckTimer = null;
+          }
+          var u = (self.data.username || '').trim();
+          if (!u) {
+            self.usernameStatus = 'idle';
+            return;
+          }
+          if (!self.usernameFormatValid()) {
+            self.usernameStatus = 'invalid';
+            return;
+          }
+          self.usernameStatus = 'checking';
+          self.usernameCheckTimer = setTimeout(function () {
+            fetch('/api/auth/username-available?u=' + encodeURIComponent(u), {
+              credentials: 'same-origin'
+            }).then(function (r) {
+              if (r.status === 429) {
+                self.usernameStatus = 'error';
+                return null;
+              }
+              return r.text().then(function (text) {
+                var body = {};
+                try { body = JSON.parse(text); } catch (e) { /* ignore */ }
+                return { ok: r.ok, body: body };
+              });
+            }).then(function (res) {
+              if (!res) return; // 429 already handled
+              // Stale-response guard: if the user kept typing while
+              // the check was in flight, only honour the response
+              // when the value still matches what we sent.
+              if ((self.data.username || '').trim() !== u) return;
+              if (res.body && res.body.available) {
+                self.usernameStatus = 'available';
+                return;
+              }
+              self.usernameStatus = (res.body && res.body.reason) || 'taken';
+            }).catch(function () {
+              self.usernameStatus = 'error';
+            });
+          }, 400);
+        },
 
-          var data = {
-            username: form.username ? form.username.value : '',
-            password: form.password ? form.password.value : '',
-            external_links: form.external_links ? form.external_links.value : '',
-            ecosystem_connection: form.ecosystem_connection ? form.ecosystem_connection.value : '',
-            community_contribution: form.community_contribution ? form.community_contribution.value : '',
-            current_focus: form.current_focus ? form.current_focus.value : '',
-            application_notes: form.application_notes ? form.application_notes.value : ''
+        // displayName powers the Sprint Y.4 personalization in step
+        // headlines + sidebar quotes. Returns "@<username>" once the
+        // applicant has typed a valid handle, "you" otherwise so
+        // copy reads naturally on the empty-input case.
+        displayName: function () {
+          var u = (this.data.username || '').trim();
+          if (!u) return 'you';
+          return '@' + u;
+        },
+
+        isCurrentStepValid: function () {
+          var d = this.data;
+          switch (this.step) {
+            case 0: return true; // Welcome (no fields)
+            // Sprint Y.4: usernameValid() now demands the live
+            // availability check has resolved to 'available' -
+            // an applicant with a "TAKEN" or "RESERVED" status
+            // pill cannot click Continue.
+            case 1: return this.usernameValid() && this.passwordValid();
+            case 2: return d.external_links.length <= 500;
+            case 3: return d.ecosystem_connection.length >= 30 && d.ecosystem_connection.length <= 800;
+            case 4: return d.community_contribution.length >= 30 && d.community_contribution.length <= 600;
+            case 5: return d.current_focus.length <= 400;
+            case 6: return d.application_notes.length <= 300;
+            case 7:
+              if (!{ a: 1, b: 1, c: 1 }[d.technical_depth_choice]) return false;
+              var len = (d.technical_depth_answer || '').length;
+              return len >= 100 && len <= 500;
+            case 8: return d.practical_experience.length <= 400;
+            case 9: return d.critical_thinking.length <= 400;
+            case 10: return true;
+          }
+          return true;
+        },
+
+        // ---- Navigation ----
+
+        next: function () {
+          if (!this.isCurrentStepValid()) return;
+          this.direction = 'forward';
+          if (this.step < this.steps.length - 1) this.step++;
+        },
+        back: function () {
+          if (this.step <= 0) return;
+          this.direction = 'backward';
+          this.step--;
+        },
+        skip: function () {
+          // Only optional steps may skip. The Skip button is
+          // hidden via x-show on required steps; this guard is
+          // belt-and-braces.
+          if (!this.steps[this.step] || this.steps[this.step].required) return;
+          this.direction = 'forward';
+          if (this.step < this.steps.length - 1) this.step++;
+        },
+        goToStep: function (n) {
+          if (n === this.step) return;
+          if (n < 0 || n >= this.steps.length) return;
+          this.direction = n > this.step ? 'forward' : 'backward';
+          this.step = n;
+        },
+
+        // onEnter fires from @keydown.enter on the wizard root.
+        // We forward to next() ONLY when the focused element is
+        // a non-textarea form field, so newlines in textareas
+        // continue to work normally.
+        onEnter: function (e) {
+          var t = e.target;
+          if (t && t.tagName === 'TEXTAREA') return;
+          // Don't hijack Enter inside the choice picker buttons;
+          // those fire on click, and Enter on a focused button
+          // already triggers click natively.
+          if (t && t.tagName === 'BUTTON') return;
+          // Welcome step has no inputs; let Enter advance.
+          if (!this.isCurrentStepValid()) return;
+          e.preventDefault();
+          this.next();
+        },
+
+        // stepForField maps a server-returned field name back
+        // to the wizard step that owns it.
+        stepForField: function (field) {
+          var map = {
+            username: 1, password: 1,
+            external_links: 2,
+            ecosystem_connection: 3,
+            community_contribution: 4,
+            current_focus: 5,
+            application_notes: 6,
+            technical_depth_choice: 7, technical_depth_answer: 7,
+            practical_experience: 8,
+            critical_thinking: 9
           };
+          return Object.prototype.hasOwnProperty.call(map, field) ? map[field] : 0;
+        },
+
+        // ---- Final submit ----
+
+        submit: function () {
+          var self = this;
+          if (self.submitting || self.submitted) return;
+          self.submitting = true;
+          self.submitError = '';
+          self.fieldErrors = {};
 
           fetch('/api/register', {
             method: 'POST',
@@ -358,7 +642,7 @@
               'Content-Type': 'application/json'
             },
             credentials: 'same-origin',
-            body: JSON.stringify(data)
+            body: JSON.stringify(self.data)
           }).then(function (r) {
             return r.text().then(function (text) {
               var body = {};
@@ -368,28 +652,135 @@
           }).then(function (res) {
             self.submitting = false;
             if (res.ok) {
-              // Server side already created the session cookie and
-              // signalled pending status. Take the user to the
-              // waiting page; a hard navigation also flushes any
-              // half-typed Alpine state.
-              window.location.href = '/pending';
+              self.submitted = true;
+              setTimeout(function () {
+                window.location.href = '/pending';
+              }, 600);
               return;
             }
-            // 400 with structured field info: pin the message to
-            // the right input.
             if (res.status === 400 && res.body && res.body.field) {
               var msg = res.body.message || res.body.code || 'invalid input';
-              self.errors[res.body.field] = msg;
+              self.fieldErrors[res.body.field] = msg;
+              self.goToStep(self.stepForField(res.body.field));
               return;
             }
-            // 409 username conflict, 5xx, or other unstructured
-            // response: top-of-form banner.
-            self.formError =
+            self.submitError =
               (res.body && (res.body.error || res.body.message)) ||
               'Registration failed (' + res.status + ')';
           }).catch(function () {
             self.submitting = false;
-            self.formError = 'Network error, please try again';
+            self.submitError = 'Network error, please try again';
+          });
+        }
+      };
+    });
+
+    // Sprint Y application rating widget. Each application field on
+    // the admin pending-users panel gets ten star buttons backed by
+    // this component. Per-click auto-save: the click fires PUT
+    // /api/admin/users/{id}/rating, the server returns the live
+    // average + rated count, the widget dispatches a
+    // "rating-changed" event so the card-level summary scope can
+    // refresh both numbers. Clicking the currently-selected value
+    // clears it (sends null) so an admin can correct an accidental
+    // pick without choosing a different number.
+    window.Alpine.data('ratingWidget', function (userId, dimension, initial) {
+      return {
+        userId: userId,
+        dimension: dimension,
+        // value is the saved rating; null means unrated. We keep
+        // the local state optimistic - on success the server
+        // confirms, on failure we roll back to the previous value.
+        value: typeof initial === 'number' ? initial : null,
+        saved: false,
+        error: '',
+        savedTimer: null,
+
+        rate: function (n) {
+          var self = this;
+          // Toggle off when clicking the already-selected value.
+          var nextValue = (self.value === n) ? null : n;
+          var prev = self.value;
+          self.value = nextValue;
+          self.error = '';
+          fetch('/api/admin/users/' + self.userId + '/rating', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              dimension: self.dimension,
+              value: nextValue
+            })
+          }).then(function (r) {
+            return r.text().then(function (text) {
+              var body = {};
+              try { body = JSON.parse(text); } catch (e) { /* ignore */ }
+              return { ok: r.ok, status: r.status, body: body };
+            });
+          }).then(function (res) {
+            if (!res.ok) {
+              self.value = prev;
+              self.error = (res.body && res.body.error) ||
+                ('save failed (' + res.status + ')');
+              return;
+            }
+            self.saved = true;
+            if (self.savedTimer) clearTimeout(self.savedTimer);
+            self.savedTimer = setTimeout(function () {
+              self.saved = false;
+            }, 1500);
+            // Notify the card-level rating-summary scope so the
+            // average + rated_count refresh without a roundtrip.
+            self.$dispatch('rating-changed', {
+              userId: self.userId,
+              average: (res.body && typeof res.body.average === 'number') ? res.body.average : 0,
+              ratedCount: (res.body && typeof res.body.rated_count === 'number') ? res.body.rated_count : 0
+            });
+          }).catch(function () {
+            self.value = prev;
+            self.error = 'network error';
+          });
+        }
+      };
+    });
+
+    // Sprint Y rating notes Alpine component. Auto-saves the admin's
+    // free-form moderation notes 500ms after the last keystroke
+    // (debounce on the textarea's @input directive). Mirrors the
+    // ratingWidget save / saved / error flag pattern.
+    window.Alpine.data('ratingNotes', function (userId, initial) {
+      return {
+        userId: userId,
+        value: typeof initial === 'string' ? initial : '',
+        saving: false,
+        saved: false,
+        error: '',
+        savedTimer: null,
+
+        save: function () {
+          var self = this;
+          self.saving = true;
+          self.saved = false;
+          self.error = '';
+          fetch('/api/admin/users/' + self.userId + '/rating/notes', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ notes: self.value })
+          }).then(function (r) {
+            self.saving = false;
+            if (!r.ok) {
+              self.error = 'save failed (' + r.status + ')';
+              return;
+            }
+            self.saved = true;
+            if (self.savedTimer) clearTimeout(self.savedTimer);
+            self.savedTimer = setTimeout(function () {
+              self.saved = false;
+            }, 1500);
+          }).catch(function () {
+            self.saving = false;
+            self.error = 'network error';
           });
         }
       };

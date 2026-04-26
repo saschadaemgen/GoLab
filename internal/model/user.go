@@ -35,8 +35,16 @@ type User struct {
 	CommunityContribution string `json:"community_contribution,omitempty"`
 	CurrentFocus          string `json:"current_focus,omitempty"`
 	ApplicationNotes      string `json:"application_notes,omitempty"`
-	CreatedAt             time.Time `json:"created_at"`
-	UpdatedAt             time.Time `json:"updated_at"`
+	// Sprint Y.1 knowledge questions. Three free-form fields used to
+	// gauge technical depth, practical experience and critical
+	// thinking. Evaluated separately from the 5-dimensional rating;
+	// see admin.html for the review UI.
+	TechnicalDepthChoice string    `json:"technical_depth_choice,omitempty"`
+	TechnicalDepthAnswer string    `json:"technical_depth_answer,omitempty"`
+	PracticalExperience  string    `json:"practical_experience,omitempty"`
+	CriticalThinking     string    `json:"critical_thinking,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // Status constants
@@ -66,6 +74,11 @@ type UserCreateParams struct {
 	CommunityContribution string
 	CurrentFocus          string
 	ApplicationNotes      string
+	// Sprint Y.1 knowledge questions
+	TechnicalDepthChoice string
+	TechnicalDepthAnswer string
+	PracticalExperience  string
+	CriticalThinking     string
 }
 
 // Create inserts a new user. The `Status` field controls the
@@ -93,13 +106,18 @@ func (s *UserStore) Create(ctx context.Context, p UserCreateParams) (*User, erro
 		`INSERT INTO users (
 			username, password_hash, display_name, power_level, status,
 			external_links, ecosystem_connection, community_contribution,
-			current_focus, application_notes
+			current_focus, application_notes,
+			technical_depth_choice, technical_depth_answer,
+			practical_experience, critical_thinking
 		 )
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+		         $11, $12, $13, $14)
 		 RETURNING id`,
 		p.Username, p.PasswordHash, p.Username, powerLevel, p.Status,
 		p.ExternalLinks, p.EcosystemConnection, p.CommunityContribution,
 		p.CurrentFocus, p.ApplicationNotes,
+		p.TechnicalDepthChoice, p.TechnicalDepthAnswer,
+		p.PracticalExperience, p.CriticalThinking,
 	).Scan(&id); err != nil {
 		return nil, fmt.Errorf("creating user: %w", err)
 	}
@@ -121,6 +139,8 @@ const userColumns = `id, username, password_hash, display_name, bio, avatar_url,
 	status, reviewed_at, reviewed_by,
 	external_links, ecosystem_connection, community_contribution,
 	current_focus, application_notes,
+	technical_depth_choice, technical_depth_answer,
+	practical_experience, critical_thinking,
 	created_at, updated_at`
 
 // scanUser reads one user row in the order userColumns lays out.
@@ -134,6 +154,8 @@ func scanUser(row pgx.Row, u *User) error {
 		&u.Status, &u.ReviewedAt, &u.ReviewedBy,
 		&u.ExternalLinks, &u.EcosystemConnection, &u.CommunityContribution,
 		&u.CurrentFocus, &u.ApplicationNotes,
+		&u.TechnicalDepthChoice, &u.TechnicalDepthAnswer,
+		&u.PracticalExperience, &u.CriticalThinking,
 		&u.CreatedAt, &u.UpdatedAt,
 	)
 }

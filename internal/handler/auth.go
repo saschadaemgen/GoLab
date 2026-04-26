@@ -32,6 +32,7 @@ type AuthHandler struct {
 // registerRequest carries the application-form fields. Sprint X
 // removed the email field and added five application fields the
 // admin reviews before flipping the user from pending to active.
+// Sprint Y.1 added the four knowledge-question fields.
 type registerRequest struct {
 	Username              string `json:"username"`
 	Password              string `json:"password"`
@@ -40,6 +41,11 @@ type registerRequest struct {
 	CommunityContribution string `json:"community_contribution"`
 	CurrentFocus          string `json:"current_focus"`
 	ApplicationNotes      string `json:"application_notes"`
+	// Sprint Y.1 knowledge questions
+	TechnicalDepthChoice string `json:"technical_depth_choice"`
+	TechnicalDepthAnswer string `json:"technical_depth_answer"`
+	PracticalExperience  string `json:"practical_experience"`
+	CriticalThinking     string `json:"critical_thinking"`
 }
 
 // loginRequest carries the credentials. Sprint X switched login from
@@ -74,6 +80,11 @@ func decodeRegister(r *http.Request) (registerRequest, error) {
 		req.CommunityContribution = r.Form.Get("community_contribution")
 		req.CurrentFocus = r.Form.Get("current_focus")
 		req.ApplicationNotes = r.Form.Get("application_notes")
+		// Sprint Y.1 knowledge questions
+		req.TechnicalDepthChoice = r.Form.Get("technical_depth_choice")
+		req.TechnicalDepthAnswer = r.Form.Get("technical_depth_answer")
+		req.PracticalExperience = r.Form.Get("practical_experience")
+		req.CriticalThinking = r.Form.Get("critical_thinking")
 		return req, nil
 	}
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -146,7 +157,20 @@ const (
 	communityContributionMax = 600 // was 400
 	currentFocusMax          = 400 // was 300
 	applicationNotesMax      = 300 // was 200
+	// Sprint Y.1 knowledge questions
+	technicalDepthAnswerMin = 100 // required
+	technicalDepthAnswerMax = 500
+	practicalExperienceMax  = 400 // optional
+	criticalThinkingMax     = 400 // optional
 )
+
+// validTechnicalDepthChoices is the allow-list for the choice
+// picker on /register. Empty string is rejected by the handler;
+// it shows up in the DB only on legacy users from before Sprint
+// Y.1 (per migration 028 default).
+var validTechnicalDepthChoices = map[string]bool{
+	"a": true, "b": true, "c": true,
+}
 
 // fieldError carries a structured validation failure. Field is the
 // JSON / form-input key the message belongs to ("ecosystem_connection",
@@ -255,6 +279,55 @@ func validateApplication(req *registerRequest) error {
 			Message: fmt.Sprintf("at most %d characters", applicationNotesMax),
 		}
 	}
+
+	// Sprint Y.1 knowledge questions. Trim first so leading /
+	// trailing whitespace does not confuse the length gate.
+	req.TechnicalDepthChoice = strings.TrimSpace(req.TechnicalDepthChoice)
+	req.TechnicalDepthAnswer = strings.TrimSpace(req.TechnicalDepthAnswer)
+	req.PracticalExperience = strings.TrimSpace(req.PracticalExperience)
+	req.CriticalThinking = strings.TrimSpace(req.CriticalThinking)
+
+	// Technical depth: choice required (a / b / c), answer 100-500.
+	if !validTechnicalDepthChoices[req.TechnicalDepthChoice] {
+		return &fieldError{
+			Field:   "technical_depth_choice",
+			Code:    "technical_depth_choice_invalid",
+			Message: "please pick one of the three sub-questions (a, b, or c)",
+		}
+	}
+	if len(req.TechnicalDepthAnswer) < technicalDepthAnswerMin {
+		return &fieldError{
+			Field:   "technical_depth_answer",
+			Code:    "technical_depth_answer_too_short",
+			Message: fmt.Sprintf("at least %d characters", technicalDepthAnswerMin),
+		}
+	}
+	if len(req.TechnicalDepthAnswer) > technicalDepthAnswerMax {
+		return &fieldError{
+			Field:   "technical_depth_answer",
+			Code:    "technical_depth_answer_too_long",
+			Message: fmt.Sprintf("at most %d characters", technicalDepthAnswerMax),
+		}
+	}
+
+	// Practical experience and critical thinking: optional, max only.
+	// Honest "no" answers are accepted; we deliberately do NOT enforce
+	// a minimum so an applicant who has not run this stack yet can
+	// say so without padding.
+	if len(req.PracticalExperience) > practicalExperienceMax {
+		return &fieldError{
+			Field:   "practical_experience",
+			Code:    "practical_experience_too_long",
+			Message: fmt.Sprintf("at most %d characters", practicalExperienceMax),
+		}
+	}
+	if len(req.CriticalThinking) > criticalThinkingMax {
+		return &fieldError{
+			Field:   "critical_thinking",
+			Code:    "critical_thinking_too_long",
+			Message: fmt.Sprintf("at most %d characters", criticalThinkingMax),
+		}
+	}
 	return nil
 }
 
@@ -299,6 +372,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Validate username
 	if !usernameRegex.MatchString(req.Username) {
 		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, "username must be 3-32 alphanumeric characters or underscores")
+		return
+	}
+	// Sprint Y.4: server-side reserved-list enforcement so a direct
+	// API submitter cannot bypass the wizard's live check.
+	if isReservedUsername(req.Username) {
+		errorRedirectOrJSON(w, r, "/register", http.StatusConflict, "username is reserved")
 		return
 	}
 
@@ -368,6 +447,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		CommunityContribution: req.CommunityContribution,
 		CurrentFocus:          req.CurrentFocus,
 		ApplicationNotes:      req.ApplicationNotes,
+		TechnicalDepthChoice:  req.TechnicalDepthChoice,
+		TechnicalDepthAnswer:  req.TechnicalDepthAnswer,
+		PracticalExperience:   req.PracticalExperience,
+		CriticalThinking:      req.CriticalThinking,
 	})
 	if err != nil {
 		slog.Error("register: create user", "error", err)
@@ -477,6 +560,100 @@ var (
 type passwordError struct{ msg string }
 
 func (e *passwordError) Error() string { return e.msg }
+
+// reservedUsernames is the list of handles that registration rejects
+// regardless of DB state. Sprint Y.4: introduced for the live
+// availability check on /register so an applicant cannot park on
+// "admin" / "support" / etc and surface that only at final submit.
+// Lower-case only; the comparison normalises both sides.
+//
+// Two categories:
+//  - role / system-sounding handles ("admin", "moderator",
+//    "system", "support", "api", "dev") that would confuse other
+//    users into thinking the account speaks for the platform
+//  - product / brand reservation ("golab", "simplego") so the
+//    real product handles never end up belonging to a random
+//    registrant
+//
+// "anonymous" / "null" / "undefined" are listed as well; they are
+// the kind of handle that breaks downstream tooling (a search for
+// "@anonymous" might unintentionally match every nameless action).
+var reservedUsernames = map[string]bool{
+	"admin":     true,
+	"root":      true,
+	"system":    true,
+	"moderator": true,
+	"support":   true,
+	"api":       true,
+	"www":       true,
+	"mail":      true,
+	"info":      true,
+	"golab":     true,
+	"simplego":  true,
+	"anonymous": true,
+	"null":      true,
+	"undefined": true,
+	"test":      true,
+	"dev":       true,
+	"staging":   true,
+}
+
+// isReservedUsername reports whether `u` is on the reserved-list
+// (case-insensitive). Used by CheckUsernameAvailable below and
+// implicitly by the registration flow because a reserved name
+// will hit the same DB-uniqueness check at INSERT time anyway.
+// Surfacing it earlier saves the applicant from typing a long
+// password just to find out the handle is unusable.
+func isReservedUsername(u string) bool {
+	return reservedUsernames[strings.ToLower(u)]
+}
+
+// CheckUsernameAvailable powers the live availability check on
+// the registration wizard's Account step. Public endpoint
+// (no auth) so an applicant can verify before they create an
+// account. Rate-limited at the route level (30/min/IP) so a
+// scraper cannot enumerate the user table.
+//
+// Response shape is always 200 OK with a body that tells the
+// caller WHY a name is unavailable:
+//
+//   { "available": true }
+//   { "available": false, "reason": "invalid"   }  - bad chars / length
+//   { "available": false, "reason": "reserved"  }  - on the reserved list
+//   { "available": false, "reason": "taken"     }  - exists in users table
+//   { "available": false, "reason": "empty"     }  - no `u` query param
+//   { "available": false, "reason": "error"     }  - DB blew up
+//
+// We deliberately do NOT 4xx on invalid input; the wizard expects
+// a JSON body either way and a non-200 would force two response
+// branches client-side. The HTTP status itself is reserved for
+// rate-limit (429) and genuine server failures (500).
+func (h *AuthHandler) CheckUsernameAvailable(w http.ResponseWriter, r *http.Request) {
+	username := strings.TrimSpace(r.URL.Query().Get("u"))
+	if username == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "empty"})
+		return
+	}
+	if !usernameRegex.MatchString(username) {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "invalid"})
+		return
+	}
+	if isReservedUsername(username) {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "reserved"})
+		return
+	}
+	exists, err := h.Users.UsernameExists(r.Context(), username)
+	if err != nil {
+		slog.Error("check username available", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"available": false, "reason": "error"})
+		return
+	}
+	if exists {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "taken"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"available": true})
+}
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeLogin(r)

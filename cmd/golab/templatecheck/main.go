@@ -116,12 +116,7 @@ func main() {
 		},
 		"admin": map[string]any{
 			"Title": "Admin", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/admin",
-			"Content": map[string]any{
-				"Stats": map[string]any{"Users": 42, "Posts": 187, "Spaces": 8, "Banned": 0},
-				"Users": []map[string]any{
-					{"ID": int64(1), "Username": "prinz", "DisplayName": "Der Prinz", "PowerLevel": 100, "PostCount": 3, "Banned": false, "CreatedAt": time.Now().Add(-2 * time.Hour)},
-				},
-			},
+			"Content": dummyAdminContent(dummyUser),
 		},
 		"space": map[string]any{
 			"Title": "Space - GoLab", "SiteName": "GoLab", "User": dummyUser, "CurrentPath": "/s/simplex",
@@ -198,3 +193,53 @@ type bufWriter struct {
 func (w *bufWriter) Header() http.Header         { return w.headers }
 func (w *bufWriter) Write(b []byte) (int, error) { return w.buf.Write(b) }
 func (w *bufWriter) WriteHeader(_ int)           {}
+
+// dummyAdminContent assembles the structured payload the admin page
+// expects, including a Sprint X applicant with five application
+// fields and a Sprint Y rating row. Exercising the pending-users
+// branch makes the templatecheck catch breakage in the new
+// rating-widget partial and the rating helpers (ratingDim,
+// ratingAverage, ratingCount, ratingNotesJS).
+func dummyAdminContent(viewer *model.User) map[string]any {
+	score := func(n int) *int { return &n }
+	pending := []map[string]any{
+		{
+			"User": model.User{
+				ID:                    7,
+				Username:              "applicant",
+				DisplayName:           "Maria Applicant",
+				PowerLevel:            10,
+				Status:                model.UserStatusPending,
+				CreatedAt:             time.Now().Add(-3 * time.Hour),
+				UpdatedAt:             time.Now().Add(-3 * time.Hour),
+				ExternalLinks:         "https://github.com/applicant https://example.dev",
+				EcosystemConnection:   "I run a SimpleGo node and contribute hardware notes.",
+				CommunityContribution: "Hardware integration write-ups, security reviews.",
+				CurrentFocus:          "Cross-compiling SimpleGoX for ARM SBCs.",
+				ApplicationNotes:      "Available for code review on weekends.",
+				// Sprint Y.1 knowledge questions
+				TechnicalDepthChoice: "a",
+				TechnicalDepthAnswer: "Double Ratchet's main weak point is the post-compromise recovery window: an attacker who briefly captured a chain key sees every message until the next ratchet step. With high-latency channels this gap matters.",
+				PracticalExperience:  "Yes - I run a SimpleX SMP relay on a small SBC for personal contacts.",
+				CriticalThinking:     "Telegram's marketing of 'secret chats' as the same product as default cloud chats - they are not, and most users never enable secret chats.",
+			},
+			"Rating": &model.ApplicationRating{
+				UserID:                7,
+				TrackRecord:           score(8),
+				EcosystemFit:          score(9),
+				ContributionPotential: score(7),
+				Notes:                 "Strong portfolio.",
+				UpdatedAt:             time.Now().Add(-30 * time.Minute),
+			},
+		},
+	}
+	return map[string]any{
+		"Stats": map[string]any{"Users": 42, "Posts": 187, "Spaces": 8, "Banned": 0},
+		"Users": []map[string]any{
+			{"ID": int64(1), "Username": "prinz", "DisplayName": "Der Prinz", "PowerLevel": 100, "PostCount": 3, "Banned": false, "CreatedAt": time.Now().Add(-2 * time.Hour)},
+		},
+		"PendingUsers":        pending,
+		"RequireApproval":     true,
+		"AllowUsernameChange": true,
+	}
+}

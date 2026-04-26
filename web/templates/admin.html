@@ -14,30 +14,39 @@
       <span class="admin-pending-count">{{ len .PendingUsers }}</span>
     </h3>
     {{ range .PendingUsers }}
+    {{ $u := .User }}
+    {{ $r := .Rating }}
     {{/* Sprint X: expandable application view. Each pending row
          shows the username + registered-time row by default; the
          "Show application" toggle reveals the five application
          fields the user submitted on /register. The toggle is
          Alpine-driven so we can reuse the dropdown-enter / leave
-         transition tokens already defined in golab.css. */}}
-    <div class="admin-pending-card" id="pending-user-{{ .ID }}"
+         transition tokens already defined in golab.css.
+
+         Sprint Y: each application field gets a 5-star rating
+         widget below it. Ratings persist past approval so admins
+         can adjust them as the user develops; per-click auto-save
+         (no separate Save button). The "rating-changed" custom
+         event bubbles up to the .rating-summary scope so the
+         running average refreshes without a roundtrip. */}}
+    <div class="admin-pending-card" id="pending-user-{{ $u.ID }}"
          x-data="{ open: false }">
       <div class="admin-pending-info">
-        <strong>{{ .Username }}</strong>
-        <span class="admin-pending-time">Registered {{ timeAgo .CreatedAt }}</span>
+        <strong>{{ $u.Username }}</strong>
+        <span class="admin-pending-time">Registered {{ timeAgo $u.CreatedAt }}</span>
       </div>
       <div class="admin-pending-actions">
         <button type="button" class="btn btn-ghost btn-sm press-effect"
                 @click="open = !open"
                 :aria-expanded="open ? 'true' : 'false'"
-                :aria-controls="'pending-app-' + {{ .ID }}">
+                :aria-controls="'pending-app-' + {{ $u.ID }}">
           <span x-show="!open">Show application</span>
           <span x-show="open" x-cloak>Hide application</span>
         </button>
         <button type="button" class="btn btn-primary btn-sm press-effect"
-                data-action="admin-approve" data-user-id="{{ .ID }}">Approve</button>
+                data-action="admin-approve" data-user-id="{{ $u.ID }}">Approve</button>
         <button type="button" class="btn btn-danger btn-sm press-effect"
-                data-action="admin-reject" data-user-id="{{ .ID }}">Reject</button>
+                data-action="admin-reject" data-user-id="{{ $u.ID }}">Reject</button>
       </div>
 
       {{/* Application body. Fields are stored verbatim so we render
@@ -46,29 +55,128 @@
            becomes a clickable link with rel="noopener noreferrer
            nofollow" and target="_blank" - the admin can audit the
            applicant's work without giving the link any SEO value or
-           leaking the referrer. */}}
+           leaking the referrer.
+
+           Sprint Y rating-summary scope wraps the whole body so the
+           bottom average row can listen for rating-changed events
+           dispatched by the per-field widgets. */}}
       <div class="admin-pending-app" x-show="open" x-cloak
-           :id="'pending-app-' + {{ .ID }}">
+           :id="'pending-app-' + {{ $u.ID }}"
+           x-data="{ average: {{ ratingAverage $r }}, rated: {{ ratingCount $r }} }"
+           @rating-changed.stop="average = $event.detail.average; rated = $event.detail.ratedCount">
         <dl class="admin-pending-fields">
           <dt>Where can we see your work?</dt>
-          <dd class="admin-pending-links">{{ renderApplicationLinks .ExternalLinks }}</dd>
+          <dd>
+            <div class="admin-pending-links">{{ renderApplicationLinks $u.ExternalLinks }}</div>
+            {{ template "rating-widget.html" (dict "UserID" $u.ID "Dimension" "track_record" "Value" (ratingDim $r "track_record")) }}
+          </dd>
 
           <dt>How are you connected to the SimpleGo ecosystem?</dt>
-          <dd>{{ .EcosystemConnection }}</dd>
+          <dd>
+            <div>{{ $u.EcosystemConnection }}</div>
+            {{ template "rating-widget.html" (dict "UserID" $u.ID "Dimension" "ecosystem_fit" "Value" (ratingDim $r "ecosystem_fit")) }}
+          </dd>
 
           <dt>What would you contribute to this community?</dt>
-          <dd>{{ .CommunityContribution }}</dd>
+          <dd>
+            <div>{{ $u.CommunityContribution }}</div>
+            {{ template "rating-widget.html" (dict "UserID" $u.ID "Dimension" "contribution_potential" "Value" (ratingDim $r "contribution_potential")) }}
+          </dd>
 
-          {{ if .CurrentFocus }}
+          {{ if $u.CurrentFocus }}
           <dt>What is your current focus or open question?</dt>
-          <dd>{{ .CurrentFocus }}</dd>
+          <dd>
+            <div>{{ $u.CurrentFocus }}</div>
+            {{ template "rating-widget.html" (dict "UserID" $u.ID "Dimension" "relevance" "Value" (ratingDim $r "relevance")) }}
+          </dd>
           {{ end }}
 
-          {{ if .ApplicationNotes }}
+          {{ if $u.ApplicationNotes }}
           <dt>Anything else we should know?</dt>
-          <dd>{{ .ApplicationNotes }}</dd>
+          <dd>
+            <div>{{ $u.ApplicationNotes }}</div>
+            {{ template "rating-widget.html" (dict "UserID" $u.ID "Dimension" "communication" "Value" (ratingDim $r "communication")) }}
+          </dd>
           {{ end }}
         </dl>
+
+        {{/* Sprint Y bottom summary row: live average + rated count.
+             Updates via the rating-changed custom event without a
+             page refresh. Notes textarea below it auto-saves 500ms
+             after typing stops. */}}
+        <div class="rating-summary">
+          <strong>Average:</strong>
+          <span x-text="average.toFixed(1)">{{ printf "%.1f" (ratingAverage $r) }}</span>/10
+          <span class="rating-count">
+            (<span x-text="rated">{{ ratingCount $r }}</span>/5 dimensions rated)
+          </span>
+        </div>
+
+        <div class="rating-notes-block"
+             x-data="ratingNotes({{ $u.ID }}, {{ ratingNotesJS $r }})">
+          <label class="form-label" :for="'notes-' + {{ $u.ID }}">
+            Admin notes (private, auto-saved)
+          </label>
+          <textarea class="form-input form-textarea"
+                    :id="'notes-' + {{ $u.ID }}"
+                    rows="3"
+                    maxlength="2000"
+                    x-model="value"
+                    @input.debounce.500ms="save()"
+                    placeholder="Internal moderation notes. Never visible to the user."></textarea>
+          <div class="rating-notes-status">
+            <span x-show="saving" x-cloak>saving...</span>
+            <span x-show="!saving && saved" x-cloak class="rating-saved">saved</span>
+            <span x-show="error" x-cloak class="form-error" x-text="error"></span>
+          </div>
+        </div>
+
+        {{/* Sprint Y.1 knowledge-question answers. Sit below the
+             5-star ratings + notes; explicitly framed as separate
+             evaluation input. The intro line tells the admin not
+             to mistake these for a sixth rating dimension. Each
+             answer renders as a labelled read-only block; missing
+             answers (no choice picked, optional fields blank)
+             render as muted "no answer" placeholders so the admin
+             knows the applicant skipped vs. that the field never
+             reached the row. */}}
+        <div class="knowledge-answers">
+          <p class="knowledge-intro">
+            Knowledge answers - read carefully, evaluate substance over
+            length. These do not enter the 5-dimensional rating above.
+            Use them to inform your final approve/reject decision.
+          </p>
+
+          <div class="knowledge-answer-block">
+            <h4>
+              Technical depth
+              {{ if $u.TechnicalDepthChoice }}(choice {{ $u.TechnicalDepthChoice }}){{ end }}
+            </h4>
+            {{ if $u.TechnicalDepthAnswer }}
+            <p class="knowledge-answer-text">{{ $u.TechnicalDepthAnswer }}</p>
+            {{ else }}
+            <p class="knowledge-answer-text muted">No answer.</p>
+            {{ end }}
+          </div>
+
+          <div class="knowledge-answer-block">
+            <h4>Practical experience</h4>
+            {{ if $u.PracticalExperience }}
+            <p class="knowledge-answer-text">{{ $u.PracticalExperience }}</p>
+            {{ else }}
+            <p class="knowledge-answer-text muted">No answer (optional).</p>
+            {{ end }}
+          </div>
+
+          <div class="knowledge-answer-block">
+            <h4>Critical thinking</h4>
+            {{ if $u.CriticalThinking }}
+            <p class="knowledge-answer-text">{{ $u.CriticalThinking }}</p>
+            {{ else }}
+            <p class="knowledge-answer-text muted">No answer (optional).</p>
+            {{ end }}
+          </div>
+        </div>
       </div>
     </div>
     {{ end }}
