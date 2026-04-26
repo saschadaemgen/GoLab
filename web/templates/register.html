@@ -1,6 +1,27 @@
 {{ define "content" }}
+{{/*
+  Sprint X.1 application form. Three UX changes from the original
+  Sprint X version:
+    - external_links is optional (no asterisk in the label)
+    - the form keeps its values on a 400 response: instead of the
+      browser's native form-POST + server-redirect cycle (which
+      replaces the page with an empty fresh /register), we submit
+      via fetch() and render any field-specific error inline next
+      to the offending textarea
+    - every long-form field has a live character counter that flips
+      colour at 90% of the limit (warning) and over the limit
+      (error)
+
+  The form lives inside an Alpine x-data="registerForm()" scope.
+  Each textarea then nests its own tiny x-data with a `count`
+  property that updates on @input. The parent scope holds
+  `errors` (field name -> message) and the `submit` handler.
+  Counters and errors share the parent scope via Alpine's
+  prototypal lookup.
+*/}}
 <div class="auth-container fade-in">
-  <div class="auth-card auth-card-wide">
+  <div class="auth-card auth-card-wide"
+       x-data="registerForm()">
     <h1 class="auth-title">Apply to GoLab</h1>
     <p class="auth-subtitle">
       GoLab is the developer community for the SimpleGo ecosystem
@@ -14,19 +35,31 @@
     <div class="flash flash-error" role="alert">{{ .Error }}</div>
     {{ end }}{{ end }}{{ end }}
 
+    {{/* Generic top-of-form error from Alpine - shown when the
+         server returns 500 or a non-field error. Field-specific
+         errors render inline below their input instead. */}}
+    <div class="flash flash-error" role="alert"
+         x-show="formError" x-cloak x-text="formError"></div>
+
     <form id="register-form"
-          method="POST"
-          action="/api/register"
+          @submit.prevent="submit($event)"
           autocomplete="off"
           novalidate>
-      <div class="form-group">
+      <div class="form-group" x-data="{ count: 0, max: 32 }">
         <label class="form-label" for="reg-username">Username</label>
         <input class="form-input" type="text" id="reg-username" name="username"
                required minlength="3" maxlength="32"
                pattern="[A-Za-z0-9_]+"
                autocomplete="username"
-               placeholder="yourhandle">
+               placeholder="yourhandle"
+               @input="count = $event.target.value.length">
+        <div class="form-counter"
+             :class="{ 'near-limit': count > max * 0.9 && count <= max,
+                       'over-limit': count > max }">
+          <span x-text="count">0</span> / <span x-text="max">32</span>
+        </div>
         <div class="form-hint">3-32 characters, letters, numbers and underscores. Cannot be changed later by you.</div>
+        <div class="form-error" x-show="errors.username" x-cloak x-text="errors.username"></div>
       </div>
 
       <div class="form-group">
@@ -35,64 +68,106 @@
                required minlength="8" maxlength="128"
                autocomplete="new-password"
                placeholder="At least 8 characters">
+        <div class="form-error" x-show="errors.password" x-cloak x-text="errors.password"></div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" x-data="{ count: 0, max: 500 }">
         <label class="form-label" for="reg-external-links">Where can we see your work?</label>
         <textarea class="form-input form-textarea" id="reg-external-links"
                   name="external_links"
-                  required minlength="5" maxlength="500"
+                  maxlength="500"
                   rows="2"
+                  @input="count = $event.target.value.length"
                   placeholder="https://github.com/yourhandle  https://yourdomain.com  https://codeberg.org/yourhandle"></textarea>
-        <div class="form-hint">
-          GitHub, Codeberg, GitLab, personal site, anywhere with code or technical writing. Required.
+        <div class="form-counter"
+             :class="{ 'near-limit': count > max * 0.9 && count <= max,
+                       'over-limit': count > max }">
+          <span x-text="count">0</span> / <span x-text="max">500</span>
         </div>
+        <div class="form-hint">Optional. GitHub, Codeberg, GitLab, or personal site. Helps us evaluate.</div>
+        <div class="form-error" x-show="errors.external_links" x-cloak x-text="errors.external_links"></div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" x-data="{ count: 0, max: 800 }">
         <label class="form-label" for="reg-ecosystem">How are you connected to the SimpleGo ecosystem?</label>
         <textarea class="form-input form-textarea" id="reg-ecosystem"
                   name="ecosystem_connection"
-                  required minlength="50" maxlength="500"
+                  required minlength="30" maxlength="800"
                   rows="4"
+                  @input="count = $event.target.value.length"
                   placeholder="Are you using SimpleGo, GoChat, SimpleGoX, or any of the other components? Building something with them? Researching the underlying tech? Be specific."></textarea>
-        <div class="form-hint">Required. 50-500 characters.</div>
+        <div class="form-counter"
+             :class="{ 'near-limit': count > max * 0.9 && count <= max,
+                       'over-limit': count > max }">
+          <span x-text="count">0</span> / <span x-text="max">800</span>
+          <template x-if="count > 0 && count < 30">
+            <span class="form-hint-inline">(at least 30 characters)</span>
+          </template>
+        </div>
+        <div class="form-hint">Required. 30-800 characters.</div>
+        <div class="form-error" x-show="errors.ecosystem_connection" x-cloak x-text="errors.ecosystem_connection"></div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" x-data="{ count: 0, max: 600 }">
         <label class="form-label" for="reg-contribution">What would you contribute to this community?</label>
         <textarea class="form-input form-textarea" id="reg-contribution"
                   name="community_contribution"
-                  required minlength="50" maxlength="400"
+                  required minlength="30" maxlength="600"
                   rows="4"
+                  @input="count = $event.target.value.length"
                   placeholder="Examples: protocol-level discussion, hardware integration, security review, deployment notes, documentation."></textarea>
-        <div class="form-hint">Required. 50-400 characters.</div>
+        <div class="form-counter"
+             :class="{ 'near-limit': count > max * 0.9 && count <= max,
+                       'over-limit': count > max }">
+          <span x-text="count">0</span> / <span x-text="max">600</span>
+          <template x-if="count > 0 && count < 30">
+            <span class="form-hint-inline">(at least 30 characters)</span>
+          </template>
+        </div>
+        <div class="form-hint">Required. 30-600 characters.</div>
+        <div class="form-error" x-show="errors.community_contribution" x-cloak x-text="errors.community_contribution"></div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" x-data="{ count: 0, max: 400 }">
         <label class="form-label" for="reg-focus">What is your current focus or open question?</label>
         <textarea class="form-input form-textarea" id="reg-focus"
                   name="current_focus"
-                  maxlength="300"
+                  maxlength="400"
                   rows="3"
+                  @input="count = $event.target.value.length"
                   placeholder="The thing you would actually post about in your first week."></textarea>
-        <div class="form-hint">Optional. Up to 300 characters.</div>
+        <div class="form-counter"
+             :class="{ 'near-limit': count > max * 0.9 && count <= max,
+                       'over-limit': count > max }">
+          <span x-text="count">0</span> / <span x-text="max">400</span>
+        </div>
+        <div class="form-hint">Optional. Up to 400 characters.</div>
+        <div class="form-error" x-show="errors.current_focus" x-cloak x-text="errors.current_focus"></div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" x-data="{ count: 0, max: 300 }">
         <label class="form-label" for="reg-notes">Anything else we should know?</label>
         <textarea class="form-input form-textarea" id="reg-notes"
                   name="application_notes"
-                  maxlength="200"
+                  maxlength="300"
                   rows="2"
+                  @input="count = $event.target.value.length"
                   placeholder=""></textarea>
-        <div class="form-hint">Optional. Up to 200 characters.</div>
+        <div class="form-counter"
+             :class="{ 'near-limit': count > max * 0.9 && count <= max,
+                       'over-limit': count > max }">
+          <span x-text="count">0</span> / <span x-text="max">300</span>
+        </div>
+        <div class="form-hint">Optional. Up to 300 characters.</div>
+        <div class="form-error" x-show="errors.application_notes" x-cloak x-text="errors.application_notes"></div>
       </div>
 
-      <div class="form-error" role="alert"></div>
-
       <div class="auth-submit-row">
-        <button type="submit" class="btn btn-primary btn-lg">Submit application</button>
+        <button type="submit" class="btn btn-primary btn-lg"
+                :disabled="submitting">
+          <span x-show="!submitting">Submit application</span>
+          <span x-show="submitting" x-cloak>Submitting...</span>
+        </button>
       </div>
     </form>
 

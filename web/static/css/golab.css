@@ -3834,3 +3834,33 @@ img.avatar {
   gap: 0.5rem;
   margin-top: 1rem;
 }
+
+/* Sprint X.1 application form helpers.
+   - .form-counter: live character counter under each field. Flips
+     to amber at 90% of limit, red over the limit.
+   - .form-hint-inline: small italic hint that appears next to the
+     counter (e.g. "at least 30 characters" while still under the
+     minimum).
+   - .form-error: inline per-field error rendered below the input
+     when the server returns a structured field validation error.
+     The top-of-form .flash-error already covers non-field errors. */
+.form-counter {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.form-counter.near-limit { color: #d29922; }
+.form-counter.over-limit { color: var(--danger); font-weight: 600; }
+.form-hint-inline {
+  margin-left: 0.5rem;
+  font-style: italic;
+  color: var(--text-dim);
+}
+.form-error {
+  display: block;
+  color: var(--danger);
+  font-size: 0.88rem;
+  margin-top: 0.25rem;
+}

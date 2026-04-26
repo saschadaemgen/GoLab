@@ -8,29 +8,40 @@ import (
 // TestValidateApplication locks in the Sprint X application gate
 // rules without touching the DB or HTTP layer. The handler delegates
 // every content check to validateApplication, so these cases pin the
-// user-visible behaviour: the registration form rejects empty,
-// malformed, or under-length submissions before any uniqueness check
-// runs, and accepts a complete and well-formed application.
+// user-visible behaviour.
+//
+// Sprint X.1 changes pinned here:
+//   - external_links is optional (was required)
+//   - ecosystem_connection minimum is 30 (was 50), max is 800
+//     (was 500)
+//   - community_contribution minimum is 30 (was 50), max is 600
+//     (was 400)
+//   - current_focus max is 400 (was 300)
+//   - application_notes max is 300 (was 200)
+//   - error type is *fieldError so the handler can extract Field
+//     for inline UI mapping; tests still match on the Code substring.
 func TestValidateApplication(t *testing.T) {
 	const goodLinks = "https://github.com/example  https://example.dev"
-	// Use strings.Repeat so the bounds are obvious in the test
-	// source instead of opaque hand-rolled strings.
-	good50 := strings.Repeat("a", 50)
-	good400 := strings.Repeat("a", 400)
-	good500 := strings.Repeat("a", 500)
+	// Sprint X.1: 30 is the new minimum length for the long-form
+	// fields, 600 / 800 the new caps. Build sample strings that
+	// land at meaningful boundaries.
+	min30 := strings.Repeat("a", 30)
+	max600 := strings.Repeat("a", 600)
+	max800 := strings.Repeat("a", 800)
 
 	cases := []struct {
 		name      string
 		req       registerRequest
 		wantOk    bool
-		wantErrIn string // substring; empty means don't care
+		wantField string // expected fieldError.Field; empty when wantOk
+		wantCode  string // expected fieldError.Code; empty when wantOk
 	}{
 		{
 			name: "complete application accepted",
 			req: registerRequest{
 				ExternalLinks:         goodLinks,
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
 				CurrentFocus:          "I am working on hardware integration.",
 				ApplicationNotes:      "Available for code review.",
 			},
@@ -40,48 +51,48 @@ func TestValidateApplication(t *testing.T) {
 			name: "complete with optional fields empty",
 			req: registerRequest{
 				ExternalLinks:         goodLinks,
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
-				// CurrentFocus + ApplicationNotes deliberately empty
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
 			},
 			wantOk: true,
 		},
 		{
-			name: "external_links missing",
+			name: "external_links empty is now accepted (Sprint X.1)",
 			req: registerRequest{
 				ExternalLinks:         "",
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
 			},
-			wantOk:    false,
-			wantErrIn: "external_links_missing",
+			wantOk: true,
 		},
 		{
 			name: "external_links present but no valid URL",
 			req: registerRequest{
 				ExternalLinks:         "github yourhandle codeberg",
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
 			},
 			wantOk:    false,
-			wantErrIn: "external_links_invalid",
+			wantField: "external_links",
+			wantCode:  "external_links_invalid",
 		},
 		{
 			name: "external_links http (not https) rejected",
 			req: registerRequest{
 				ExternalLinks:         "http://example.com",
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
 			},
 			wantOk:    false,
-			wantErrIn: "external_links_invalid",
+			wantField: "external_links",
+			wantCode:  "external_links_invalid",
 		},
 		{
 			name: "external_links one valid plus other text accepted",
 			req: registerRequest{
 				ExternalLinks:         "see https://example.com or look up Maria",
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
 			},
 			wantOk: true,
 		},
@@ -89,79 +100,121 @@ func TestValidateApplication(t *testing.T) {
 			name: "external_links comma-separated accepted",
 			req: registerRequest{
 				ExternalLinks:         "https://github.com/a,https://example.org",
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
 			},
 			wantOk: true,
 		},
 		{
-			name: "ecosystem_connection too short",
+			name: "ecosystem_connection at exactly 30 chars accepted",
 			req: registerRequest{
-				ExternalLinks:         goodLinks,
-				EcosystemConnection:   "I use SimpleGo.",
-				CommunityContribution: good50,
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
+			},
+			wantOk: true,
+		},
+		{
+			name: "ecosystem_connection at 29 chars rejected",
+			req: registerRequest{
+				EcosystemConnection:   strings.Repeat("a", 29),
+				CommunityContribution: min30,
 			},
 			wantOk:    false,
-			wantErrIn: "ecosystem_connection_too_short",
+			wantField: "ecosystem_connection",
+			wantCode:  "ecosystem_connection_too_short",
 		},
 		{
 			name: "community_contribution too short",
 			req: registerRequest{
-				ExternalLinks:         goodLinks,
-				EcosystemConnection:   good50,
+				EcosystemConnection:   min30,
 				CommunityContribution: "code review",
 			},
 			wantOk:    false,
-			wantErrIn: "community_contribution_too_short",
+			wantField: "community_contribution",
+			wantCode:  "community_contribution_too_short",
 		},
 		{
-			name: "ecosystem_connection too long",
+			name: "ecosystem_connection at 800 chars accepted",
 			req: registerRequest{
-				ExternalLinks:         goodLinks,
-				EcosystemConnection:   good500 + "x", // 501 chars
-				CommunityContribution: good50,
+				EcosystemConnection:   max800,
+				CommunityContribution: min30,
 			},
-			wantOk:    false,
-			wantErrIn: "ecosystem_connection_too_long",
+			wantOk: true,
 		},
 		{
-			name: "community_contribution too long",
+			name: "ecosystem_connection at 801 chars rejected",
 			req: registerRequest{
-				ExternalLinks:         goodLinks,
-				EcosystemConnection:   good50,
-				CommunityContribution: good400 + "x", // 401 chars
+				EcosystemConnection:   max800 + "x",
+				CommunityContribution: min30,
 			},
 			wantOk:    false,
-			wantErrIn: "community_contribution_too_long",
+			wantField: "ecosystem_connection",
+			wantCode:  "ecosystem_connection_too_long",
 		},
 		{
-			name: "current_focus too long",
+			name: "community_contribution at 600 chars accepted",
 			req: registerRequest{
-				ExternalLinks:         goodLinks,
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
-				CurrentFocus:          strings.Repeat("a", 301),
+				EcosystemConnection:   min30,
+				CommunityContribution: max600,
 			},
-			wantOk:    false,
-			wantErrIn: "current_focus_too_long",
+			wantOk: true,
 		},
 		{
-			name: "application_notes too long",
+			name: "community_contribution at 601 chars rejected",
 			req: registerRequest{
-				ExternalLinks:         goodLinks,
-				EcosystemConnection:   good50,
-				CommunityContribution: good50,
-				ApplicationNotes:      strings.Repeat("a", 201),
+				EcosystemConnection:   min30,
+				CommunityContribution: max600 + "x",
 			},
 			wantOk:    false,
-			wantErrIn: "application_notes_too_long",
+			wantField: "community_contribution",
+			wantCode:  "community_contribution_too_long",
+		},
+		{
+			name: "current_focus at 400 chars accepted",
+			req: registerRequest{
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
+				CurrentFocus:          strings.Repeat("a", 400),
+			},
+			wantOk: true,
+		},
+		{
+			name: "current_focus at 401 chars rejected",
+			req: registerRequest{
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
+				CurrentFocus:          strings.Repeat("a", 401),
+			},
+			wantOk:    false,
+			wantField: "current_focus",
+			wantCode:  "current_focus_too_long",
+		},
+		{
+			name: "application_notes at 300 chars accepted",
+			req: registerRequest{
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
+				ApplicationNotes:      strings.Repeat("a", 300),
+			},
+			wantOk: true,
+		},
+		{
+			name: "application_notes at 301 chars rejected",
+			req: registerRequest{
+				EcosystemConnection:   min30,
+				CommunityContribution: min30,
+				ApplicationNotes:      strings.Repeat("a", 301),
+			},
+			wantOk:    false,
+			wantField: "application_notes",
+			wantCode:  "application_notes_too_long",
 		},
 		{
 			name: "whitespace gets trimmed before length check",
 			req: registerRequest{
 				ExternalLinks:         "  https://example.com  ",
-				EcosystemConnection:   "  " + good50 + "  ",
-				CommunityContribution: "  " + good50 + "  ",
+				EcosystemConnection:   "  " + min30 + "  ",
+				CommunityContribution: "  " + min30 + "  ",
 			},
 			wantOk: true,
 		},
@@ -178,11 +231,25 @@ func TestValidateApplication(t *testing.T) {
 				return
 			}
 			if err == nil {
-				t.Errorf("expected error containing %q, got nil", c.wantErrIn)
+				t.Errorf("expected error with code %q, got nil", c.wantCode)
 				return
 			}
-			if c.wantErrIn != "" && !strings.Contains(err.Error(), c.wantErrIn) {
-				t.Errorf("expected error containing %q, got %q", c.wantErrIn, err.Error())
+			fe, ok := err.(*fieldError)
+			if !ok {
+				t.Errorf("expected *fieldError, got %T (%v)", err, err)
+				return
+			}
+			if c.wantField != "" && fe.Field != c.wantField {
+				t.Errorf("Field = %q, want %q", fe.Field, c.wantField)
+			}
+			if c.wantCode != "" && fe.Code != c.wantCode {
+				t.Errorf("Code = %q, want %q", fe.Code, c.wantCode)
+			}
+			// Ensure the rendered error string still contains the code
+			// for any caller that joins on Error() instead of using
+			// errors.As.
+			if !strings.Contains(err.Error(), c.wantCode) {
+				t.Errorf("Error() = %q does not contain code %q", err.Error(), c.wantCode)
 			}
 		})
 	}

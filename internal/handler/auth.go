@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -131,26 +132,57 @@ func urlEncode(s string) string {
 }
 
 // applicationFieldLimits defines the length gates for each application
-// question. Centralised so the handler, the validation helper and any
-// future tests stay in sync.
+// question. Centralised so the handler, the validation helper, the
+// register template counter and the test suite stay in sync.
+//
+// Sprint X.1 softened the lower bounds on the long-form fields after
+// applicants reported the originals felt cramped, and dropped the
+// external_links requirement altogether (the field is now optional).
 const (
-	externalLinksMin         = 5
-	externalLinksMax         = 500
-	ecosystemConnectionMin   = 50
-	ecosystemConnectionMax   = 500
-	communityContributionMin = 50
-	communityContributionMax = 400
-	currentFocusMax          = 300
-	applicationNotesMax      = 200
+	externalLinksMax         = 500 // optional, no min
+	ecosystemConnectionMin   = 30  // was 50
+	ecosystemConnectionMax   = 800 // was 500
+	communityContributionMin = 30  // was 50
+	communityContributionMax = 600 // was 400
+	currentFocusMax          = 400 // was 300
+	applicationNotesMax      = 300 // was 200
 )
 
+// fieldError carries a structured validation failure. Field is the
+// JSON / form-input key the message belongs to ("ecosystem_connection",
+// "external_links", etc) so the client can highlight the offending
+// textarea inline. Code is the stable machine-readable reason
+// ("ecosystem_connection_too_short") tests pin against. Message is
+// the human string surfaced in the UI.
+//
+// Sprint X.1: the registration form switched from "reload page on
+// 400" to "fetch + render error inline". Without the structured
+// field name the client could not know which textarea to highlight,
+// so previously every error appeared at the top and lost its
+// connection to the input that caused it.
+type fieldError struct {
+	Field   string
+	Code    string
+	Message string
+}
+
+func (e *fieldError) Error() string {
+	return e.Code + ": " + e.Message
+}
+
 // validateApplication runs the Sprint X content rules over a
-// registration request and returns the first user-visible error or nil
-// when everything passes. Pure function: no DB, no HTTP, easy to unit-
-// test directly without standing up the full Register handler.
+// registration request and returns the first user-visible error or
+// nil when everything passes. Pure function: no DB, no HTTP, easy
+// to unit-test directly without standing up the full Register
+// handler.
 //
 // Mutates the request in place to apply consistent whitespace
 // trimming so the handler downstream stores the cleaned version.
+//
+// Sprint X.1: external_links is now optional. If supplied, it must
+// still parse to at least one valid https URL - we keep that check
+// to reject "asdf" and similar pure-text submissions while letting
+// applicants who do not have public links yet apply anyway.
 func validateApplication(req *registerRequest) error {
 	req.ExternalLinks = strings.TrimSpace(req.ExternalLinks)
 	req.EcosystemConnection = strings.TrimSpace(req.EcosystemConnection)
@@ -158,42 +190,70 @@ func validateApplication(req *registerRequest) error {
 	req.CurrentFocus = strings.TrimSpace(req.CurrentFocus)
 	req.ApplicationNotes = strings.TrimSpace(req.ApplicationNotes)
 
-	// External links: required, must contain at least one https URL.
-	if len(req.ExternalLinks) == 0 {
-		return fmt.Errorf("external_links_missing: please share at least one link to your work")
-	}
-	if len(req.ExternalLinks) < externalLinksMin {
-		return fmt.Errorf("external_links_too_short: at least %d characters", externalLinksMin)
-	}
-	if len(req.ExternalLinks) > externalLinksMax {
-		return fmt.Errorf("external_links_too_long: at most %d characters", externalLinksMax)
-	}
-	if !hasValidHTTPSURL(req.ExternalLinks) {
-		return fmt.Errorf("external_links_invalid: please include at least one full https:// URL")
+	// External links: optional. Only validate format when non-empty.
+	if req.ExternalLinks != "" {
+		if len(req.ExternalLinks) > externalLinksMax {
+			return &fieldError{
+				Field:   "external_links",
+				Code:    "external_links_too_long",
+				Message: fmt.Sprintf("at most %d characters", externalLinksMax),
+			}
+		}
+		if !hasValidHTTPSURL(req.ExternalLinks) {
+			return &fieldError{
+				Field:   "external_links",
+				Code:    "external_links_invalid",
+				Message: "please include at least one full https:// URL or leave the field blank",
+			}
+		}
 	}
 
 	// Ecosystem connection: required, length-bounded.
 	if len(req.EcosystemConnection) < ecosystemConnectionMin {
-		return fmt.Errorf("ecosystem_connection_too_short: at least %d characters", ecosystemConnectionMin)
+		return &fieldError{
+			Field:   "ecosystem_connection",
+			Code:    "ecosystem_connection_too_short",
+			Message: fmt.Sprintf("at least %d characters", ecosystemConnectionMin),
+		}
 	}
 	if len(req.EcosystemConnection) > ecosystemConnectionMax {
-		return fmt.Errorf("ecosystem_connection_too_long: at most %d characters", ecosystemConnectionMax)
+		return &fieldError{
+			Field:   "ecosystem_connection",
+			Code:    "ecosystem_connection_too_long",
+			Message: fmt.Sprintf("at most %d characters", ecosystemConnectionMax),
+		}
 	}
 
 	// Community contribution: required, length-bounded.
 	if len(req.CommunityContribution) < communityContributionMin {
-		return fmt.Errorf("community_contribution_too_short: at least %d characters", communityContributionMin)
+		return &fieldError{
+			Field:   "community_contribution",
+			Code:    "community_contribution_too_short",
+			Message: fmt.Sprintf("at least %d characters", communityContributionMin),
+		}
 	}
 	if len(req.CommunityContribution) > communityContributionMax {
-		return fmt.Errorf("community_contribution_too_long: at most %d characters", communityContributionMax)
+		return &fieldError{
+			Field:   "community_contribution",
+			Code:    "community_contribution_too_long",
+			Message: fmt.Sprintf("at most %d characters", communityContributionMax),
+		}
 	}
 
 	// Optional fields: only enforce upper bound.
 	if len(req.CurrentFocus) > currentFocusMax {
-		return fmt.Errorf("current_focus_too_long: at most %d characters", currentFocusMax)
+		return &fieldError{
+			Field:   "current_focus",
+			Code:    "current_focus_too_long",
+			Message: fmt.Sprintf("at most %d characters", currentFocusMax),
+		}
 	}
 	if len(req.ApplicationNotes) > applicationNotesMax {
-		return fmt.Errorf("application_notes_too_long: at most %d characters", applicationNotesMax)
+		return &fieldError{
+			Field:   "application_notes",
+			Code:    "application_notes_too_long",
+			Message: fmt.Sprintf("at most %d characters", applicationNotesMax),
+		}
 	}
 	return nil
 }
@@ -251,7 +311,21 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Sprint X: validate the application content before doing any DB
 	// work. This rejects empty / too-short / malformed submissions
 	// without burning a username uniqueness check or a bcrypt hash.
+	//
+	// Sprint X.1: when the call comes from the JSON-driven Alpine
+	// form, return the structured field info so the client can
+	// pin the inline error to the offending textarea instead of
+	// printing a generic top-of-form banner.
 	if err := validateApplication(&req); err != nil {
+		var fe *fieldError
+		if !wantsFormResponse(r) && errors.As(err, &fe) {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"field":   fe.Field,
+				"code":    fe.Code,
+				"message": fe.Message,
+			})
+			return
+		}
 		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, err.Error())
 		return
 	}
