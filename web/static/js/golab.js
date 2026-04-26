@@ -395,6 +395,117 @@
       };
     });
 
+    // Sprint Y application rating widget. Each application field on
+    // the admin pending-users panel gets ten star buttons backed by
+    // this component. Per-click auto-save: the click fires PUT
+    // /api/admin/users/{id}/rating, the server returns the live
+    // average + rated count, the widget dispatches a
+    // "rating-changed" event so the card-level summary scope can
+    // refresh both numbers. Clicking the currently-selected value
+    // clears it (sends null) so an admin can correct an accidental
+    // pick without choosing a different number.
+    window.Alpine.data('ratingWidget', function (userId, dimension, initial) {
+      return {
+        userId: userId,
+        dimension: dimension,
+        // value is the saved rating; null means unrated. We keep
+        // the local state optimistic - on success the server
+        // confirms, on failure we roll back to the previous value.
+        value: typeof initial === 'number' ? initial : null,
+        saved: false,
+        error: '',
+        savedTimer: null,
+
+        rate: function (n) {
+          var self = this;
+          // Toggle off when clicking the already-selected value.
+          var nextValue = (self.value === n) ? null : n;
+          var prev = self.value;
+          self.value = nextValue;
+          self.error = '';
+          fetch('/api/admin/users/' + self.userId + '/rating', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              dimension: self.dimension,
+              value: nextValue
+            })
+          }).then(function (r) {
+            return r.text().then(function (text) {
+              var body = {};
+              try { body = JSON.parse(text); } catch (e) { /* ignore */ }
+              return { ok: r.ok, status: r.status, body: body };
+            });
+          }).then(function (res) {
+            if (!res.ok) {
+              self.value = prev;
+              self.error = (res.body && res.body.error) ||
+                ('save failed (' + res.status + ')');
+              return;
+            }
+            self.saved = true;
+            if (self.savedTimer) clearTimeout(self.savedTimer);
+            self.savedTimer = setTimeout(function () {
+              self.saved = false;
+            }, 1500);
+            // Notify the card-level rating-summary scope so the
+            // average + rated_count refresh without a roundtrip.
+            self.$dispatch('rating-changed', {
+              userId: self.userId,
+              average: (res.body && typeof res.body.average === 'number') ? res.body.average : 0,
+              ratedCount: (res.body && typeof res.body.rated_count === 'number') ? res.body.rated_count : 0
+            });
+          }).catch(function () {
+            self.value = prev;
+            self.error = 'network error';
+          });
+        }
+      };
+    });
+
+    // Sprint Y rating notes Alpine component. Auto-saves the admin's
+    // free-form moderation notes 500ms after the last keystroke
+    // (debounce on the textarea's @input directive). Mirrors the
+    // ratingWidget save / saved / error flag pattern.
+    window.Alpine.data('ratingNotes', function (userId, initial) {
+      return {
+        userId: userId,
+        value: typeof initial === 'string' ? initial : '',
+        saving: false,
+        saved: false,
+        error: '',
+        savedTimer: null,
+
+        save: function () {
+          var self = this;
+          self.saving = true;
+          self.saved = false;
+          self.error = '';
+          fetch('/api/admin/users/' + self.userId + '/rating/notes', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ notes: self.value })
+          }).then(function (r) {
+            self.saving = false;
+            if (!r.ok) {
+              self.error = 'save failed (' + r.status + ')';
+              return;
+            }
+            self.saved = true;
+            if (self.savedTimer) clearTimeout(self.savedTimer);
+            self.savedTimer = setTimeout(function () {
+              self.saved = false;
+            }, 1500);
+          }).catch(function () {
+            self.saving = false;
+            self.error = 'network error';
+          });
+        }
+      };
+    });
+
     // Sprint 15a B6: edit-post modal component. Opens in response
     // to a golab:open-edit-post window event (fired by the
     // data-action="edit-post" click handler in bindActions), fetches

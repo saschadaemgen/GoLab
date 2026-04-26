@@ -3871,3 +3871,80 @@ img.avatar {
   font-size: 0.88rem;
   margin-top: 0.25rem;
 }
+
+/* Sprint Y application rating widget. Lives inside .admin-pending-app
+   below each application field. Star buttons are unstyled buttons
+   with an inline SVG; filled state uses --accent. The whole row
+   sits in a flex container so the value badge and "saved" indicator
+   tail behind the stars on a single line. */
+.rating-widget {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.rating-widget .stars {
+  display: inline-flex;
+  gap: 0.125rem;
+}
+.rating-widget .star-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.125rem;
+  color: var(--border, #d0d7de);
+  transition: color 0.1s, transform 0.1s;
+  line-height: 0;
+}
+.rating-widget .star-btn:hover {
+  color: var(--accent);
+  transform: scale(1.12);
+}
+.rating-widget .star-btn.filled {
+  color: var(--accent);
+}
+.rating-widget .star-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.rating-widget .rating-value {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 3em;
+}
+.rating-widget .rating-saved,
+.rating-notes-status .rating-saved {
+  color: var(--success, #3fa46a);
+  font-size: 0.85rem;
+}
+
+/* Bottom-of-card running average + rated count. Sprint Y. The
+   .rating-summary class also has a margin-top so it visually
+   separates from the last application field's widget. */
+.rating-summary {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.rating-summary .rating-count {
+  color: var(--text-dim);
+  margin-left: 0.5rem;
+}
+
+/* Admin notes textarea below the rating summary. Reuses
+   .form-textarea but adds a status row beneath for the saving /
+   saved / error indicators that ratingNotes() drives. */
+.rating-notes-block {
+  margin-top: 1rem;
+}
+.rating-notes-status {
+  margin-top: 0.25rem;
+  min-height: 1.2rem; /* prevent layout jump when the row goes empty */
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}

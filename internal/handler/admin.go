@@ -40,6 +40,7 @@ type AdminHandler struct {
 	Users         *model.UserStore
 	Settings      *model.SettingsStore
 	Notifications *model.NotificationStore
+	Ratings       *model.ApplicationRatingStore // Sprint Y
 	Hub           *Hub
 }
 
@@ -63,12 +64,23 @@ type adminUser struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// pendingUserView pairs a pending applicant with their existing
+// rating row (if any). Sprint Y: the admin /admin page renders one
+// of these per pending user so each row gets its five star widgets
+// pre-populated with whatever the admin scored on a previous visit.
+// A user without any rating row yet shows up with a zero-value
+// ApplicationRating (every dimension nil).
+type pendingUserView struct {
+	User   model.User
+	Rating *model.ApplicationRating
+}
+
 type adminDashboard struct {
 	Stats               adminStats
 	Users               []adminUser
-	PendingUsers        []model.User // Sprint 12 moderation queue
-	RequireApproval     bool         // current state of the toggle
-	AllowUsernameChange bool         // Sprint 13: user-facing username editor
+	PendingUsers        []pendingUserView // Sprint 12 moderation queue + Sprint Y ratings
+	RequireApproval     bool              // current state of the toggle
+	AllowUsernameChange bool              // Sprint 13: user-facing username editor
 }
 
 // Page renders the full /admin dashboard (server-rendered).
@@ -123,9 +135,32 @@ func (h *AdminHandler) collect(r *http.Request) adminDashboard {
 
 	// Sprint 12 moderation data: pending users queue + require_approval
 	// setting current state for the toggle.
+	//
+	// Sprint Y: also bulk-load the per-user rating rows so each star
+	// widget renders with the previously-saved value. AttachTo
+	// returns a zero-value rating for users with no row yet so the
+	// template can iterate uniformly.
 	if h.Users != nil {
 		if pending, err := h.Users.ListPending(ctx, 50); err == nil {
-			out.PendingUsers = pending
+			ids := make([]int64, len(pending))
+			for i := range pending {
+				ids[i] = pending[i].ID
+			}
+			var ratings map[int64]*model.ApplicationRating
+			if h.Ratings != nil {
+				ratings, _ = h.Ratings.AttachTo(ctx, ids)
+			}
+			views := make([]pendingUserView, 0, len(pending))
+			for i := range pending {
+				v := pendingUserView{User: pending[i]}
+				if r, ok := ratings[pending[i].ID]; ok && r != nil {
+					v.Rating = r
+				} else {
+					v.Rating = &model.ApplicationRating{UserID: pending[i].ID}
+				}
+				views = append(views, v)
+			}
+			out.PendingUsers = views
 		}
 	}
 	if h.Settings != nil {
@@ -250,6 +285,146 @@ func (h *AdminHandler) Reject(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.Notifications.Create(r.Context(), id, actor.ID, model.NotifRejected, nil)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
+}
+
+// rateRequest is the body shape for PUT /api/admin/users/{id}/rating.
+// `Value` is *int so a JSON null clears the dimension; an explicit 0
+// is rejected by the model layer (CHECK constraint enforces 1-10).
+type rateRequest struct {
+	Dimension string `json:"dimension"`
+	Value     *int   `json:"value"`
+}
+
+// notesRequest is the body shape for PUT /api/admin/users/{id}/rating/notes.
+type notesRequest struct {
+	Notes string `json:"notes"`
+}
+
+// ratingNotesMaxLen caps the admin notes blob. Long enough for a
+// paragraph or two of moderation context, short enough to keep the
+// admin panel responsive when the page renders 50 pending users at
+// once. Sprint Y.
+const ratingNotesMaxLen = 2000
+
+// ratingResponse is what every rating mutation endpoint returns:
+// the live average + the count of rated dimensions. The admin UI
+// uses both to update the summary row without a second roundtrip.
+type ratingResponse struct {
+	Average    float64 `json:"average"`
+	RatedCount int     `json:"rated_count"`
+}
+
+// SetRating updates one dimension of an applicant's rating row.
+// Sprint Y per-click auto-save: clicking a star fires this directly
+// instead of waiting on a parent Save button. The dimension allow-
+// list lives in model.AllowedRatingDimensions; the value range is
+// enforced by both the model and the DB CHECK constraint.
+func (h *AdminHandler) SetRating(w http.ResponseWriter, r *http.Request) {
+	if h.Ratings == nil {
+		writeError(w, http.StatusServiceUnavailable, "ratings disabled")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	actor := auth.UserFromContext(r.Context())
+	if actor == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req rateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !model.AllowedRatingDimensions[req.Dimension] {
+		writeError(w, http.StatusBadRequest, "invalid dimension")
+		return
+	}
+	if req.Value != nil && (*req.Value < 1 || *req.Value > 10) {
+		writeError(w, http.StatusBadRequest, "value must be 1-10 or null")
+		return
+	}
+	if err := h.Ratings.SetDimension(r.Context(), id, req.Dimension, req.Value, actor.ID); err != nil {
+		slog.Error("set rating dimension", "error", err, "user", id, "dim", req.Dimension)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	rating, err := h.Ratings.Get(r.Context(), id)
+	if err != nil {
+		// The write succeeded; if the read-back fails we still want to
+		// tell the client the click landed. Return zero average rather
+		// than 500.
+		slog.Warn("re-read rating after set", "error", err, "user", id)
+		writeJSON(w, http.StatusOK, ratingResponse{})
+		return
+	}
+	writeJSON(w, http.StatusOK, ratingResponse{
+		Average:    rating.Average(),
+		RatedCount: rating.RatedCount(),
+	})
+}
+
+// GetRating returns the full rating row for a user. Used when the
+// admin re-opens an already-approved user to adjust their score.
+func (h *AdminHandler) GetRating(w http.ResponseWriter, r *http.Request) {
+	if h.Ratings == nil {
+		writeError(w, http.StatusServiceUnavailable, "ratings disabled")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	rating, err := h.Ratings.Get(r.Context(), id)
+	if err != nil {
+		slog.Error("get rating", "error", err, "user", id)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rating":      rating,
+		"average":     rating.Average(),
+		"rated_count": rating.RatedCount(),
+	})
+}
+
+// SetRatingNotes stores the admin's free-form moderation note.
+// Debounced on the client so the user doesn't hit this on every
+// keystroke; the handler still gets called once typing settles.
+func (h *AdminHandler) SetRatingNotes(w http.ResponseWriter, r *http.Request) {
+	if h.Ratings == nil {
+		writeError(w, http.StatusServiceUnavailable, "ratings disabled")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	actor := auth.UserFromContext(r.Context())
+	if actor == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req notesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.Notes) > ratingNotesMaxLen {
+		writeError(w, http.StatusBadRequest, "notes too long")
+		return
+	}
+	if err := h.Ratings.SetNotes(r.Context(), id, strings.TrimSpace(req.Notes), actor.ID); err != nil {
+		slog.Error("set rating notes", "error", err, "user", id)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 }
 
 // Pending returns the list of users waiting for approval. JSON for

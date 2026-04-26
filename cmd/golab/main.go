@@ -149,6 +149,10 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	// author self-edit (and, from Sprint 15c onward, every admin
 	// moderation edit).
 	editHistory := &model.PostEditHistoryStore{DB: pool}
+	// Sprint Y: per-applicant rating record (5 dimensions, 1-10
+	// stars, admin-only). Persists past approval; admins can
+	// re-edit later as the user develops.
+	ratings := &model.ApplicationRatingStore{DB: pool}
 
 	// Notification dispatcher (used by post + profile handlers to fan events).
 	notifDispatch := &handler.NotifDispatch{Store: notifs, Hub: hub}
@@ -194,7 +198,9 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	searchH := &handler.SearchHandler{DB: pool}
 	adminH := &handler.AdminHandler{
 		DB: pool, Render: tmpls, Users: users,
-		Settings: settings, Notifications: notifs, Hub: hub,
+		Settings: settings, Notifications: notifs,
+		Ratings: ratings, // Sprint Y
+		Hub:     hub,
 	}
 	// Sprint 13: admin database management (backup, export, import).
 	// BackupDir defaults to /opt/backups inside the container; the
@@ -430,6 +436,12 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Get("/admin/pending", adminH.Pending)
 			r.Post("/admin/users/{id}/approve", adminH.Approve)
 			r.Post("/admin/users/{id}/reject", adminH.Reject)
+			// Sprint Y: per-applicant rating endpoints. RequireAdmin
+			// is already on the parent group so power_level >= 75 is
+			// enforced; the handlers also defensively require auth.
+			r.Get("/admin/users/{id}/rating", adminH.GetRating)
+			r.Put("/admin/users/{id}/rating", adminH.SetRating)
+			r.Put("/admin/users/{id}/rating/notes", adminH.SetRatingNotes)
 			r.Put("/admin/settings/{key}", adminH.SetSetting)
 
 			// Sprint 13: database management. Backup / Export / List /
