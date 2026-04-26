@@ -14,17 +14,61 @@
       <span class="admin-pending-count">{{ len .PendingUsers }}</span>
     </h3>
     {{ range .PendingUsers }}
-    <div class="admin-pending-card" id="pending-user-{{ .ID }}">
+    {{/* Sprint X: expandable application view. Each pending row
+         shows the username + registered-time row by default; the
+         "Show application" toggle reveals the five application
+         fields the user submitted on /register. The toggle is
+         Alpine-driven so we can reuse the dropdown-enter / leave
+         transition tokens already defined in golab.css. */}}
+    <div class="admin-pending-card" id="pending-user-{{ .ID }}"
+         x-data="{ open: false }">
       <div class="admin-pending-info">
         <strong>{{ .Username }}</strong>
-        <span class="admin-pending-email">{{ .Email }}</span>
         <span class="admin-pending-time">Registered {{ timeAgo .CreatedAt }}</span>
       </div>
       <div class="admin-pending-actions">
+        <button type="button" class="btn btn-ghost btn-sm press-effect"
+                @click="open = !open"
+                :aria-expanded="open ? 'true' : 'false'"
+                :aria-controls="'pending-app-' + {{ .ID }}">
+          <span x-show="!open">Show application</span>
+          <span x-show="open" x-cloak>Hide application</span>
+        </button>
         <button type="button" class="btn btn-primary btn-sm press-effect"
                 data-action="admin-approve" data-user-id="{{ .ID }}">Approve</button>
         <button type="button" class="btn btn-danger btn-sm press-effect"
                 data-action="admin-reject" data-user-id="{{ .ID }}">Reject</button>
+      </div>
+
+      {{/* Application body. Fields are stored verbatim so we render
+           them with text-only escaping (Go html/template autoescape).
+           ExternalLinks gets URL-extraction so each https:// token
+           becomes a clickable link with rel="noopener noreferrer
+           nofollow" and target="_blank" - the admin can audit the
+           applicant's work without giving the link any SEO value or
+           leaking the referrer. */}}
+      <div class="admin-pending-app" x-show="open" x-cloak
+           :id="'pending-app-' + {{ .ID }}">
+        <dl class="admin-pending-fields">
+          <dt>Where can we see your work?</dt>
+          <dd class="admin-pending-links">{{ renderApplicationLinks .ExternalLinks }}</dd>
+
+          <dt>How are you connected to the SimpleGo ecosystem?</dt>
+          <dd>{{ .EcosystemConnection }}</dd>
+
+          <dt>What would you contribute to this community?</dt>
+          <dd>{{ .CommunityContribution }}</dd>
+
+          {{ if .CurrentFocus }}
+          <dt>What is your current focus or open question?</dt>
+          <dd>{{ .CurrentFocus }}</dd>
+          {{ end }}
+
+          {{ if .ApplicationNotes }}
+          <dt>Anything else we should know?</dt>
+          <dd>{{ .ApplicationNotes }}</dd>
+          {{ end }}
+        </dl>
       </div>
     </div>
     {{ end }}

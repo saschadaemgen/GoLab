@@ -23,10 +23,12 @@
           autocomplete="on"
           novalidate>
       <div class="form-group">
-        <label class="form-label" for="login-email">Email</label>
-        <input class="form-input" type="email" id="login-email" name="email"
-               required autocomplete="email" autofocus
-               placeholder="you@example.com">
+        <label class="form-label" for="login-username">Username</label>
+        <input class="form-input" type="text" id="login-username" name="username"
+               required autocomplete="username" autofocus
+               minlength="3" maxlength="32"
+               pattern="[A-Za-z0-9_]+"
+               placeholder="yourhandle">
       </div>
 
       <div class="form-group">
@@ -45,7 +47,7 @@
     </form>
 
     <div class="auth-footer">
-      New to GoLab? <a href="/register" hx-boost="true">Create an account</a>
+      New to GoLab? <a href="/register" hx-boost="true">Apply for an account</a>
     </div>
   </div>
 </div>

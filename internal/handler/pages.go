@@ -437,10 +437,17 @@ func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Hide email unless viewing own profile
-	if !isSelf {
-		profile.Email = ""
-	}
+	// Sprint X: email field removed. Application fields stay on the
+	// user row but never reach the public profile page; they are
+	// moderation-only data shown in the admin pending-users panel.
+	// Strip them defensively even on self-view to avoid leaking the
+	// application content into a generic profile fragment that
+	// might be shared / inspected by third parties.
+	profile.ExternalLinks = ""
+	profile.EcosystemConnection = ""
+	profile.CommunityContribution = ""
+	profile.CurrentFocus = ""
+	profile.ApplicationNotes = ""
 
 	data := h.newPageData(r, profile.Username+" - GoLab")
 	data.Content = profileContent{

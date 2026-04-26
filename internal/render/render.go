@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -152,7 +153,51 @@ func funcMap() template.FuncMap {
 		"emojiFor":      emojiFor,
 		"reactionTypes": reactionTypes,
 		"contains":      contains,
+		// Sprint X application helpers.
+		"renderApplicationLinks": renderApplicationLinks,
 	}
+}
+
+// renderApplicationLinks turns the user-submitted ExternalLinks blob
+// into clickable anchors plus any leftover non-URL text. Used by the
+// admin pending-users panel so reviewers can audit applicants' work
+// in one click. Splits on whitespace and commas; emits an <a> for
+// every token whose URL.Parse succeeds with scheme=https and a
+// non-empty host. Tokens that fail validation render as plain text
+// (Go's html/template auto-escapes them).
+//
+// Each link gets target="_blank", rel="noopener noreferrer nofollow":
+// - noopener: don't expose this window to the opened tab via
+//   window.opener (a basic anti-phishing precaution)
+// - noreferrer: don't leak our hostname in the Referer header
+// - nofollow: don't grant SEO weight; the link is moderation
+//   evidence, not an endorsement
+func renderApplicationLinks(blob string) template.HTML {
+	if strings.TrimSpace(blob) == "" {
+		return ""
+	}
+	// Split keeping the original separators so the rendered output
+	// matches the user's formatting (newline-separated stays on
+	// separate lines). We tokenise into "url" / "text" runs and
+	// emit each.
+	var b strings.Builder
+	for _, raw := range strings.Fields(strings.ReplaceAll(blob, ",", " ")) {
+		token := strings.TrimSpace(raw)
+		if token == "" {
+			continue
+		}
+		if u, err := url.Parse(token); err == nil && u.Scheme == "https" && u.Host != "" {
+			fmt.Fprintf(&b,
+				`<a href="%s" target="_blank" rel="noopener noreferrer nofollow">%s</a> `,
+				template.HTMLEscapeString(u.String()),
+				template.HTMLEscapeString(u.String()),
+			)
+			continue
+		}
+		fmt.Fprintf(&b, "%s ", template.HTMLEscapeString(token))
+	}
+	out := strings.TrimSpace(b.String())
+	return template.HTML(out)
 }
 
 // emojiFor looks up the glyph for a reaction type. Returns the

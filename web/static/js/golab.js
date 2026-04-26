@@ -309,6 +309,92 @@
       };
     });
 
+    // Sprint X.1 application registration form. Replaces the native
+    // form-POST + server-redirect cycle so a 400 from validation
+    // does not wipe the user's input. Submit goes via fetch(); on
+    // 200 we redirect to /pending; on 400 we map the structured
+    // {field, code, message} response to an inline error next to
+    // the offending textarea; on 5xx / network failure we show a
+    // generic top-of-form error and leave every field intact.
+    //
+    // Per-field counters live in nested `x-data="{ count, max }"`
+    // scopes inside register.html and are independent of this
+    // component - they react purely on @input. They keep working
+    // across a 400 response because the DOM values are never
+    // cleared.
+    window.Alpine.data('registerForm', function () {
+      return {
+        submitting: false,
+        // errors maps field name -> message. Looked up by template
+        // expressions like `errors.ecosystem_connection`. Cleared
+        // before each submit so a successful re-try removes any
+        // previous inline error.
+        errors: {},
+        // formError is the top-of-form banner for non-field issues
+        // (network failure, 5xx, response without a `field` key).
+        formError: '',
+
+        submit: function (e) {
+          var self = this;
+          var form = e.target;
+          self.submitting = true;
+          self.errors = {};
+          self.formError = '';
+
+          var data = {
+            username: form.username ? form.username.value : '',
+            password: form.password ? form.password.value : '',
+            external_links: form.external_links ? form.external_links.value : '',
+            ecosystem_connection: form.ecosystem_connection ? form.ecosystem_connection.value : '',
+            community_contribution: form.community_contribution ? form.community_contribution.value : '',
+            current_focus: form.current_focus ? form.current_focus.value : '',
+            application_notes: form.application_notes ? form.application_notes.value : ''
+          };
+
+          fetch('/api/register', {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(data)
+          }).then(function (r) {
+            return r.text().then(function (text) {
+              var body = {};
+              try { body = JSON.parse(text); } catch (e) { /* non-JSON */ }
+              return { ok: r.ok, status: r.status, body: body };
+            });
+          }).then(function (res) {
+            self.submitting = false;
+            if (res.ok) {
+              // Server side already created the session cookie and
+              // signalled pending status. Take the user to the
+              // waiting page; a hard navigation also flushes any
+              // half-typed Alpine state.
+              window.location.href = '/pending';
+              return;
+            }
+            // 400 with structured field info: pin the message to
+            // the right input.
+            if (res.status === 400 && res.body && res.body.field) {
+              var msg = res.body.message || res.body.code || 'invalid input';
+              self.errors[res.body.field] = msg;
+              return;
+            }
+            // 409 username conflict, 5xx, or other unstructured
+            // response: top-of-form banner.
+            self.formError =
+              (res.body && (res.body.error || res.body.message)) ||
+              'Registration failed (' + res.status + ')';
+          }).catch(function () {
+            self.submitting = false;
+            self.formError = 'Network error, please try again';
+          });
+        }
+      };
+    });
+
     // Sprint 15a B6: edit-post modal component. Opens in response
     // to a golab:open-edit-post window event (fired by the
     // data-action="edit-post" click handler in bindActions), fetches
