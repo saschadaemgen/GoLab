@@ -33,6 +33,14 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS technical_depth_answer TEXT NOT NULL 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS practical_experience   TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS critical_thinking      TEXT NOT NULL DEFAULT '';
 
+-- Sprint Y.1.1: the DO ... END block contains semicolons inside
+-- the dollar-quoted body. goose splits SQL on top-level
+-- semicolons by default, which would send Postgres only the
+-- "DO $$ BEGIN IF NOT EXISTS (" prefix and trip an unterminated
+-- dollar-quote error. The +goose StatementBegin / StatementEnd
+-- markers tell goose to ship everything between them as one
+-- statement and stop trying to be clever about semicolons.
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -43,6 +51,7 @@ BEGIN
             CHECK (technical_depth_choice IN ('', 'a', 'b', 'c'));
     END IF;
 END$$;
+-- +goose StatementEnd
 
 -- +goose Down
 -- Forward-only project policy.
