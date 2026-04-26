@@ -6,18 +6,26 @@ import (
 	"testing"
 )
 
-// TestRegisterRequest_DecodesWizardPayload pins the JSON shape the
-// Sprint Y.2 wizard sends to /api/register. The wizard is one
-// Alpine component holding all 11 form fields under a `data` map;
-// on submit it serializes data straight to JSON. This test
-// constructs the same JSON shape the wizard produces and verifies
-// every field lands on the right registerRequest property and
-// passes the existing validateApplication contract.
+// TestRegisterRequest_DecodesAllElevenStepsPayload pins the JSON
+// shape the Sprint Y.3 brutalist wizard sends to /api/register.
+// The wizard splits the eleven application fields across 11 step
+// indices (Welcome / Account / 8 fields / Review) but submits a
+// single JSON body holding all of them. This test verifies the
+// JSON produced by walking the full 11-step flow lands on the
+// right registerRequest property and passes validateApplication
+// without modification - the schema and validation contract is
+// unchanged from Sprint Y.1.
+//
+// Note: the test name carries forward the original Y.2 test
+// (TestRegisterRequest_DecodesWizardPayload) intent but is
+// renamed to make the 11-step contract explicit. Same fields,
+// same validation, just routed through eleven UI steps instead
+// of five.
 //
 // Reading the assertion side: a future template refactor that
 // renames a JSON key (e.g. "ecosystem_connection" -> "ecosystem")
 // fails this test loudly before reaching production.
-func TestRegisterRequest_DecodesWizardPayload(t *testing.T) {
+func TestRegisterRequest_DecodesAllElevenStepsPayload(t *testing.T) {
 	wizardPayload := []byte(`{
 		"username": "applicant",
 		"password": "very-secret-12345",

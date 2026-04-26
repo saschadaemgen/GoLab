@@ -309,26 +309,44 @@
       };
     });
 
-    // Sprint Y.2 registration wizard. Replaces the Sprint X / X.1
-    // single-page form with a 5-step flow (Welcome -> Account ->
-    // About -> Knowledge -> Review). Carries forward every Sprint
-    // X.1 + Y.1 contract (fetch-based submit, structured field
-    // errors, character counters via :data length, optional
-    // external_links, four knowledge fields).
+    // Sprint Y.3 brutalist registration wizard. Replaces the
+    // Sprint Y.2 5-step cinematic-card variant. Same eleven
+    // form fields, but now split across 11 wizard indices so
+    // each step focuses on exactly one prompt. Carries every
+    // Sprint X.1 / Y.1 contract forward (fetch submit, typed
+    // {field, code, message} errors, optional external_links,
+    // four knowledge fields).
     //
     // The whole wizard is one component; per-step Alpine sub-
-    // scopes are only used for transient UI state (tooltip open
-    // flags, choice picker hover state). All form values live on
-    // this.data so the Review step can reflect them and the final
-    // submit() can serialize them all in one POST.
+    // scopes are only used for transient UI state. All form
+    // values live on this.data so the Review step can reflect
+    // them and the final submit() can serialize them all in
+    // one POST.
+    //
+    // 11 step indices:
+    //   0 Welcome              required = false (no fields)
+    //   1 Account               required (username + password)
+    //   2 External links        optional
+    //   3 Ecosystem connection  required
+    //   4 Community contribution required
+    //   5 Current focus         optional
+    //   6 Application notes     optional
+    //   7 Technical depth       required (choice + answer)
+    //   8 Practical experience  optional
+    //   9 Critical thinking     optional
+    //  10 Review                no fields, just the submit
     //
     // direction is "forward" or "backward"; the wizard root has
     // :data-direction so CSS in golab.css can pick the right
-    // slide animation per step transition (forward = enter from
-    // right, backward = enter from left). Set BEFORE the step
+    // slide animation per step transition. Set BEFORE the step
     // mutation so the attribute is in place when x-transition
     // reads the surrounding state.
-    window.Alpine.data('registrationWizard', function () {
+    //
+    // Keyboard handling: Esc anywhere -> back(). Enter inside
+    // an INPUT (not TEXTAREA - the latter must keep newline
+    // behaviour) -> next(). Wired via @keydown in the template
+    // root.
+    window.Alpine.data('registrationWizardBrutalist', function () {
       return {
         step: 0,
         direction: 'forward',
@@ -336,6 +354,23 @@
         submitted: false,
         submitError: '',
         fieldErrors: {},
+
+        // The step list drives the sidebar render and the
+        // Skip/Continue button visibility. `required: true`
+        // hides the Skip button on that step.
+        steps: [
+          { label: 'Welcome',        required: false },
+          { label: 'Account',        required: true  },
+          { label: 'External links', required: false },
+          { label: 'Ecosystem',      required: true  },
+          { label: 'Contribution',   required: true  },
+          { label: 'Current focus',  required: false },
+          { label: 'Notes',          required: false },
+          { label: 'Technical',      required: true  },
+          { label: 'Practical',      required: false },
+          { label: 'Critical',       required: false },
+          { label: 'Review',         required: false }
+        ],
 
         data: {
           username: '',
@@ -351,85 +386,152 @@
           critical_thinking: ''
         },
 
-        // ---- Per-step validation (used to gate the Continue button
-        // and to call validate() before advancing). The full
-        // server-side validateApplication runs on submit; these
-        // are lightweight checks that mirror the documented bounds
-        // without re-implementing every rule. ----
+        init: function () {
+          // No-op for now; placeholder for any future deep-link
+          // hash handling (e.g. /register#step=4 to jump back
+          // into a partial application).
+        },
+
+        // ---- Progress + sidebar quote ----
+
+        progressPct: function () {
+          // Step 0 (welcome) reads 0%. Step N>0 reads (N / 10) * 100.
+          // 10 because step 10 is the review-and-submit step; once
+          // the user hits review we say 100% complete.
+          return Math.round((this.step / (this.steps.length - 1)) * 100);
+        },
+
+        // sidebarQuote returns a contextual one-liner displayed
+        // in the bottom of the sidebar. Each step has its own
+        // editorial line; the user has something to read while
+        // typing.
+        sidebarQuote: function () {
+          var quotes = [
+            '"Read access is open. Write access is reviewed personally. We do not optimise for growth."',
+            '"Your handle is permanent. Pick something you would want to read on a security advisory three years from now."',
+            '"A blank links field is fine. Padding it with random GitHub stars is not."',
+            '"Specific beats general. \'I run a relay\' beats \'I care about privacy.\'"',
+            '"Tell us what you would do, not what you would consume."',
+            '"The first post you would write tells us more than your CV."',
+            '"Optional. If there is nothing extra, do not invent some."',
+            '"We test thinking, not memorisation. Wrong-but-thoughtful is the goal."',
+            '"\'No\' is a complete answer. We will not penalise honesty."',
+            '"Be specific or skip. \'Big Tech\' is a non-answer."',
+            '"Read it once. Submit. We will be in touch within seven days."'
+          ];
+          return quotes[this.step] || quotes[0];
+        },
+
+        // linkCount counts how many https URLs are present in
+        // the external_links blob. Used by the step-2 link
+        // detector. Same tokenization the server uses
+        // (whitespace + comma split, https scheme required).
+        linkCount: function () {
+          var s = this.data.external_links || '';
+          if (!s) return 0;
+          var n = 0;
+          var tokens = s.split(/[\s,]+/);
+          for (var i = 0; i < tokens.length; i++) {
+            var t = tokens[i].trim();
+            if (!t) continue;
+            try {
+              var u = new URL(t);
+              if (u.protocol === 'https:' && u.host) n++;
+            } catch (e) { /* not a URL, skip */ }
+          }
+          return n;
+        },
+
+        // ---- Per-step validation ----
 
         usernameValid: function () {
-          var u = this.data.username || '';
-          return /^[A-Za-z0-9_]{3,32}$/.test(u);
+          return /^[A-Za-z0-9_]{3,32}$/.test(this.data.username || '');
         },
         passwordValid: function () {
           var p = this.data.password || '';
           return p.length >= 8 && p.length <= 128;
         },
-        step1Valid: function () {
-          return this.usernameValid() && this.passwordValid();
-        },
-        step2Valid: function () {
+
+        isCurrentStepValid: function () {
           var d = this.data;
-          if (d.ecosystem_connection.length < 30 || d.ecosystem_connection.length > 800) return false;
-          if (d.community_contribution.length < 30 || d.community_contribution.length > 600) return false;
-          if (d.external_links.length > 500) return false;
-          if (d.current_focus.length > 400) return false;
-          if (d.application_notes.length > 300) return false;
-          return true;
-        },
-        step3Valid: function () {
-          var d = this.data;
-          if (!{ a: 1, b: 1, c: 1 }[d.technical_depth_choice]) return false;
-          var len = (d.technical_depth_answer || '').length;
-          if (len < 100 || len > 500) return false;
-          if (d.practical_experience.length > 400) return false;
-          if (d.critical_thinking.length > 400) return false;
-          return true;
-        },
-        currentStepValid: function () {
           switch (this.step) {
-            case 0: return true;
-            case 1: return this.step1Valid();
-            case 2: return this.step2Valid();
-            case 3: return this.step3Valid();
-            case 4: return true;
-            default: return true;
+            case 0: return true; // Welcome (no fields)
+            case 1: return this.usernameValid() && this.passwordValid();
+            case 2: return d.external_links.length <= 500;
+            case 3: return d.ecosystem_connection.length >= 30 && d.ecosystem_connection.length <= 800;
+            case 4: return d.community_contribution.length >= 30 && d.community_contribution.length <= 600;
+            case 5: return d.current_focus.length <= 400;
+            case 6: return d.application_notes.length <= 300;
+            case 7:
+              if (!{ a: 1, b: 1, c: 1 }[d.technical_depth_choice]) return false;
+              var len = (d.technical_depth_answer || '').length;
+              return len >= 100 && len <= 500;
+            case 8: return d.practical_experience.length <= 400;
+            case 9: return d.critical_thinking.length <= 400;
+            case 10: return true;
           }
+          return true;
         },
 
-        // ---- Navigation. Set direction first so the CSS attribute
-        // selector picks the right slide animation when x-show
-        // toggles the next step in. ----
+        // ---- Navigation ----
 
         next: function () {
-          if (!this.currentStepValid()) return;
+          if (!this.isCurrentStepValid()) return;
           this.direction = 'forward';
-          if (this.step < 4) this.step++;
+          if (this.step < this.steps.length - 1) this.step++;
         },
         back: function () {
           if (this.step <= 0) return;
           this.direction = 'backward';
           this.step--;
         },
+        skip: function () {
+          // Only optional steps may skip. The Skip button is
+          // hidden via x-show on required steps; this guard is
+          // belt-and-braces.
+          if (!this.steps[this.step] || this.steps[this.step].required) return;
+          this.direction = 'forward';
+          if (this.step < this.steps.length - 1) this.step++;
+        },
         goToStep: function (n) {
           if (n === this.step) return;
+          if (n < 0 || n >= this.steps.length) return;
           this.direction = n > this.step ? 'forward' : 'backward';
           this.step = n;
         },
 
-        // stepForField maps a server-returned field name back to the
-        // wizard step it belongs to. Used after a 400 response so
-        // we can jump the user directly to the offending input.
+        // onEnter fires from @keydown.enter on the wizard root.
+        // We forward to next() ONLY when the focused element is
+        // a non-textarea form field, so newlines in textareas
+        // continue to work normally.
+        onEnter: function (e) {
+          var t = e.target;
+          if (t && t.tagName === 'TEXTAREA') return;
+          // Don't hijack Enter inside the choice picker buttons;
+          // those fire on click, and Enter on a focused button
+          // already triggers click natively.
+          if (t && t.tagName === 'BUTTON') return;
+          // Welcome step has no inputs; let Enter advance.
+          if (!this.isCurrentStepValid()) return;
+          e.preventDefault();
+          this.next();
+        },
+
+        // stepForField maps a server-returned field name back
+        // to the wizard step that owns it.
         stepForField: function (field) {
           var map = {
             username: 1, password: 1,
-            external_links: 2, ecosystem_connection: 2,
-            community_contribution: 2, current_focus: 2,
-            application_notes: 2,
-            technical_depth_choice: 3, technical_depth_answer: 3,
-            practical_experience: 3, critical_thinking: 3
+            external_links: 2,
+            ecosystem_connection: 3,
+            community_contribution: 4,
+            current_focus: 5,
+            application_notes: 6,
+            technical_depth_choice: 7, technical_depth_answer: 7,
+            practical_experience: 8,
+            critical_thinking: 9
           };
-          return map[field] || 0;
+          return Object.prototype.hasOwnProperty.call(map, field) ? map[field] : 0;
         },
 
         // ---- Final submit ----
@@ -458,29 +560,18 @@
           }).then(function (res) {
             self.submitting = false;
             if (res.ok) {
-              // Success morph: button becomes a checkmark for a
-              // moment so the click feels confirmed, then
-              // navigate to /pending. Server already created
-              // the session cookie.
               self.submitted = true;
               setTimeout(function () {
                 window.location.href = '/pending';
               }, 600);
               return;
             }
-            // 400 with structured field info: pin the message to
-            // the right input AND jump to its owning step so the
-            // user sees the failure inline, not as a top banner
-            // five steps away.
             if (res.status === 400 && res.body && res.body.field) {
               var msg = res.body.message || res.body.code || 'invalid input';
               self.fieldErrors[res.body.field] = msg;
               self.goToStep(self.stepForField(res.body.field));
               return;
             }
-            // 409 username conflict, 5xx, or other unstructured
-            // response: top-of-card banner that stays visible
-            // across step changes.
             self.submitError =
               (res.body && (res.body.error || res.body.message)) ||
               'Registration failed (' + res.status + ')';
