@@ -217,6 +217,11 @@ func dummyAdminContent(viewer *model.User) map[string]any {
 				CommunityContribution: "Hardware integration write-ups, security reviews.",
 				CurrentFocus:          "Cross-compiling SimpleGoX for ARM SBCs.",
 				ApplicationNotes:      "Available for code review on weekends.",
+				// Sprint Y.1 knowledge questions
+				TechnicalDepthChoice: "a",
+				TechnicalDepthAnswer: "Double Ratchet's main weak point is the post-compromise recovery window: an attacker who briefly captured a chain key sees every message until the next ratchet step. With high-latency channels this gap matters.",
+				PracticalExperience:  "Yes - I run a SimpleX SMP relay on a small SBC for personal contacts.",
+				CriticalThinking:     "Telegram's marketing of 'secret chats' as the same product as default cloud chats - they are not, and most users never enable secret chats.",
 			},
 			"Rating": &model.ApplicationRating{
 				UserID:                7,

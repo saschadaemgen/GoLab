@@ -348,7 +348,14 @@
             ecosystem_connection: form.ecosystem_connection ? form.ecosystem_connection.value : '',
             community_contribution: form.community_contribution ? form.community_contribution.value : '',
             current_focus: form.current_focus ? form.current_focus.value : '',
-            application_notes: form.application_notes ? form.application_notes.value : ''
+            application_notes: form.application_notes ? form.application_notes.value : '',
+            // Sprint Y.1 knowledge questions. technical_depth_choice
+            // is a hidden input fed by the choice picker's Alpine
+            // scope; the other three are normal textareas.
+            technical_depth_choice: form.technical_depth_choice ? form.technical_depth_choice.value : '',
+            technical_depth_answer: form.technical_depth_answer ? form.technical_depth_answer.value : '',
+            practical_experience: form.practical_experience ? form.practical_experience.value : '',
+            critical_thinking: form.critical_thinking ? form.critical_thinking.value : ''
           };
 
           fetch('/api/register', {

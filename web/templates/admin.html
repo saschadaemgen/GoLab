@@ -130,6 +130,53 @@
             <span x-show="error" x-cloak class="form-error" x-text="error"></span>
           </div>
         </div>
+
+        {{/* Sprint Y.1 knowledge-question answers. Sit below the
+             5-star ratings + notes; explicitly framed as separate
+             evaluation input. The intro line tells the admin not
+             to mistake these for a sixth rating dimension. Each
+             answer renders as a labelled read-only block; missing
+             answers (no choice picked, optional fields blank)
+             render as muted "no answer" placeholders so the admin
+             knows the applicant skipped vs. that the field never
+             reached the row. */}}
+        <div class="knowledge-answers">
+          <p class="knowledge-intro">
+            Knowledge answers - read carefully, evaluate substance over
+            length. These do not enter the 5-dimensional rating above.
+            Use them to inform your final approve/reject decision.
+          </p>
+
+          <div class="knowledge-answer-block">
+            <h4>
+              Technical depth
+              {{ if $u.TechnicalDepthChoice }}(choice {{ $u.TechnicalDepthChoice }}){{ end }}
+            </h4>
+            {{ if $u.TechnicalDepthAnswer }}
+            <p class="knowledge-answer-text">{{ $u.TechnicalDepthAnswer }}</p>
+            {{ else }}
+            <p class="knowledge-answer-text muted">No answer.</p>
+            {{ end }}
+          </div>
+
+          <div class="knowledge-answer-block">
+            <h4>Practical experience</h4>
+            {{ if $u.PracticalExperience }}
+            <p class="knowledge-answer-text">{{ $u.PracticalExperience }}</p>
+            {{ else }}
+            <p class="knowledge-answer-text muted">No answer (optional).</p>
+            {{ end }}
+          </div>
+
+          <div class="knowledge-answer-block">
+            <h4>Critical thinking</h4>
+            {{ if $u.CriticalThinking }}
+            <p class="knowledge-answer-text">{{ $u.CriticalThinking }}</p>
+            {{ else }}
+            <p class="knowledge-answer-text muted">No answer (optional).</p>
+            {{ end }}
+          </div>
+        </div>
       </div>
     </div>
     {{ end }}

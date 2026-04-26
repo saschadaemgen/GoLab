@@ -32,6 +32,7 @@ type AuthHandler struct {
 // registerRequest carries the application-form fields. Sprint X
 // removed the email field and added five application fields the
 // admin reviews before flipping the user from pending to active.
+// Sprint Y.1 added the four knowledge-question fields.
 type registerRequest struct {
 	Username              string `json:"username"`
 	Password              string `json:"password"`
@@ -40,6 +41,11 @@ type registerRequest struct {
 	CommunityContribution string `json:"community_contribution"`
 	CurrentFocus          string `json:"current_focus"`
 	ApplicationNotes      string `json:"application_notes"`
+	// Sprint Y.1 knowledge questions
+	TechnicalDepthChoice string `json:"technical_depth_choice"`
+	TechnicalDepthAnswer string `json:"technical_depth_answer"`
+	PracticalExperience  string `json:"practical_experience"`
+	CriticalThinking     string `json:"critical_thinking"`
 }
 
 // loginRequest carries the credentials. Sprint X switched login from
@@ -74,6 +80,11 @@ func decodeRegister(r *http.Request) (registerRequest, error) {
 		req.CommunityContribution = r.Form.Get("community_contribution")
 		req.CurrentFocus = r.Form.Get("current_focus")
 		req.ApplicationNotes = r.Form.Get("application_notes")
+		// Sprint Y.1 knowledge questions
+		req.TechnicalDepthChoice = r.Form.Get("technical_depth_choice")
+		req.TechnicalDepthAnswer = r.Form.Get("technical_depth_answer")
+		req.PracticalExperience = r.Form.Get("practical_experience")
+		req.CriticalThinking = r.Form.Get("critical_thinking")
 		return req, nil
 	}
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -146,7 +157,20 @@ const (
 	communityContributionMax = 600 // was 400
 	currentFocusMax          = 400 // was 300
 	applicationNotesMax      = 300 // was 200
+	// Sprint Y.1 knowledge questions
+	technicalDepthAnswerMin = 100 // required
+	technicalDepthAnswerMax = 500
+	practicalExperienceMax  = 400 // optional
+	criticalThinkingMax     = 400 // optional
 )
+
+// validTechnicalDepthChoices is the allow-list for the choice
+// picker on /register. Empty string is rejected by the handler;
+// it shows up in the DB only on legacy users from before Sprint
+// Y.1 (per migration 028 default).
+var validTechnicalDepthChoices = map[string]bool{
+	"a": true, "b": true, "c": true,
+}
 
 // fieldError carries a structured validation failure. Field is the
 // JSON / form-input key the message belongs to ("ecosystem_connection",
@@ -253,6 +277,55 @@ func validateApplication(req *registerRequest) error {
 			Field:   "application_notes",
 			Code:    "application_notes_too_long",
 			Message: fmt.Sprintf("at most %d characters", applicationNotesMax),
+		}
+	}
+
+	// Sprint Y.1 knowledge questions. Trim first so leading /
+	// trailing whitespace does not confuse the length gate.
+	req.TechnicalDepthChoice = strings.TrimSpace(req.TechnicalDepthChoice)
+	req.TechnicalDepthAnswer = strings.TrimSpace(req.TechnicalDepthAnswer)
+	req.PracticalExperience = strings.TrimSpace(req.PracticalExperience)
+	req.CriticalThinking = strings.TrimSpace(req.CriticalThinking)
+
+	// Technical depth: choice required (a / b / c), answer 100-500.
+	if !validTechnicalDepthChoices[req.TechnicalDepthChoice] {
+		return &fieldError{
+			Field:   "technical_depth_choice",
+			Code:    "technical_depth_choice_invalid",
+			Message: "please pick one of the three sub-questions (a, b, or c)",
+		}
+	}
+	if len(req.TechnicalDepthAnswer) < technicalDepthAnswerMin {
+		return &fieldError{
+			Field:   "technical_depth_answer",
+			Code:    "technical_depth_answer_too_short",
+			Message: fmt.Sprintf("at least %d characters", technicalDepthAnswerMin),
+		}
+	}
+	if len(req.TechnicalDepthAnswer) > technicalDepthAnswerMax {
+		return &fieldError{
+			Field:   "technical_depth_answer",
+			Code:    "technical_depth_answer_too_long",
+			Message: fmt.Sprintf("at most %d characters", technicalDepthAnswerMax),
+		}
+	}
+
+	// Practical experience and critical thinking: optional, max only.
+	// Honest "no" answers are accepted; we deliberately do NOT enforce
+	// a minimum so an applicant who has not run this stack yet can
+	// say so without padding.
+	if len(req.PracticalExperience) > practicalExperienceMax {
+		return &fieldError{
+			Field:   "practical_experience",
+			Code:    "practical_experience_too_long",
+			Message: fmt.Sprintf("at most %d characters", practicalExperienceMax),
+		}
+	}
+	if len(req.CriticalThinking) > criticalThinkingMax {
+		return &fieldError{
+			Field:   "critical_thinking",
+			Code:    "critical_thinking_too_long",
+			Message: fmt.Sprintf("at most %d characters", criticalThinkingMax),
 		}
 	}
 	return nil
@@ -368,6 +441,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		CommunityContribution: req.CommunityContribution,
 		CurrentFocus:          req.CurrentFocus,
 		ApplicationNotes:      req.ApplicationNotes,
+		TechnicalDepthChoice:  req.TechnicalDepthChoice,
+		TechnicalDepthAnswer:  req.TechnicalDepthAnswer,
+		PracticalExperience:   req.PracticalExperience,
+		CriticalThinking:      req.CriticalThinking,
 	})
 	if err != nil {
 		slog.Error("register: create user", "error", err)

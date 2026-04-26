@@ -48,6 +48,30 @@ func TestUser_HasApplicationFields(t *testing.T) {
 	}
 }
 
+// TestUser_HasKnowledgeFields locks in the four Sprint Y.1 fields.
+// Same shape as the application-fields guard above; ensures a future
+// refactor that moves these to a separate table also updates the
+// downstream stripping in profile.go / pages.go.
+func TestUser_HasKnowledgeFields(t *testing.T) {
+	tt := reflect.TypeOf(User{})
+	required := []string{
+		"TechnicalDepthChoice",
+		"TechnicalDepthAnswer",
+		"PracticalExperience",
+		"CriticalThinking",
+	}
+	for _, name := range required {
+		f, ok := tt.FieldByName(name)
+		if !ok {
+			t.Errorf("User is missing the %s field added in Sprint Y.1", name)
+			continue
+		}
+		if f.Type.Kind() != reflect.String {
+			t.Errorf("User.%s should be string, got %s", name, f.Type)
+		}
+	}
+}
+
 // TestUserStore_HasPromoteMethod guards the Sprint X.2 Promote
 // method's existence and signature. The auth handler's first-user
 // auto-promote path calls h.Users.Promote(ctx, id, level) without

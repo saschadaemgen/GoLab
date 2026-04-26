@@ -3948,3 +3948,240 @@ img.avatar {
   font-size: 0.85rem;
   color: var(--text-dim);
 }
+
+/* Sprint Y.1 register page redesign.
+   Two-column layout >=1024px (40% framing copy + 60% form),
+   stacks to single column on smaller screens. The framing copy
+   becomes sticky on desktop so it stays visible while the
+   applicant scrolls the long form.
+
+   .register-layout replaces .auth-container as the page-level
+   wrapper specifically for /register; .auth-container is still
+   used by /login. */
+.register-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  max-width: 1100px;
+  margin: 0 auto;
+  gap: 2rem;
+  padding: 2rem 1rem;
+}
+@media (min-width: 1024px) {
+  .register-layout {
+    grid-template-columns: 40% 1fr;
+    gap: 3rem;
+    padding: 3rem 2rem;
+  }
+}
+.register-intro {
+  color: var(--text);
+}
+@media (min-width: 1024px) {
+  .register-intro {
+    position: sticky;
+    top: 5rem;
+    align-self: start;
+  }
+}
+.register-intro h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+  color: var(--text-bright);
+}
+.register-intro p {
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0 0 1rem;
+}
+.ecosystem-icons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+.ecosystem-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Form column container. Each section gets its own card so the
+   long form has visual rhythm. */
+.register-form-col {
+  min-width: 0; /* allow textarea shrink inside grid */
+}
+.register-form-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.register-form-section h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-bright);
+}
+.register-form-section .section-intro {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0 0 1.5rem;
+}
+.register-form-section .section-intro strong {
+  color: var(--text);
+}
+
+/* Tooltip system for "?" icons next to form labels. The trigger
+   is inline-flex so it sits centered next to the label text. The
+   popover is absolutely positioned above it; pointer-events:none
+   prevents the popover from interfering with hover-out detection
+   on the trigger. */
+.tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  margin-left: 0.4rem;
+  cursor: help;
+  vertical-align: middle;
+}
+.tooltip-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+.tooltip-trigger:hover .tooltip-icon,
+.tooltip-trigger[aria-expanded="true"] .tooltip-icon {
+  color: var(--accent);
+}
+.tooltip-popover {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  z-index: 100;
+  pointer-events: none;
+  font-weight: normal;
+}
+@media (max-width: 480px) {
+  .tooltip-popover {
+    width: 240px;
+    left: 0;
+    transform: none;
+  }
+}
+
+/* Choice picker for the technical_depth question. Three buttons
+   stacked vertically; selected one has the accent border + tinted
+   background. Buttons are full text-aligned so long question
+   bodies wrap cleanly. */
+.choice-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.choice-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.choice-btn:hover {
+  border-color: var(--accent);
+}
+.choice-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle, rgba(26, 125, 90, 0.1));
+}
+.choice-label {
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.choice-text {
+  flex: 1;
+}
+.knowledge-question textarea[name="technical_depth_answer"] {
+  margin-top: 0.5rem;
+}
+
+/* Full-width submit button variant. Sprint Y.1 register page
+   spans this across the form column for visual weight. */
+.btn-block {
+  display: inline-block;
+  width: 100%;
+}
+
+/* Sprint Y.1 admin knowledge-answer blocks. Read-only paragraphs
+   below the rating widgets, with a heading per question and a
+   "evaluate substance" intro paragraph above all three. */
+.knowledge-answers {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.knowledge-answers .knowledge-intro {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  margin: 0 0 1rem;
+  font-style: italic;
+}
+.knowledge-answer-block {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.knowledge-answer-block h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--text-bright);
+}
+.knowledge-answer-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  line-height: 1.55;
+}
+.knowledge-answer-text.muted {
+  color: var(--text-muted);
+  font-style: italic;
+}

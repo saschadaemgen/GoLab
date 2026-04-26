@@ -108,6 +108,11 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 	user.CommunityContribution = ""
 	user.CurrentFocus = ""
 	user.ApplicationNotes = ""
+	// Sprint Y.1 knowledge questions: same moderation-only treatment.
+	user.TechnicalDepthChoice = ""
+	user.TechnicalDepthAnswer = ""
+	user.PracticalExperience = ""
+	user.CriticalThinking = ""
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":            user,
