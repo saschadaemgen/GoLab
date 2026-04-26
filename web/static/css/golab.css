@@ -4203,8 +4203,10 @@ img.avatar {
    in this file. */
 
 .wiz-root {
+  /* Sprint Y.5 layout v2: NO min-height. The wizard collapses to
+     its content height. The page background outside the wizard
+     is provided by the body / particle layer behind it. */
   position: relative;
-  min-height: calc(100vh - 4rem);
   background: var(--bg, #0d1117);
   color: var(--text, #c9d1d9);
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -4224,11 +4226,14 @@ img.avatar {
 }
 
 .wiz-layout {
+  /* Sprint Y.5: no min-height. align-items: stretch (the grid
+     default) keeps the sidebar same height as the main column,
+     so the right column drives the height of both. */
   display: grid;
   grid-template-columns: 1fr;
   max-width: 1280px;
   margin: 0 auto;
-  min-height: calc(100vh - 4rem - 3px);
+  align-items: stretch;
 }
 @media (min-width: 1024px) {
   .wiz-layout { grid-template-columns: 320px 1fr; }
@@ -4319,7 +4324,14 @@ img.avatar {
 }
 
 .wiz-sidebar-quote {
-  margin-top: 2rem;
+  /* Sprint Y.5: pin to the bottom of the sidebar via auto top
+     margin. The sidebar is a flex column (parent rule); auto
+     consumes any unused vertical space above the quote so it
+     always sits at the foot of the column even when the step
+     list does not fill the height. Min-margin keeps a 32px
+     breathing room when the list IS tall enough to push the
+     quote down naturally. */
+  margin-top: auto;
   padding: 1rem;
   background: var(--accent-subtle, rgba(26, 125, 90, 0.06));
   border-left: 2px solid var(--accent);
@@ -4344,19 +4356,20 @@ img.avatar {
 }
 
 /* ---- Main column ---- */
-/* Sprint Y.4: min-height keeps the column tall enough to host
-   the column-background gradient on tall viewports without
-   stretching the inner content. Content takes its natural
-   height; .wiz-footer adds a 4rem margin-top so it sits at
-   "last content + 4rem", not at the viewport bottom. */
+/* Sprint Y.5 layout v2: content drives the height. No min-height
+   stretch - on a tall viewport with a short step (e.g. Welcome,
+   Account) the wizard ends naturally below the footer instead
+   of pinning the footer to the viewport bottom with hundreds of
+   pixels of dead space above it. The column is a flex container
+   so direct children stack vertically; .wiz-footer's margin-top
+   is now 32px (down from 64px in Y.4) since the visual rhythm
+   reads better with content-sized cards. */
 .wiz-main {
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
   position: relative;
   overflow: hidden;
-  min-height: 100vh;
-  min-height: 100dvh; /* dvh on mobile when supported */
 }
 @media (min-width: 1024px) {
   .wiz-main { padding: 4rem; }
@@ -4689,20 +4702,16 @@ img.avatar {
 .wiz-choice-text { font-size: 0.95rem; }
 
 /* ---- Footer (action row) ---- */
-/* Sprint Y.4: footer sits naturally below content with a 4rem
-   breathing room (margin-top), NOT pushed to the bottom of the
-   viewport via margin-top: auto. On a 1080px screen with two
-   form inputs the footer sits ~80px below the last input; on a
-   long review step it sits below the summary blocks. The card
-   shrinks to its natural content height; the .wiz-main flex
-   column gives the page a min-height of 100vh so the
-   background extends to the viewport edge, but content does
-   not stretch. */
+/* Sprint Y.5: 32px breathing room (was 64px in Y.4). With the
+   column no longer stretched to viewport height, the visual
+   weight reads better with a tighter footer-to-content gap.
+   On short steps the footer sits ~32px below the last input;
+   on long steps (Review) it follows the summary blocks. */
 .wiz-footer {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  margin-top: 4rem;
+  margin-top: 2rem;
   padding-top: 2rem;
   border-top: 1px solid var(--border);
 }
@@ -4935,3 +4944,51 @@ img.avatar {
   color: var(--accent);
   font-weight: inherit;
 }
+
+
+/* =============================================================
+   Sprint Y.5 wizard cascade animations
+   =============================================================
+   Each step's direct children fade up sequentially when the step
+   becomes active, so a step "assembles" itself in front of the
+   user instead of all elements appearing at once. Total cascade
+   time ~1100ms which feels like a film transition rather than a
+   form load.
+
+   The cascade re-fires on every step change because each step is
+   wrapped in <template x-if="step === N"> in register.html: when
+   step changes, Alpine destroys the previous element and mounts
+   the new one. CSS animations fire on the freshly-mounted DOM
+   nodes.
+
+   `backwards` fill mode is critical: it keeps each child invisible
+   during its delay (otherwise children flash visible at t=0 then
+   animate in, which looks broken). */
+@keyframes wiz-element-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wiz-step-pane > * {
+  animation: wiz-element-enter 500ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Stagger by direct-child position. The :nth-child sequence is
+   tuned so the cascade reads as: badge -> headline -> helper ->
+   input -> meta. Steps with more elements (Review) extend the
+   sequence naturally. */
+.wiz-step-pane > *:nth-child(1) { animation-delay: 60ms;   animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(2) { animation-delay: 220ms;  animation-duration: 500ms; }
+.wiz-step-pane > *:nth-child(3) { animation-delay: 380ms;  animation-duration: 500ms; }
+.wiz-step-pane > *:nth-child(4) { animation-delay: 540ms;  animation-duration: 500ms; }
+.wiz-step-pane > *:nth-child(5) { animation-delay: 700ms;  animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(6) { animation-delay: 860ms;  animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(7) { animation-delay: 1020ms; animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(8) { animation-delay: 1180ms; animation-duration: 400ms; }
+.wiz-step-pane > *:nth-child(9) { animation-delay: 1340ms; animation-duration: 400ms; }
