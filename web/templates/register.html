@@ -1,406 +1,616 @@
 {{ define "content" }}
 {{/*
-  Sprint Y.1 application form. Replaces the Sprint X / X.1
-  single-column auth-card layout with a two-column desktop grid:
+  Sprint Y.2 registration wizard. Replaces the Sprint Y.1
+  single-page two-column form with a 5-step cinematic flow:
 
-    LEFT  (40%, sticky):  framing copy + ecosystem icons
-    RIGHT (60%, scroll):  form in three labelled sections
-      1. Account            (username + password)
-      2. About you          (5 application fields)
-      3. Knowledge questions (3 fields incl. choice picker)
+    step 0  Welcome           (intro, no fields)
+    step 1  Account            (username + password)
+    step 2  About you          (5 application fields)
+    step 3  Knowledge          (3 questions incl. choice picker)
+    step 4  Review and Submit  (summary + final submit)
 
-  On viewports < 1024px the layout stacks to a single column with
-  the framing copy on top and the form below. CSS handles that
-  via .register-layout grid-template-columns.
+  All step state and form data live in one Alpine component
+  (`registrationWizard` in golab.js). The component holds:
+    - step                current step (0-4)
+    - direction           "forward" / "backward" (drives slide CSS)
+    - data                map of all 11 form field values
+    - submitting          boolean, used by the submit button morph
+    - fieldErrors         map of field-name -> error message
+    - submitError         top-of-card banner for non-field errors
 
-  Every form field gets a small `?` tooltip-trigger next to the
-  label. Hover desktop / tap mobile shows a popover explaining
-  the field. The popover lives in pure Alpine + CSS, no library.
+  Step transitions slide horizontally based on `direction` so the
+  user feels which way they are going. CSS rules in golab.css
+  match `[data-direction="forward"]` / `[data-direction="backward"]`
+  on the .wizard-container root.
 
-  The technical_depth question has a sub-choice picker (a / b / c).
-  Only the selected sub-question reveals its answer textarea, so
-  applicants do not feel obligated to answer all three. The
-  selected choice writes into a hidden input so the existing
-  registerForm submit picks it up.
-
-  Live counters and registerForm() submit / inline-error wiring
-  carry over unchanged from Sprint X.1.
+  The wizard validates each step before advancing; on the final
+  submit, validation errors from the server jump back to the
+  step that owns the offending field via stepForField().
 */}}
-<div class="register-layout" x-data="registerForm">
+<div class="wizard-container"
+     x-data="registrationWizard"
+     :data-direction="direction">
 
-  {{/* ===== LEFT COLUMN: framing ===== */}}
-  <aside class="register-intro">
-    <h1>Welcome to GoLab</h1>
-    <p>
-      GoLab is the developer community for the SimpleGo ecosystem.
-      It is privacy-first, code-focused, and built for people who
-      actually contribute - not just lurk.
-    </p>
-    <p>
-      Read access is open to everyone. Write access is curated. We
-      review every application personally because we believe small
-      focused groups produce better technical conversation than open
-      free-for-alls. If your application is thoughtful and shows real
-      expertise or interest, you will hear back within seven days.
-    </p>
-    <p>
-      You can browse all public posts immediately after registration.
-      If we approve your application, you can post, comment, react
-      and join project work. If we reject, you keep read access but
-      cannot write.
-    </p>
-
-    <div class="ecosystem-icons" aria-label="Ecosystem you're applying to contribute to">
-      <div class="ecosystem-icon"><span>SimpleGo</span></div>
-      <div class="ecosystem-icon"><span>GoChat</span></div>
-      <div class="ecosystem-icon"><span>GoBot</span></div>
-      <div class="ecosystem-icon"><span>GoUNITY</span></div>
-      <div class="ecosystem-icon"><span>GoKey</span></div>
-      <div class="ecosystem-icon"><span>SimpleGoX</span></div>
+  {{/* ===== Progress bar (steps 1-4 only) ===== */}}
+  <div class="wizard-progress" x-show="step > 0" x-cloak>
+    <div class="wizard-progress-track">
+      <div class="wizard-progress-fill"
+           :style="`width: ${(step / 4) * 100}%`"></div>
     </div>
-  </aside>
+    <div class="wizard-progress-steps">
+      <span :class="{ active: step >= 1 }">Account</span>
+      <span :class="{ active: step >= 2 }">About</span>
+      <span :class="{ active: step >= 3 }">Knowledge</span>
+      <span :class="{ active: step >= 4 }">Review</span>
+    </div>
+  </div>
 
-  {{/* ===== RIGHT COLUMN: form ===== */}}
-  <div class="register-form-col">
+  {{/* Top-of-card non-field error banner. Shown when the server
+       returns 5xx or a 400 without a field key (e.g. username
+       conflict). Field-specific errors render inline next to the
+       offending input on whatever step that field belongs to. */}}
+  <div class="flash flash-error" role="alert"
+       x-show="submitError" x-cloak x-text="submitError"
+       style="margin-bottom: 1rem"></div>
 
-    {{ if .Content }}{{ with .Content }}{{ if .Error }}
-    <div class="flash flash-error" role="alert">{{ .Error }}</div>
-    {{ end }}{{ end }}{{ end }}
+  {{/* ===== Step 0: Welcome ===== */}}
+  <section class="wizard-step wizard-welcome"
+           x-show="step === 0" x-cloak
+           x-transition:enter="wizard-step-enter"
+           x-transition:enter-start="wizard-step-enter-start"
+           x-transition:enter-end="wizard-step-enter-end"
+           x-transition:leave="wizard-step-leave"
+           x-transition:leave-start="wizard-step-leave-start"
+           x-transition:leave-end="wizard-step-leave-end">
 
-    {{/* Generic top-of-form error from Alpine - shown when the
-         server returns 500 or a non-field error. Field-specific
-         errors render inline below their input instead. */}}
-    <div class="flash flash-error" role="alert"
-         x-show="formError" x-cloak x-text="formError"></div>
+    <h1 class="wizard-welcome-headline">Welcome to GoLab</h1>
+    <p class="wizard-welcome-subtitle">
+      Where SimpleGo developers actually build together.
+    </p>
 
-    <form id="register-form"
-          @submit.prevent="submit($event)"
-          autocomplete="off"
-          novalidate>
-
-      {{/* ----- Section 1: Account ----- */}}
-      <section class="register-form-section">
-        <h2>Account</h2>
-
-        <div class="form-group" x-data="{ count: 0, max: 32 }">
-          <label class="form-label" for="reg-username">
-            Username
-          </label>
-          <input class="form-input" type="text" id="reg-username" name="username"
-                 required minlength="3" maxlength="32"
-                 pattern="[A-Za-z0-9_]+"
-                 autocomplete="username"
-                 placeholder="yourhandle"
-                 @input="count = $event.target.value.length">
-          <div class="form-counter"
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">32</span>
-          </div>
-          <div class="form-hint">3-32 characters, letters, numbers and underscores. Cannot be changed later by you.</div>
-          <div class="form-error" x-show="errors.username" x-cloak x-text="errors.username"></div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="reg-password">Password</label>
-          <input class="form-input" type="password" id="reg-password" name="password"
-                 required minlength="8" maxlength="128"
-                 autocomplete="new-password"
-                 placeholder="At least 8 characters">
-          <div class="form-error" x-show="errors.password" x-cloak x-text="errors.password"></div>
-        </div>
-      </section>
-
-      {{/* ----- Section 2: About you ----- */}}
-      <section class="register-form-section">
-        <h2>About you</h2>
-
-        <div class="form-group" x-data="{ count: 0, max: 500 }">
-          <label class="form-label" for="reg-external-links">
-            Where can we see your work?
-            <span class="tooltip-trigger" x-data="{ open: false }"
-                  @mouseenter="open = true" @mouseleave="open = false"
-                  @click="open = !open" @click.outside="open = false">
-              <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
-                Optional but very helpful. Link to GitHub, Codeberg, personal site, or anything where we can see what you have built. Helps us evaluate your track record.
-              </span>
-            </span>
-          </label>
-          <textarea class="form-input form-textarea" id="reg-external-links"
-                    name="external_links"
-                    maxlength="500" rows="2"
-                    @input="count = $event.target.value.length"
-                    placeholder="https://github.com/yourhandle  https://yourdomain.com"></textarea>
-          <div class="form-counter"
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">500</span>
-          </div>
-          <div class="form-error" x-show="errors.external_links" x-cloak x-text="errors.external_links"></div>
-        </div>
-
-        <div class="form-group" x-data="{ count: 0, max: 800 }">
-          <label class="form-label" for="reg-ecosystem">
-            How are you connected to the SimpleGo ecosystem?
-            <span class="tooltip-trigger" x-data="{ open: false }"
-                  @mouseenter="open = true" @mouseleave="open = false"
-                  @click="open = !open" @click.outside="open = false">
-              <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
-                Required. We want to know if you actually use SimpleGo, GoChat, SimpleGoX, or research the underlying tech (SimpleX, SMP, hardware security). Be specific - vague answers like "I care about privacy" do not pass.
-              </span>
-            </span>
-          </label>
-          <textarea class="form-input form-textarea" id="reg-ecosystem"
-                    name="ecosystem_connection"
-                    required minlength="30" maxlength="800" rows="4"
-                    @input="count = $event.target.value.length"
-                    placeholder="Are you using or building on SimpleGo / GoChat / SimpleGoX? Researching SMP or the underlying privacy tech? Be specific."></textarea>
-          <div class="form-counter"
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">800</span>
-            <template x-if="count > 0 && count < 30">
-              <span class="form-hint-inline">(at least 30 characters)</span>
-            </template>
-          </div>
-          <div class="form-error" x-show="errors.ecosystem_connection" x-cloak x-text="errors.ecosystem_connection"></div>
-        </div>
-
-        <div class="form-group" x-data="{ count: 0, max: 600 }">
-          <label class="form-label" for="reg-contribution">
-            What would you contribute to this community?
-            <span class="tooltip-trigger" x-data="{ open: false }"
-                  @mouseenter="open = true" @mouseleave="open = false"
-                  @click="open = !open" @click.outside="open = false">
-              <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
-                Required. What expertise or perspective would you bring? Examples: protocol-level discussion, hardware integration, security review, deployment notes, documentation. Specific beats general.
-              </span>
-            </span>
-          </label>
-          <textarea class="form-input form-textarea" id="reg-contribution"
-                    name="community_contribution"
-                    required minlength="30" maxlength="600" rows="4"
-                    @input="count = $event.target.value.length"
-                    placeholder="Protocol-level discussion, hardware integration, security review, deployment notes, documentation."></textarea>
-          <div class="form-counter"
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">600</span>
-            <template x-if="count > 0 && count < 30">
-              <span class="form-hint-inline">(at least 30 characters)</span>
-            </template>
-          </div>
-          <div class="form-error" x-show="errors.community_contribution" x-cloak x-text="errors.community_contribution"></div>
-        </div>
-
-        <div class="form-group" x-data="{ count: 0, max: 400 }">
-          <label class="form-label" for="reg-focus">
-            What is your current focus or open question?
-            <span class="tooltip-trigger" x-data="{ open: false }"
-                  @mouseenter="open = true" @mouseleave="open = false"
-                  @click="open = !open" @click.outside="open = false">
-              <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
-                Optional. The thing you would actually post about in your first week. Helps us see what you bring to recent discussions.
-              </span>
-            </span>
-          </label>
-          <textarea class="form-input form-textarea" id="reg-focus"
-                    name="current_focus"
-                    maxlength="400" rows="3"
-                    @input="count = $event.target.value.length"
-                    placeholder="The thing you would actually post about in your first week."></textarea>
-          <div class="form-counter"
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">400</span>
-          </div>
-          <div class="form-error" x-show="errors.current_focus" x-cloak x-text="errors.current_focus"></div>
-        </div>
-
-        <div class="form-group" x-data="{ count: 0, max: 300 }">
-          <label class="form-label" for="reg-notes">
-            Anything else we should know?
-            <span class="tooltip-trigger" x-data="{ open: false }"
-                  @mouseenter="open = true" @mouseleave="open = false"
-                  @click="open = !open" @click.outside="open = false">
-              <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
-                Optional. Anything else relevant - other communities you contribute to, projects you maintain, languages you work in.
-              </span>
-            </span>
-          </label>
-          <textarea class="form-input form-textarea" id="reg-notes"
-                    name="application_notes"
-                    maxlength="300" rows="2"
-                    @input="count = $event.target.value.length"
-                    placeholder=""></textarea>
-          <div class="form-counter"
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">300</span>
-          </div>
-          <div class="form-error" x-show="errors.application_notes" x-cloak x-text="errors.application_notes"></div>
-        </div>
-      </section>
-
-      {{/* ----- Section 3: Knowledge questions ----- */}}
-      <section class="register-form-section">
-        <h2>Knowledge questions</h2>
-        <p class="section-intro">
-          These three questions help us verify technical depth.
-          They are answered honestly in your own words. Length is
-          not the goal, substance is. These answers are evaluated
-          separately and do <strong>not</strong> count toward your
-          application rating - they help us decide approve/reject.
+    <div class="wizard-welcome-grid wizard-stagger">
+      <div class="wizard-welcome-card">
+        <h3>What this is</h3>
+        <p>
+          GoLab is the developer community for the SimpleGo
+          ecosystem. Privacy-first, code-focused, built for
+          people who actually contribute.
         </p>
+      </div>
+      <div class="wizard-welcome-card">
+        <h3>Why we curate</h3>
+        <p>
+          Read access is open to everyone. Write access is
+          reviewed personally. Small focused groups produce
+          better technical conversation than open free-for-alls.
+        </p>
+      </div>
+      <div class="wizard-welcome-card">
+        <h3>What to expect</h3>
+        <p>
+          Five steps, about 10 minutes. We respond within seven
+          days. You can browse all public posts immediately
+          after registering.
+        </p>
+      </div>
+    </div>
 
-        {{/* Technical depth: choice picker + textarea (only the
-             selected sub-question reveals the textarea). The
-             choice value writes into a hidden input that the
-             registerForm.submit() handler reads via the name=
-             attribute on the form element. */}}
-        <div class="form-group knowledge-question"
-             x-data="{ choice: '', count: 0, max: 500 }">
-          <label class="form-label">
-            Technical depth question
-            <span class="tooltip-trigger" x-data="{ open: false }"
-                  @mouseenter="open = true" @mouseleave="open = false"
-                  @click="open = !open" @click.outside="open = false">
-              <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
-                Required. Pick ONE sub-question and answer in your own words. We are testing whether you understand the protocols, not whether you can quote the spec. Wrong-but-thoughtful beats right-but-shallow.
-              </span>
-            </span>
-          </label>
+    <div class="wizard-welcome-ecosystem" aria-label="Ecosystem">
+      <span>SimpleGo</span>
+      <span>GoChat</span>
+      <span>GoBot</span>
+      <span>GoUNITY</span>
+      <span>GoKey</span>
+      <span>SimpleGoX</span>
+    </div>
 
-          <div class="choice-picker" role="radiogroup">
-            <button type="button" class="choice-btn"
-                    :class="{ selected: choice === 'a' }"
-                    :aria-pressed="choice === 'a' ? 'true' : 'false'"
-                    @click="choice = 'a'">
-              <span class="choice-label">a)</span>
-              <span class="choice-text">
-                What is your biggest critique of the Double Ratchet algorithm as used in Signal or SimpleX?
-              </span>
-            </button>
-            <button type="button" class="choice-btn"
-                    :class="{ selected: choice === 'b' }"
-                    :aria-pressed="choice === 'b' ? 'true' : 'false'"
-                    @click="choice = 'b'">
-              <span class="choice-label">b)</span>
-              <span class="choice-text">
-                Why did Matrix choose Megolm over Olm for group chats? What trade-offs does this introduce?
-              </span>
-            </button>
-            <button type="button" class="choice-btn"
-                    :class="{ selected: choice === 'c' }"
-                    :aria-pressed="choice === 'c' ? 'true' : 'false'"
-                    @click="choice = 'c'">
-              <span class="choice-label">c)</span>
-              <span class="choice-text">
-                SimpleX claims "no user identifiers." Where does this claim hit limits in practice (e.g. directory services, bots, persistent contacts)?
-              </span>
-            </button>
-          </div>
+    <div class="wizard-actions" style="border-top: none; padding-top: 0; justify-content: center;">
+      <button type="button"
+              class="btn btn-primary btn-lg wizard-cta-pulse"
+              @click="next()">
+        Begin application &rarr;
+      </button>
+    </div>
 
-          {{/* Hidden input fed by Alpine. registerForm.submit() reads
-               form.technical_depth_choice.value, so this name= is
-               load-bearing. */}}
-          <input type="hidden" name="technical_depth_choice" :value="choice">
+    <div class="auth-footer" style="margin-top: 1.5rem">
+      Already a member? <a href="/login" hx-boost="true">Log in</a>
+    </div>
+  </section>
 
-          <textarea x-show="choice" x-cloak x-transition.opacity
-                    class="form-input form-textarea"
-                    name="technical_depth_answer"
-                    minlength="100" maxlength="500" rows="6"
-                    @input="count = $event.target.value.length"
-                    placeholder="Your answer in 100-500 characters..."></textarea>
-          <div class="form-counter" x-show="choice" x-cloak
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">500</span>
-            <template x-if="count > 0 && count < 100">
-              <span class="form-hint-inline">(at least 100 characters)</span>
-            </template>
-          </div>
-          <div class="form-error" x-show="errors.technical_depth_choice" x-cloak x-text="errors.technical_depth_choice"></div>
-          <div class="form-error" x-show="errors.technical_depth_answer" x-cloak x-text="errors.technical_depth_answer"></div>
-        </div>
+  {{/* ===== Step 1: Account ===== */}}
+  <section class="wizard-step"
+           x-show="step === 1" x-cloak
+           x-transition:enter="wizard-step-enter"
+           x-transition:enter-start="wizard-step-enter-start"
+           x-transition:enter-end="wizard-step-enter-end"
+           x-transition:leave="wizard-step-leave"
+           x-transition:leave-start="wizard-step-leave-start"
+           x-transition:leave-end="wizard-step-leave-end">
 
-        <div class="form-group" x-data="{ count: 0, max: 400 }">
-          <label class="form-label" for="reg-practical">
-            Practical experience
-            <span class="tooltip-trigger" x-data="{ open: false }"
-                  @mouseenter="open = true" @mouseleave="open = false"
-                  @click="open = !open" @click.outside="open = false">
-              <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
-                Honest answer expected. If you have not run any of this infrastructure, write "no" and skip. We will not hold it against you alone, but it weighs in evaluation. Lying will be obvious.
-              </span>
-            </span>
-          </label>
-          <p class="form-hint">
-            Have you actually run a SimpleX server, GoChat node, hardware-security stack, or similar privacy infrastructure?
-            If yes: which, and what did you learn? If no: just say so.
-          </p>
-          <textarea class="form-input form-textarea" id="reg-practical"
-                    name="practical_experience"
-                    maxlength="400" rows="4"
-                    @input="count = $event.target.value.length"
-                    placeholder="Optional. Honest answer beats padded. 'no' is a valid answer."></textarea>
-          <div class="form-counter"
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">400</span>
-          </div>
-          <div class="form-error" x-show="errors.practical_experience" x-cloak x-text="errors.practical_experience"></div>
-        </div>
+    <div class="wizard-step-indicator">Step 1 of 4 &middot; Account</div>
+    <h1 class="wizard-headline">Pick your handle</h1>
+    <p class="wizard-helper">
+      This is how the community will see you. Choose carefully -
+      you cannot change it later.
+    </p>
 
-        <div class="form-group" x-data="{ count: 0, max: 400 }">
-          <label class="form-label" for="reg-critical">
-            Critical thinking
-            <span class="tooltip-trigger" x-data="{ open: false }"
-                  @mouseenter="open = true" @mouseleave="open = false"
-                  @click="open = !open" @click.outside="open = false">
-              <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
-                Optional. Where do you see privacy theater? Be specific. "Big Tech" or "Closed Source" as answers count as no answer.
-              </span>
-            </span>
-          </label>
-          <p class="form-hint">
-            Where in the privacy / messaging space do you see the gap between marketing and reality? Specific examples beat broad accusations.
-          </p>
-          <textarea class="form-input form-textarea" id="reg-critical"
-                    name="critical_thinking"
-                    maxlength="400" rows="4"
-                    @input="count = $event.target.value.length"
-                    placeholder="Optional. Pick a specific product / protocol / claim and explain the gap."></textarea>
-          <div class="form-counter"
-               :class="{ 'near-limit': count > max * 0.9 && count <= max,
-                         'over-limit': count > max }">
-            <span x-text="count">0</span> / <span x-text="max">400</span>
-          </div>
-          <div class="form-error" x-show="errors.critical_thinking" x-cloak x-text="errors.critical_thinking"></div>
-        </div>
-      </section>
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-username">
+        Username
+        <span class="field-checkmark"
+              :class="{ shown: usernameValid() }"
+              aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </span>
+      </label>
+      <input class="form-input" type="text" id="reg-username"
+             x-model="data.username"
+             required minlength="3" maxlength="32"
+             pattern="[A-Za-z0-9_]+"
+             autocomplete="username"
+             placeholder="yourhandle">
+      <div class="form-counter"
+           :class="{ 'near-limit': data.username.length > 28, 'over-limit': data.username.length > 32 }">
+        <span x-text="data.username.length">0</span> / 32
+      </div>
+      <div class="form-hint">3-32 characters, letters, numbers and underscores.</div>
+      <div class="wizard-field-error" x-show="fieldErrors.username" x-cloak x-text="fieldErrors.username"></div>
+    </div>
 
-      <div class="auth-submit-row">
-        <button type="submit" class="btn btn-primary btn-lg btn-block"
-                :disabled="submitting">
-          <span x-show="!submitting">Submit application</span>
-          <span x-show="submitting" x-cloak>Submitting...</span>
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-password">
+        Password
+        <span class="field-checkmark"
+              :class="{ shown: passwordValid() }"
+              aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </span>
+      </label>
+      <input class="form-input" type="password" id="reg-password"
+             x-model="data.password"
+             required minlength="8" maxlength="128"
+             autocomplete="new-password"
+             placeholder="At least 8 characters">
+      <div class="form-hint">At least 8 characters. We do not enforce composition rules - long is better than weird.</div>
+      <div class="wizard-field-error" x-show="fieldErrors.password" x-cloak x-text="fieldErrors.password"></div>
+    </div>
+
+    <div class="wizard-actions">
+      <button type="button" class="btn-back" @click="back()">&larr; Welcome</button>
+      <div class="wizard-spacer"></div>
+      <button type="button" class="btn btn-primary btn-next"
+              @click="next()"
+              :disabled="!step1Valid()">
+        Continue &rarr;
+      </button>
+    </div>
+  </section>
+
+  {{/* ===== Step 2: About you ===== */}}
+  <section class="wizard-step"
+           x-show="step === 2" x-cloak
+           x-transition:enter="wizard-step-enter"
+           x-transition:enter-start="wizard-step-enter-start"
+           x-transition:enter-end="wizard-step-enter-end"
+           x-transition:leave="wizard-step-leave"
+           x-transition:leave-start="wizard-step-leave-start"
+           x-transition:leave-end="wizard-step-leave-end">
+
+    <div class="wizard-step-indicator">Step 2 of 4 &middot; About you</div>
+    <h1 class="wizard-headline">Tell us your story</h1>
+    <p class="wizard-helper">
+      We are looking for substance, not buzzwords. Vague answers
+      ("I care about privacy") do not pass.
+    </p>
+
+    {{/* External Links */}}
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-external-links">
+        Where can we see your work?
+        <span class="tooltip-trigger" x-data="{ open: false }"
+              @mouseenter="open = true" @mouseleave="open = false"
+              @click="open = !open" @click.outside="open = false">
+          <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
+            Optional but very helpful. Link to GitHub, Codeberg, personal site, or anything where we can see what you have built.
+          </span>
+        </span>
+      </label>
+      <textarea class="form-input form-textarea" id="reg-external-links"
+                x-model="data.external_links"
+                maxlength="500" rows="2"
+                placeholder="https://github.com/yourhandle  https://yourdomain.com"></textarea>
+      <div class="form-counter"
+           :class="{ 'near-limit': data.external_links.length > 450, 'over-limit': data.external_links.length > 500 }">
+        <span x-text="data.external_links.length">0</span> / 500
+      </div>
+      <div class="wizard-field-error" x-show="fieldErrors.external_links" x-cloak x-text="fieldErrors.external_links"></div>
+    </div>
+
+    {{/* Ecosystem connection */}}
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-ecosystem">
+        How are you connected to the SimpleGo ecosystem?
+        <span class="tooltip-trigger" x-data="{ open: false }"
+              @mouseenter="open = true" @mouseleave="open = false"
+              @click="open = !open" @click.outside="open = false">
+          <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
+            Required. Are you using SimpleGo / GoChat / SimpleGoX? Researching the underlying tech (SimpleX, SMP, hardware security)? Be specific.
+          </span>
+        </span>
+        <span class="field-checkmark"
+              :class="{ shown: data.ecosystem_connection.length >= 30 && data.ecosystem_connection.length <= 800 }"
+              aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+      </label>
+      <textarea class="form-input form-textarea" id="reg-ecosystem"
+                x-model="data.ecosystem_connection"
+                required minlength="30" maxlength="800" rows="4"
+                placeholder="Are you using or building on SimpleGo / GoChat / SimpleGoX? Researching SMP or the underlying privacy tech? Be specific."></textarea>
+      <div class="form-counter"
+           :class="{ 'near-limit': data.ecosystem_connection.length > 720, 'over-limit': data.ecosystem_connection.length > 800 }">
+        <span x-text="data.ecosystem_connection.length">0</span> / 800
+        <template x-if="data.ecosystem_connection.length > 0 && data.ecosystem_connection.length < 30">
+          <span class="form-hint-inline">(at least 30 characters)</span>
+        </template>
+      </div>
+      <div class="wizard-field-error" x-show="fieldErrors.ecosystem_connection" x-cloak x-text="fieldErrors.ecosystem_connection"></div>
+    </div>
+
+    {{/* Community contribution */}}
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-contribution">
+        What would you contribute to this community?
+        <span class="tooltip-trigger" x-data="{ open: false }"
+              @mouseenter="open = true" @mouseleave="open = false"
+              @click="open = !open" @click.outside="open = false">
+          <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
+            Required. Examples: protocol-level discussion, hardware integration, security review, deployment notes, documentation.
+          </span>
+        </span>
+        <span class="field-checkmark"
+              :class="{ shown: data.community_contribution.length >= 30 && data.community_contribution.length <= 600 }"
+              aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+      </label>
+      <textarea class="form-input form-textarea" id="reg-contribution"
+                x-model="data.community_contribution"
+                required minlength="30" maxlength="600" rows="4"
+                placeholder="Protocol-level discussion, hardware integration, security review, deployment notes, documentation."></textarea>
+      <div class="form-counter"
+           :class="{ 'near-limit': data.community_contribution.length > 540, 'over-limit': data.community_contribution.length > 600 }">
+        <span x-text="data.community_contribution.length">0</span> / 600
+        <template x-if="data.community_contribution.length > 0 && data.community_contribution.length < 30">
+          <span class="form-hint-inline">(at least 30 characters)</span>
+        </template>
+      </div>
+      <div class="wizard-field-error" x-show="fieldErrors.community_contribution" x-cloak x-text="fieldErrors.community_contribution"></div>
+    </div>
+
+    {{/* Current focus */}}
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-focus">
+        What is your current focus or open question?
+        <span class="tooltip-trigger" x-data="{ open: false }"
+              @mouseenter="open = true" @mouseleave="open = false"
+              @click="open = !open" @click.outside="open = false">
+          <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
+            Optional. The thing you would actually post about in your first week.
+          </span>
+        </span>
+      </label>
+      <textarea class="form-input form-textarea" id="reg-focus"
+                x-model="data.current_focus"
+                maxlength="400" rows="3"
+                placeholder="The thing you would actually post about in your first week."></textarea>
+      <div class="form-counter"
+           :class="{ 'near-limit': data.current_focus.length > 360, 'over-limit': data.current_focus.length > 400 }">
+        <span x-text="data.current_focus.length">0</span> / 400
+      </div>
+      <div class="wizard-field-error" x-show="fieldErrors.current_focus" x-cloak x-text="fieldErrors.current_focus"></div>
+    </div>
+
+    {{/* Application notes */}}
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-notes">
+        Anything else we should know?
+        <span class="tooltip-trigger" x-data="{ open: false }"
+              @mouseenter="open = true" @mouseleave="open = false"
+              @click="open = !open" @click.outside="open = false">
+          <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
+            Optional. Other communities you contribute to, projects you maintain, languages you work in.
+          </span>
+        </span>
+      </label>
+      <textarea class="form-input form-textarea" id="reg-notes"
+                x-model="data.application_notes"
+                maxlength="300" rows="2" placeholder=""></textarea>
+      <div class="form-counter"
+           :class="{ 'near-limit': data.application_notes.length > 270, 'over-limit': data.application_notes.length > 300 }">
+        <span x-text="data.application_notes.length">0</span> / 300
+      </div>
+      <div class="wizard-field-error" x-show="fieldErrors.application_notes" x-cloak x-text="fieldErrors.application_notes"></div>
+    </div>
+
+    <div class="wizard-actions">
+      <button type="button" class="btn-back" @click="back()">&larr; Back</button>
+      <div class="wizard-spacer"></div>
+      <button type="button" class="btn btn-primary btn-next"
+              @click="next()"
+              :disabled="!step2Valid()">
+        Continue &rarr;
+      </button>
+    </div>
+  </section>
+
+  {{/* ===== Step 3: Knowledge questions ===== */}}
+  <section class="wizard-step"
+           x-show="step === 3" x-cloak
+           x-transition:enter="wizard-step-enter"
+           x-transition:enter-start="wizard-step-enter-start"
+           x-transition:enter-end="wizard-step-enter-end"
+           x-transition:leave="wizard-step-leave"
+           x-transition:leave-start="wizard-step-leave-start"
+           x-transition:leave-end="wizard-step-leave-end">
+
+    <div class="wizard-step-indicator">Step 3 of 4 &middot; Knowledge check</div>
+    <h1 class="wizard-headline">Show us how you think</h1>
+    <p class="wizard-helper">
+      These three questions test technical depth, not memory.
+      Wrong-but-thoughtful beats right-but-shallow. Answers are
+      evaluated separately from your profile rating.
+    </p>
+
+    {{/* Q1 - Technical depth with choice picker */}}
+    <div class="wizard-field">
+      <label class="wizard-field-label">
+        Technical depth question
+        <span class="tooltip-trigger" x-data="{ open: false }"
+              @mouseenter="open = true" @mouseleave="open = false"
+              @click="open = !open" @click.outside="open = false">
+          <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
+            Pick ONE sub-question and answer in your own words. We are testing whether you understand the protocols, not whether you can quote the spec.
+          </span>
+        </span>
+      </label>
+
+      <div class="wizard-choice-picker" role="radiogroup">
+        <button type="button" class="wizard-choice-btn"
+                :class="{ selected: data.technical_depth_choice === 'a' }"
+                :aria-pressed="data.technical_depth_choice === 'a' ? 'true' : 'false'"
+                @click="data.technical_depth_choice = 'a'">
+          <span class="wizard-choice-label">a)</span>
+          <span class="wizard-choice-text">
+            What is your biggest critique of the Double Ratchet algorithm as used in Signal or SimpleX?
+          </span>
+        </button>
+        <button type="button" class="wizard-choice-btn"
+                :class="{ selected: data.technical_depth_choice === 'b' }"
+                :aria-pressed="data.technical_depth_choice === 'b' ? 'true' : 'false'"
+                @click="data.technical_depth_choice = 'b'">
+          <span class="wizard-choice-label">b)</span>
+          <span class="wizard-choice-text">
+            Why did Matrix choose Megolm over Olm for group chats? What trade-offs does this introduce?
+          </span>
+        </button>
+        <button type="button" class="wizard-choice-btn"
+                :class="{ selected: data.technical_depth_choice === 'c' }"
+                :aria-pressed="data.technical_depth_choice === 'c' ? 'true' : 'false'"
+                @click="data.technical_depth_choice = 'c'">
+          <span class="wizard-choice-label">c)</span>
+          <span class="wizard-choice-text">
+            SimpleX claims "no user identifiers." Where does this claim hit limits in practice (e.g. directory services, bots, persistent contacts)?
+          </span>
         </button>
       </div>
 
-      <div class="auth-footer">
-        Already a member? <a href="/login" hx-boost="true">Log in</a>
+      <div class="wizard-reveal" x-show="data.technical_depth_choice" x-cloak :key="data.technical_depth_choice">
+        <textarea class="form-input form-textarea"
+                  x-model="data.technical_depth_answer"
+                  minlength="100" maxlength="500" rows="6"
+                  placeholder="Your answer in 100-500 characters..."></textarea>
+        <div class="form-counter"
+             :class="{ 'near-limit': data.technical_depth_answer.length > 450, 'over-limit': data.technical_depth_answer.length > 500 }">
+          <span x-text="data.technical_depth_answer.length">0</span> / 500
+          <template x-if="data.technical_depth_answer.length > 0 && data.technical_depth_answer.length < 100">
+            <span class="form-hint-inline">(at least 100 characters)</span>
+          </template>
+        </div>
       </div>
-    </form>
-  </div>
+
+      <div class="wizard-field-error" x-show="fieldErrors.technical_depth_choice" x-cloak x-text="fieldErrors.technical_depth_choice"></div>
+      <div class="wizard-field-error" x-show="fieldErrors.technical_depth_answer" x-cloak x-text="fieldErrors.technical_depth_answer"></div>
+    </div>
+
+    {{/* Q2 - Practical experience */}}
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-practical">
+        Practical experience
+        <span class="tooltip-trigger" x-data="{ open: false }"
+              @mouseenter="open = true" @mouseleave="open = false"
+              @click="open = !open" @click.outside="open = false">
+          <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
+            Honest "no" is fine. If you have not run any of this infrastructure, just say so.
+          </span>
+        </span>
+      </label>
+      <p class="form-hint" style="margin-top: 0; margin-bottom: 0.5rem">
+        Have you actually run a SimpleX server, GoChat node, hardware-security stack, or similar privacy infrastructure?
+      </p>
+      <textarea class="form-input form-textarea" id="reg-practical"
+                x-model="data.practical_experience"
+                maxlength="400" rows="4"
+                placeholder="Optional. Honest 'no' is fine."></textarea>
+      <div class="form-counter"
+           :class="{ 'near-limit': data.practical_experience.length > 360, 'over-limit': data.practical_experience.length > 400 }">
+        <span x-text="data.practical_experience.length">0</span> / 400
+      </div>
+      <div class="wizard-field-error" x-show="fieldErrors.practical_experience" x-cloak x-text="fieldErrors.practical_experience"></div>
+    </div>
+
+    {{/* Q3 - Critical thinking */}}
+    <div class="wizard-field">
+      <label class="wizard-field-label" for="reg-critical">
+        Critical thinking
+        <span class="tooltip-trigger" x-data="{ open: false }"
+              @mouseenter="open = true" @mouseleave="open = false"
+              @click="open = !open" @click.outside="open = false">
+          <svg class="tooltip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="tooltip-popover" x-show="open" x-cloak x-transition.opacity>
+            Be specific. "Big Tech" is not an answer.
+          </span>
+        </span>
+      </label>
+      <p class="form-hint" style="margin-top: 0; margin-bottom: 0.5rem">
+        Where in the privacy / messaging space do you see the gap between marketing and reality? Specific examples beat broad accusations.
+      </p>
+      <textarea class="form-input form-textarea" id="reg-critical"
+                x-model="data.critical_thinking"
+                maxlength="400" rows="4"
+                placeholder="Optional. Pick a specific product / protocol / claim and explain the gap."></textarea>
+      <div class="form-counter"
+           :class="{ 'near-limit': data.critical_thinking.length > 360, 'over-limit': data.critical_thinking.length > 400 }">
+        <span x-text="data.critical_thinking.length">0</span> / 400
+      </div>
+      <div class="wizard-field-error" x-show="fieldErrors.critical_thinking" x-cloak x-text="fieldErrors.critical_thinking"></div>
+    </div>
+
+    <div class="wizard-actions">
+      <button type="button" class="btn-back" @click="back()">&larr; Back</button>
+      <div class="wizard-spacer"></div>
+      <button type="button" class="btn btn-primary btn-next"
+              @click="next()"
+              :disabled="!step3Valid()">
+        Continue &rarr;
+      </button>
+    </div>
+  </section>
+
+  {{/* ===== Step 4: Review ===== */}}
+  <section class="wizard-step"
+           x-show="step === 4" x-cloak
+           x-transition:enter="wizard-step-enter"
+           x-transition:enter-start="wizard-step-enter-start"
+           x-transition:enter-end="wizard-step-enter-end"
+           x-transition:leave="wizard-step-leave"
+           x-transition:leave-start="wizard-step-leave-start"
+           x-transition:leave-end="wizard-step-leave-end">
+
+    <div class="wizard-step-indicator">Step 4 of 4 &middot; Review</div>
+    <h1 class="wizard-headline">Look it over</h1>
+    <p class="wizard-helper">
+      Read your answers carefully. After submit you cannot edit
+      your application.
+    </p>
+
+    <div class="wizard-summary-block">
+      <h3>
+        Account
+        <button type="button" class="summary-edit" @click="goToStep(1)">Edit</button>
+      </h3>
+      <dl>
+        <div class="wizard-summary-row">
+          <dt>Username</dt>
+          <dd x-text="data.username || ''"></dd>
+        </div>
+        <div class="wizard-summary-row">
+          <dt>Password</dt>
+          <dd x-text="data.password ? '••••••••' : ''"></dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="wizard-summary-block">
+      <h3>
+        About you
+        <button type="button" class="summary-edit" @click="goToStep(2)">Edit</button>
+      </h3>
+      <dl>
+        <div class="wizard-summary-row">
+          <dt>External links</dt>
+          <dd :class="{ muted: !data.external_links }"
+              x-text="data.external_links || 'Not provided (optional)'"></dd>
+        </div>
+        <div class="wizard-summary-row">
+          <dt>Ecosystem connection</dt>
+          <dd x-text="data.ecosystem_connection || ''"></dd>
+        </div>
+        <div class="wizard-summary-row">
+          <dt>Community contribution</dt>
+          <dd x-text="data.community_contribution || ''"></dd>
+        </div>
+        <div class="wizard-summary-row">
+          <dt>Current focus</dt>
+          <dd :class="{ muted: !data.current_focus }"
+              x-text="data.current_focus || 'Not provided (optional)'"></dd>
+        </div>
+        <div class="wizard-summary-row">
+          <dt>Anything else</dt>
+          <dd :class="{ muted: !data.application_notes }"
+              x-text="data.application_notes || 'Not provided (optional)'"></dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="wizard-summary-block">
+      <h3>
+        Knowledge
+        <button type="button" class="summary-edit" @click="goToStep(3)">Edit</button>
+      </h3>
+      <dl>
+        <div class="wizard-summary-row">
+          <dt>Technical depth</dt>
+          <dd>
+            <span x-text="'Choice ' + (data.technical_depth_choice || '?') + ': '"></span>
+            <span x-text="data.technical_depth_answer || ''"></span>
+          </dd>
+        </div>
+        <div class="wizard-summary-row">
+          <dt>Practical experience</dt>
+          <dd :class="{ muted: !data.practical_experience }"
+              x-text="data.practical_experience || 'Not provided (optional)'"></dd>
+        </div>
+        <div class="wizard-summary-row">
+          <dt>Critical thinking</dt>
+          <dd :class="{ muted: !data.critical_thinking }"
+              x-text="data.critical_thinking || 'Not provided (optional)'"></dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="wizard-actions">
+      <button type="button" class="btn-back" @click="back()">&larr; Back</button>
+      <div class="wizard-spacer"></div>
+      <button type="button" class="btn btn-primary wizard-submit-button wizard-cta-pulse"
+              @click="submit()"
+              :disabled="submitting || submitted"
+              :aria-busy="submitting ? 'true' : 'false'">
+        <span x-show="!submitting && !submitted">Submit application</span>
+        <span x-show="submitting" x-cloak>Submitting...</span>
+        <span x-show="submitted" x-cloak class="submit-success-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          &nbsp;Sent
+        </span>
+      </button>
+    </div>
+  </section>
 
 </div>
 {{ end }}

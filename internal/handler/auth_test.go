@@ -1,9 +1,72 @@
 package handler
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+// TestRegisterRequest_DecodesWizardPayload pins the JSON shape the
+// Sprint Y.2 wizard sends to /api/register. The wizard is one
+// Alpine component holding all 11 form fields under a `data` map;
+// on submit it serializes data straight to JSON. This test
+// constructs the same JSON shape the wizard produces and verifies
+// every field lands on the right registerRequest property and
+// passes the existing validateApplication contract.
+//
+// Reading the assertion side: a future template refactor that
+// renames a JSON key (e.g. "ecosystem_connection" -> "ecosystem")
+// fails this test loudly before reaching production.
+func TestRegisterRequest_DecodesWizardPayload(t *testing.T) {
+	wizardPayload := []byte(`{
+		"username": "applicant",
+		"password": "very-secret-12345",
+		"external_links": "https://github.com/applicant",
+		"ecosystem_connection": "I run a SimpleX SMP relay and read the GoChat protocol design notes weekly.",
+		"community_contribution": "Hardware integration write-ups, security review of relay configs.",
+		"current_focus": "Cross-compiling SimpleGoX for ARM SBCs.",
+		"application_notes": "Available for code review on weekends.",
+		"technical_depth_choice": "a",
+		"technical_depth_answer": "Double Ratchet's biggest weakness in practice is the post-compromise recovery window: an attacker who briefly captured a chain key sees every following message until the next ratchet step. With high-latency channels this gap matters.",
+		"practical_experience": "Yes - small SimpleX SMP relay on a personal SBC.",
+		"critical_thinking": "Telegram marketing 'secret chats' as the same product as default cloud chats."
+	}`)
+
+	var req registerRequest
+	if err := json.Unmarshal(wizardPayload, &req); err != nil {
+		t.Fatalf("unmarshal wizard payload: %v", err)
+	}
+
+	checks := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"username", req.Username, "applicant"},
+		{"password", req.Password, "very-secret-12345"},
+		{"external_links", req.ExternalLinks, "https://github.com/applicant"},
+		{"ecosystem_connection_prefix", req.EcosystemConnection[:21], "I run a SimpleX SMP r"},
+		{"community_contribution_prefix", req.CommunityContribution[:20], "Hardware integration"},
+		{"current_focus", req.CurrentFocus, "Cross-compiling SimpleGoX for ARM SBCs."},
+		{"application_notes", req.ApplicationNotes, "Available for code review on weekends."},
+		{"technical_depth_choice", req.TechnicalDepthChoice, "a"},
+		{"technical_depth_answer_prefix", req.TechnicalDepthAnswer[:20], "Double Ratchet's big"},
+		{"practical_experience_prefix", req.PracticalExperience[:5], "Yes -"},
+		{"critical_thinking_prefix", req.CriticalThinking[:8], "Telegram"},
+	}
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, c.got, c.want)
+		}
+	}
+
+	// Sanity: the same payload validates cleanly. Catches a future
+	// refactor that splits validateApplication's contract from the
+	// wizard's intent.
+	if err := validateApplication(&req); err != nil {
+		t.Errorf("validateApplication on full wizard payload: unexpected error %v", err)
+	}
+}
 
 // TestValidateApplication locks in the application-gate rules
 // without touching the DB or HTTP layer. The handler delegates

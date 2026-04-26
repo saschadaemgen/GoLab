@@ -309,54 +309,137 @@
       };
     });
 
-    // Sprint X.1 application registration form. Replaces the native
-    // form-POST + server-redirect cycle so a 400 from validation
-    // does not wipe the user's input. Submit goes via fetch(); on
-    // 200 we redirect to /pending; on 400 we map the structured
-    // {field, code, message} response to an inline error next to
-    // the offending textarea; on 5xx / network failure we show a
-    // generic top-of-form error and leave every field intact.
+    // Sprint Y.2 registration wizard. Replaces the Sprint X / X.1
+    // single-page form with a 5-step flow (Welcome -> Account ->
+    // About -> Knowledge -> Review). Carries forward every Sprint
+    // X.1 + Y.1 contract (fetch-based submit, structured field
+    // errors, character counters via :data length, optional
+    // external_links, four knowledge fields).
     //
-    // Per-field counters live in nested `x-data="{ count, max }"`
-    // scopes inside register.html and are independent of this
-    // component - they react purely on @input. They keep working
-    // across a 400 response because the DOM values are never
-    // cleared.
-    window.Alpine.data('registerForm', function () {
+    // The whole wizard is one component; per-step Alpine sub-
+    // scopes are only used for transient UI state (tooltip open
+    // flags, choice picker hover state). All form values live on
+    // this.data so the Review step can reflect them and the final
+    // submit() can serialize them all in one POST.
+    //
+    // direction is "forward" or "backward"; the wizard root has
+    // :data-direction so CSS in golab.css can pick the right
+    // slide animation per step transition (forward = enter from
+    // right, backward = enter from left). Set BEFORE the step
+    // mutation so the attribute is in place when x-transition
+    // reads the surrounding state.
+    window.Alpine.data('registrationWizard', function () {
       return {
+        step: 0,
+        direction: 'forward',
         submitting: false,
-        // errors maps field name -> message. Looked up by template
-        // expressions like `errors.ecosystem_connection`. Cleared
-        // before each submit so a successful re-try removes any
-        // previous inline error.
-        errors: {},
-        // formError is the top-of-form banner for non-field issues
-        // (network failure, 5xx, response without a `field` key).
-        formError: '',
+        submitted: false,
+        submitError: '',
+        fieldErrors: {},
 
-        submit: function (e) {
-          var self = this;
-          var form = e.target;
-          self.submitting = true;
-          self.errors = {};
-          self.formError = '';
+        data: {
+          username: '',
+          password: '',
+          external_links: '',
+          ecosystem_connection: '',
+          community_contribution: '',
+          current_focus: '',
+          application_notes: '',
+          technical_depth_choice: '',
+          technical_depth_answer: '',
+          practical_experience: '',
+          critical_thinking: ''
+        },
 
-          var data = {
-            username: form.username ? form.username.value : '',
-            password: form.password ? form.password.value : '',
-            external_links: form.external_links ? form.external_links.value : '',
-            ecosystem_connection: form.ecosystem_connection ? form.ecosystem_connection.value : '',
-            community_contribution: form.community_contribution ? form.community_contribution.value : '',
-            current_focus: form.current_focus ? form.current_focus.value : '',
-            application_notes: form.application_notes ? form.application_notes.value : '',
-            // Sprint Y.1 knowledge questions. technical_depth_choice
-            // is a hidden input fed by the choice picker's Alpine
-            // scope; the other three are normal textareas.
-            technical_depth_choice: form.technical_depth_choice ? form.technical_depth_choice.value : '',
-            technical_depth_answer: form.technical_depth_answer ? form.technical_depth_answer.value : '',
-            practical_experience: form.practical_experience ? form.practical_experience.value : '',
-            critical_thinking: form.critical_thinking ? form.critical_thinking.value : ''
+        // ---- Per-step validation (used to gate the Continue button
+        // and to call validate() before advancing). The full
+        // server-side validateApplication runs on submit; these
+        // are lightweight checks that mirror the documented bounds
+        // without re-implementing every rule. ----
+
+        usernameValid: function () {
+          var u = this.data.username || '';
+          return /^[A-Za-z0-9_]{3,32}$/.test(u);
+        },
+        passwordValid: function () {
+          var p = this.data.password || '';
+          return p.length >= 8 && p.length <= 128;
+        },
+        step1Valid: function () {
+          return this.usernameValid() && this.passwordValid();
+        },
+        step2Valid: function () {
+          var d = this.data;
+          if (d.ecosystem_connection.length < 30 || d.ecosystem_connection.length > 800) return false;
+          if (d.community_contribution.length < 30 || d.community_contribution.length > 600) return false;
+          if (d.external_links.length > 500) return false;
+          if (d.current_focus.length > 400) return false;
+          if (d.application_notes.length > 300) return false;
+          return true;
+        },
+        step3Valid: function () {
+          var d = this.data;
+          if (!{ a: 1, b: 1, c: 1 }[d.technical_depth_choice]) return false;
+          var len = (d.technical_depth_answer || '').length;
+          if (len < 100 || len > 500) return false;
+          if (d.practical_experience.length > 400) return false;
+          if (d.critical_thinking.length > 400) return false;
+          return true;
+        },
+        currentStepValid: function () {
+          switch (this.step) {
+            case 0: return true;
+            case 1: return this.step1Valid();
+            case 2: return this.step2Valid();
+            case 3: return this.step3Valid();
+            case 4: return true;
+            default: return true;
+          }
+        },
+
+        // ---- Navigation. Set direction first so the CSS attribute
+        // selector picks the right slide animation when x-show
+        // toggles the next step in. ----
+
+        next: function () {
+          if (!this.currentStepValid()) return;
+          this.direction = 'forward';
+          if (this.step < 4) this.step++;
+        },
+        back: function () {
+          if (this.step <= 0) return;
+          this.direction = 'backward';
+          this.step--;
+        },
+        goToStep: function (n) {
+          if (n === this.step) return;
+          this.direction = n > this.step ? 'forward' : 'backward';
+          this.step = n;
+        },
+
+        // stepForField maps a server-returned field name back to the
+        // wizard step it belongs to. Used after a 400 response so
+        // we can jump the user directly to the offending input.
+        stepForField: function (field) {
+          var map = {
+            username: 1, password: 1,
+            external_links: 2, ecosystem_connection: 2,
+            community_contribution: 2, current_focus: 2,
+            application_notes: 2,
+            technical_depth_choice: 3, technical_depth_answer: 3,
+            practical_experience: 3, critical_thinking: 3
           };
+          return map[field] || 0;
+        },
+
+        // ---- Final submit ----
+
+        submit: function () {
+          var self = this;
+          if (self.submitting || self.submitted) return;
+          self.submitting = true;
+          self.submitError = '';
+          self.fieldErrors = {};
 
           fetch('/api/register', {
             method: 'POST',
@@ -365,7 +448,7 @@
               'Content-Type': 'application/json'
             },
             credentials: 'same-origin',
-            body: JSON.stringify(data)
+            body: JSON.stringify(self.data)
           }).then(function (r) {
             return r.text().then(function (text) {
               var body = {};
@@ -375,28 +458,35 @@
           }).then(function (res) {
             self.submitting = false;
             if (res.ok) {
-              // Server side already created the session cookie and
-              // signalled pending status. Take the user to the
-              // waiting page; a hard navigation also flushes any
-              // half-typed Alpine state.
-              window.location.href = '/pending';
+              // Success morph: button becomes a checkmark for a
+              // moment so the click feels confirmed, then
+              // navigate to /pending. Server already created
+              // the session cookie.
+              self.submitted = true;
+              setTimeout(function () {
+                window.location.href = '/pending';
+              }, 600);
               return;
             }
             // 400 with structured field info: pin the message to
-            // the right input.
+            // the right input AND jump to its owning step so the
+            // user sees the failure inline, not as a top banner
+            // five steps away.
             if (res.status === 400 && res.body && res.body.field) {
               var msg = res.body.message || res.body.code || 'invalid input';
-              self.errors[res.body.field] = msg;
+              self.fieldErrors[res.body.field] = msg;
+              self.goToStep(self.stepForField(res.body.field));
               return;
             }
             // 409 username conflict, 5xx, or other unstructured
-            // response: top-of-form banner.
-            self.formError =
+            // response: top-of-card banner that stays visible
+            // across step changes.
+            self.submitError =
               (res.body && (res.body.error || res.body.message)) ||
               'Registration failed (' + res.status + ')';
           }).catch(function () {
             self.submitting = false;
-            self.formError = 'Network error, please try again';
+            self.submitError = 'Network error, please try again';
           });
         }
       };

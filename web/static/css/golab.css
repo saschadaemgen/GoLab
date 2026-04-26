@@ -4185,3 +4185,428 @@ img.avatar {
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* =============================================================
+   Sprint Y.2 registration wizard
+   =============================================================
+   A 5-step onboarding flow that replaces the single-page
+   register.html. Each step lives in its own card; transitions
+   between steps slide horizontally based on direction (forward
+   vs backward) so the user feels which way they are going.
+
+   The whole wizard is one Alpine component (registrationWizard
+   in golab.js); see register.html for the structure. */
+
+/* ---- Animation tokens ---- */
+:root {
+  --wizard-fast: 150ms;
+  --wizard-medium: 250ms;
+  --wizard-slow: 500ms;
+  --wizard-ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --wizard-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --wizard-ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes wizardFadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes wizardFadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes wizardAccentPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-subtle, rgba(26, 125, 90, 0.5)); }
+  50%      { box-shadow: 0 0 0 10px transparent; }
+}
+@keyframes wizardShake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-4px); }
+  75%      { transform: translateX(4px); }
+}
+
+/* Stagger helpers - parent gets wizard-stagger, children get
+   :nth-child timings automatically. */
+.wizard-stagger > * {
+  opacity: 0;
+  animation: wizardFadeInUp var(--wizard-slow) var(--wizard-ease-soft) forwards;
+}
+.wizard-stagger > *:nth-child(1) { animation-delay: 60ms; }
+.wizard-stagger > *:nth-child(2) { animation-delay: 140ms; }
+.wizard-stagger > *:nth-child(3) { animation-delay: 220ms; }
+.wizard-stagger > *:nth-child(4) { animation-delay: 300ms; }
+.wizard-stagger > *:nth-child(5) { animation-delay: 380ms; }
+.wizard-stagger > *:nth-child(6) { animation-delay: 460ms; }
+.wizard-stagger > *:nth-child(7) { animation-delay: 540ms; }
+.wizard-stagger > *:nth-child(8) { animation-delay: 620ms; }
+
+/* ---- Wizard container + step layout ---- */
+.wizard-container {
+  position: relative;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.wizard-step {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem;
+}
+@media (max-width: 640px) {
+  .wizard-step { padding: 1.5rem; }
+}
+
+/* The leaving step gets position: absolute so it does not push
+   the incoming step around mid-transition. The parent stays
+   position: relative which .wizard-container already is. */
+.wizard-step-leave {
+  transition: transform var(--wizard-medium) var(--wizard-ease-smooth),
+              opacity var(--wizard-medium) var(--wizard-ease-smooth);
+  position: absolute;
+  inset: 2rem 1rem auto 1rem;
+}
+.wizard-step-enter {
+  transition: transform 350ms var(--wizard-ease-soft),
+              opacity 350ms var(--wizard-ease-soft);
+  transition-delay: 100ms;
+}
+
+/* Direction-specific transforms. The wizard root has
+   :data-direction so the right rule fires per step change. */
+[data-direction="forward"]  .wizard-step-enter-start { transform: translateX(30px);  opacity: 0; }
+[data-direction="forward"]  .wizard-step-enter-end   { transform: translateX(0);     opacity: 1; }
+[data-direction="forward"]  .wizard-step-leave-start { transform: translateX(0);     opacity: 1; }
+[data-direction="forward"]  .wizard-step-leave-end   { transform: translateX(-30px); opacity: 0; }
+
+[data-direction="backward"] .wizard-step-enter-start { transform: translateX(-30px); opacity: 0; }
+[data-direction="backward"] .wizard-step-enter-end   { transform: translateX(0);     opacity: 1; }
+[data-direction="backward"] .wizard-step-leave-start { transform: translateX(0);     opacity: 1; }
+[data-direction="backward"] .wizard-step-leave-end   { transform: translateX(30px);  opacity: 0; }
+
+/* ---- Welcome step (step 0) ---- */
+.wizard-welcome {
+  text-align: center;
+  padding-top: 2rem;
+}
+.wizard-welcome-headline {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+  line-height: 1.1;
+}
+.wizard-welcome-subtitle {
+  font-size: 1.15rem;
+  color: var(--text-dim);
+  margin: 0 0 3rem;
+}
+@media (max-width: 640px) {
+  .wizard-welcome-headline { font-size: 2rem; }
+  .wizard-welcome-subtitle { font-size: 1rem; margin-bottom: 2rem; }
+}
+.wizard-welcome-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+  text-align: left;
+}
+@media (min-width: 768px) {
+  .wizard-welcome-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+}
+.wizard-welcome-card {
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+.wizard-welcome-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+.wizard-welcome-card p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.wizard-welcome-ecosystem {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 2rem 0 2.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.wizard-welcome-ecosystem span {
+  position: relative;
+}
+.wizard-welcome-ecosystem span:not(:last-child)::after {
+  content: '·';
+  margin-left: 0.6rem;
+  color: var(--border);
+}
+.wizard-cta-pulse {
+  animation: wizardAccentPulse 3s var(--wizard-ease-smooth) infinite;
+}
+
+/* ---- Step indicator + progress bar ---- */
+.wizard-step-indicator {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+.wizard-progress {
+  margin-bottom: 1.5rem;
+  padding: 0 0.5rem;
+}
+.wizard-progress-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.wizard-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 400ms var(--wizard-ease-soft);
+}
+.wizard-progress-steps {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.wizard-progress-steps span {
+  flex: 1;
+  text-align: center;
+  transition: color 300ms var(--wizard-ease-soft);
+}
+.wizard-progress-steps span.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---- Step headline + helper ---- */
+.wizard-headline {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+  line-height: 1.15;
+}
+@media (max-width: 640px) {
+  .wizard-headline { font-size: 1.5rem; }
+}
+.wizard-helper {
+  color: var(--text-dim);
+  margin: 0 0 2rem;
+  line-height: 1.55;
+}
+
+/* ---- Field-level helpers shared across steps ---- */
+.wizard-field { margin-bottom: 1.5rem; }
+.wizard-field-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+.wizard-field-label .field-checkmark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--success, #2ea043);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 200ms var(--wizard-ease-soft),
+              transform 200ms var(--wizard-ease-bounce);
+}
+.wizard-field-label .field-checkmark.shown {
+  opacity: 1;
+  transform: scale(1);
+}
+.wizard-field-error {
+  display: block;
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+  animation: wizardShake 300ms var(--wizard-ease-smooth);
+}
+
+/* ---- Action row at bottom of each step ---- */
+.wizard-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.wizard-actions .wizard-spacer { flex: 1; }
+.wizard-actions .btn-back {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  border-radius: 6px;
+  transition: color var(--wizard-fast), background var(--wizard-fast);
+}
+.wizard-actions .btn-back:hover {
+  color: var(--text);
+  background: var(--bg-elevated, transparent);
+}
+.wizard-actions .btn-next {
+  min-width: 140px;
+  transition: transform var(--wizard-medium) var(--wizard-ease-bounce),
+              opacity var(--wizard-medium);
+}
+.wizard-actions .btn-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.wizard-actions .btn-next:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+/* ---- Step 4 (review) summary blocks ---- */
+.wizard-summary-block {
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+  position: relative;
+}
+.wizard-summary-block h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: var(--text-bright);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.wizard-summary-block h3 .summary-edit {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background var(--wizard-fast);
+}
+.wizard-summary-block h3 .summary-edit:hover {
+  background: var(--accent-subtle, rgba(26, 125, 90, 0.1));
+}
+.wizard-summary-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 0.5rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+@media (max-width: 640px) {
+  .wizard-summary-row { grid-template-columns: 1fr; gap: 0.15rem; }
+}
+.wizard-summary-row dt {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.wizard-summary-row dd {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.wizard-summary-row dd.muted {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ---- Submit success morph (step 4) ---- */
+.wizard-submit-button {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  position: relative;
+  overflow: hidden;
+}
+.wizard-submit-button[aria-busy="true"] { cursor: wait; }
+.wizard-submit-button .submit-success-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: wizardFadeInScale 400ms var(--wizard-ease-bounce);
+}
+
+/* ---- Choice picker (step 3 - reused from Sprint Y.1) ---- */
+.wizard-choice-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.wizard-choice-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--wizard-medium) var(--wizard-ease-soft),
+              background var(--wizard-medium) var(--wizard-ease-soft),
+              transform var(--wizard-medium) var(--wizard-ease-soft),
+              opacity var(--wizard-medium) var(--wizard-ease-soft);
+  color: var(--text);
+  line-height: 1.5;
+}
+.wizard-choice-btn:hover { border-color: var(--accent); }
+.wizard-choice-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle, rgba(26, 125, 90, 0.1));
+  transform: scale(1.02);
+}
+/* When ANY sibling is selected, dim the unselected siblings. */
+.wizard-choice-picker:has(.wizard-choice-btn.selected) .wizard-choice-btn:not(.selected) {
+  opacity: 0.6;
+}
+.wizard-choice-label {
+  font-weight: 600;
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  flex-shrink: 0;
+}
+.wizard-choice-text { flex: 1; }
+
+/* ---- Reveal animation for the answer textarea ---- */
+.wizard-reveal {
+  animation: wizardFadeInUp 350ms var(--wizard-ease-soft) both;
+}
