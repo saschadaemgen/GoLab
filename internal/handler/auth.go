@@ -3,8 +3,10 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -15,7 +17,6 @@ import (
 
 var (
 	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]{3,32}$`)
-	emailRegex    = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 )
 
 type AuthHandler struct {
@@ -27,14 +28,23 @@ type AuthHandler struct {
 	Secure        bool // true in production (HTTPS)
 }
 
+// registerRequest carries the application-form fields. Sprint X
+// removed the email field and added five application fields the
+// admin reviews before flipping the user from pending to active.
 type registerRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Username              string `json:"username"`
+	Password              string `json:"password"`
+	ExternalLinks         string `json:"external_links"`
+	EcosystemConnection   string `json:"ecosystem_connection"`
+	CommunityContribution string `json:"community_contribution"`
+	CurrentFocus          string `json:"current_focus"`
+	ApplicationNotes      string `json:"application_notes"`
 }
 
+// loginRequest carries the credentials. Sprint X switched login from
+// email-based to username-based to match the new registration flow.
 type loginRequest struct {
-	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
@@ -57,8 +67,12 @@ func decodeRegister(r *http.Request) (registerRequest, error) {
 			return req, err
 		}
 		req.Username = r.Form.Get("username")
-		req.Email = r.Form.Get("email")
 		req.Password = r.Form.Get("password")
+		req.ExternalLinks = r.Form.Get("external_links")
+		req.EcosystemConnection = r.Form.Get("ecosystem_connection")
+		req.CommunityContribution = r.Form.Get("community_contribution")
+		req.CurrentFocus = r.Form.Get("current_focus")
+		req.ApplicationNotes = r.Form.Get("application_notes")
 		return req, nil
 	}
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -72,7 +86,7 @@ func decodeLogin(r *http.Request) (loginRequest, error) {
 		if err := r.ParseForm(); err != nil {
 			return req, err
 		}
-		req.Email = r.Form.Get("email")
+		req.Username = r.Form.Get("username")
 		req.Password = r.Form.Get("password")
 		return req, nil
 	}
@@ -116,6 +130,103 @@ func urlEncode(s string) string {
 	return r.Replace(s)
 }
 
+// applicationFieldLimits defines the length gates for each application
+// question. Centralised so the handler, the validation helper and any
+// future tests stay in sync.
+const (
+	externalLinksMin         = 5
+	externalLinksMax         = 500
+	ecosystemConnectionMin   = 50
+	ecosystemConnectionMax   = 500
+	communityContributionMin = 50
+	communityContributionMax = 400
+	currentFocusMax          = 300
+	applicationNotesMax      = 200
+)
+
+// validateApplication runs the Sprint X content rules over a
+// registration request and returns the first user-visible error or nil
+// when everything passes. Pure function: no DB, no HTTP, easy to unit-
+// test directly without standing up the full Register handler.
+//
+// Mutates the request in place to apply consistent whitespace
+// trimming so the handler downstream stores the cleaned version.
+func validateApplication(req *registerRequest) error {
+	req.ExternalLinks = strings.TrimSpace(req.ExternalLinks)
+	req.EcosystemConnection = strings.TrimSpace(req.EcosystemConnection)
+	req.CommunityContribution = strings.TrimSpace(req.CommunityContribution)
+	req.CurrentFocus = strings.TrimSpace(req.CurrentFocus)
+	req.ApplicationNotes = strings.TrimSpace(req.ApplicationNotes)
+
+	// External links: required, must contain at least one https URL.
+	if len(req.ExternalLinks) == 0 {
+		return fmt.Errorf("external_links_missing: please share at least one link to your work")
+	}
+	if len(req.ExternalLinks) < externalLinksMin {
+		return fmt.Errorf("external_links_too_short: at least %d characters", externalLinksMin)
+	}
+	if len(req.ExternalLinks) > externalLinksMax {
+		return fmt.Errorf("external_links_too_long: at most %d characters", externalLinksMax)
+	}
+	if !hasValidHTTPSURL(req.ExternalLinks) {
+		return fmt.Errorf("external_links_invalid: please include at least one full https:// URL")
+	}
+
+	// Ecosystem connection: required, length-bounded.
+	if len(req.EcosystemConnection) < ecosystemConnectionMin {
+		return fmt.Errorf("ecosystem_connection_too_short: at least %d characters", ecosystemConnectionMin)
+	}
+	if len(req.EcosystemConnection) > ecosystemConnectionMax {
+		return fmt.Errorf("ecosystem_connection_too_long: at most %d characters", ecosystemConnectionMax)
+	}
+
+	// Community contribution: required, length-bounded.
+	if len(req.CommunityContribution) < communityContributionMin {
+		return fmt.Errorf("community_contribution_too_short: at least %d characters", communityContributionMin)
+	}
+	if len(req.CommunityContribution) > communityContributionMax {
+		return fmt.Errorf("community_contribution_too_long: at most %d characters", communityContributionMax)
+	}
+
+	// Optional fields: only enforce upper bound.
+	if len(req.CurrentFocus) > currentFocusMax {
+		return fmt.Errorf("current_focus_too_long: at most %d characters", currentFocusMax)
+	}
+	if len(req.ApplicationNotes) > applicationNotesMax {
+		return fmt.Errorf("application_notes_too_long: at most %d characters", applicationNotesMax)
+	}
+	return nil
+}
+
+// hasValidHTTPSURL splits the input on whitespace and commas and
+// reports whether at least one resulting token is a syntactically
+// valid https URL. We deliberately accept any host (github.com,
+// codeberg.org, gitlab.com, personal sites, .onion) - the admin
+// reviews the actual content before approving.
+func hasValidHTTPSURL(s string) bool {
+	fields := strings.FieldsFunc(s, func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == ','
+	})
+	for _, f := range fields {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		u, err := url.Parse(f)
+		if err != nil {
+			continue
+		}
+		if u.Scheme != "https" {
+			continue
+		}
+		if u.Host == "" {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeRegister(r)
 	if err != nil {
@@ -124,7 +235,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Username = strings.TrimSpace(req.Username)
-	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
 	// Validate username
 	if !usernameRegex.MatchString(req.Username) {
@@ -132,14 +242,16 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate email
-	if !emailRegex.MatchString(req.Email) {
-		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, "invalid email address")
+	// Validate password per NIST SP 800-63B: length only, 8-128 chars.
+	if err := validatePassword(req.Password); err != nil {
+		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// Validate password per NIST SP 800-63B: length only, 8-128 chars.
-	if err := validatePassword(req.Password); err != nil {
+	// Sprint X: validate the application content before doing any DB
+	// work. This rejects empty / too-short / malformed submissions
+	// without burning a username uniqueness check or a bcrypt hash.
+	if err := validateApplication(&req); err != nil {
 		errorRedirectOrJSON(w, r, "/register", http.StatusBadRequest, err.Error())
 		return
 	}
@@ -153,18 +265,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing != nil {
 		errorRedirectOrJSON(w, r, "/register", http.StatusConflict, "username already taken")
-		return
-	}
-
-	// Check email uniqueness
-	existing, err = h.Users.FindByEmail(r.Context(), req.Email)
-	if err != nil {
-		slog.Error("register: find by email", "error", err)
-		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
-		return
-	}
-	if existing != nil {
-		errorRedirectOrJSON(w, r, "/register", http.StatusConflict, "email already registered")
 		return
 	}
 
@@ -185,7 +285,16 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		status = model.UserStatusPending
 	}
 
-	user, err := h.Users.Create(r.Context(), req.Username, req.Email, hash, status)
+	user, err := h.Users.Create(r.Context(), model.UserCreateParams{
+		Username:              req.Username,
+		PasswordHash:          hash,
+		Status:                status,
+		ExternalLinks:         req.ExternalLinks,
+		EcosystemConnection:   req.EcosystemConnection,
+		CommunityContribution: req.CommunityContribution,
+		CurrentFocus:          req.CurrentFocus,
+		ApplicationNotes:      req.ApplicationNotes,
+	})
 	if err != nil {
 		slog.Error("register: create user", "error", err)
 		errorRedirectOrJSON(w, r, "/register", http.StatusInternalServerError, "internal error")
@@ -272,21 +381,25 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Username == "" {
+		errorRedirectOrJSON(w, r, "/login", http.StatusUnauthorized, "invalid username or password")
+		return
+	}
 
-	user, err := h.Users.FindByEmail(r.Context(), req.Email)
+	user, err := h.Users.FindByUsername(r.Context(), req.Username)
 	if err != nil {
-		slog.Error("login: find by email", "error", err)
+		slog.Error("login: find by username", "error", err)
 		errorRedirectOrJSON(w, r, "/login", http.StatusInternalServerError, "internal error")
 		return
 	}
 	if user == nil {
-		errorRedirectOrJSON(w, r, "/login", http.StatusUnauthorized, "invalid email or password")
+		errorRedirectOrJSON(w, r, "/login", http.StatusUnauthorized, "invalid username or password")
 		return
 	}
 
 	if !auth.CheckPassword(user.PasswordHash, req.Password) {
-		errorRedirectOrJSON(w, r, "/login", http.StatusUnauthorized, "invalid email or password")
+		errorRedirectOrJSON(w, r, "/login", http.StatusUnauthorized, "invalid username or password")
 		return
 	}
 

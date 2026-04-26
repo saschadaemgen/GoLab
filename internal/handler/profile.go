@@ -98,10 +98,16 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 		isFollowing, _ = h.Follows.IsFollowing(r.Context(), currentUser.ID, user.ID)
 	}
 
-	// Clear email for non-self profiles
-	if currentUser == nil || currentUser.ID != user.ID {
-		user.Email = ""
-	}
+	// Sprint X: email field removed entirely. The profile API used
+	// to clear it for non-self viewers; nothing to clear now.
+	// Application fields stay on the user row but are not exposed
+	// through the public profile API - they're moderation-only data
+	// reachable via the admin pending-users panel.
+	user.ExternalLinks = ""
+	user.EcosystemConnection = ""
+	user.CommunityContribution = ""
+	user.CurrentFocus = ""
+	user.ApplicationNotes = ""
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":            user,

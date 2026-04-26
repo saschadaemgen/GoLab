@@ -1,8 +1,14 @@
 {{ define "content" }}
 <div class="auth-container fade-in">
-  <div class="auth-card">
-    <h1 class="auth-title">Join GoLab</h1>
-    <p class="auth-subtitle">Create your account in under a minute.</p>
+  <div class="auth-card auth-card-wide">
+    <h1 class="auth-title">Apply to GoLab</h1>
+    <p class="auth-subtitle">
+      GoLab is the developer community for the SimpleGo ecosystem
+      (SimpleGo, GoChat, GoBot, GoUNITY, GoKey, SimpleGoX). Read
+      access is open. Write access is granted by application. We
+      review every application personally and reply within seven
+      days.
+    </p>
 
     {{ if .Content }}{{ with .Content }}{{ if .Error }}
     <div class="flash flash-error" role="alert">{{ .Error }}</div>
@@ -20,14 +26,7 @@
                pattern="[A-Za-z0-9_]+"
                autocomplete="username"
                placeholder="yourhandle">
-        <div class="form-hint">3-32 characters, letters, numbers and underscores.</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="reg-email">Email</label>
-        <input class="form-input" type="email" id="reg-email" name="email"
-               required autocomplete="email"
-               placeholder="you@example.com">
+        <div class="form-hint">3-32 characters, letters, numbers and underscores. Cannot be changed later by you.</div>
       </div>
 
       <div class="form-group">
@@ -38,10 +37,62 @@
                placeholder="At least 8 characters">
       </div>
 
+      <div class="form-group">
+        <label class="form-label" for="reg-external-links">Where can we see your work?</label>
+        <textarea class="form-input form-textarea" id="reg-external-links"
+                  name="external_links"
+                  required minlength="5" maxlength="500"
+                  rows="2"
+                  placeholder="https://github.com/yourhandle  https://yourdomain.com  https://codeberg.org/yourhandle"></textarea>
+        <div class="form-hint">
+          GitHub, Codeberg, GitLab, personal site, anywhere with code or technical writing. Required.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="reg-ecosystem">How are you connected to the SimpleGo ecosystem?</label>
+        <textarea class="form-input form-textarea" id="reg-ecosystem"
+                  name="ecosystem_connection"
+                  required minlength="50" maxlength="500"
+                  rows="4"
+                  placeholder="Are you using SimpleGo, GoChat, SimpleGoX, or any of the other components? Building something with them? Researching the underlying tech? Be specific."></textarea>
+        <div class="form-hint">Required. 50-500 characters.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="reg-contribution">What would you contribute to this community?</label>
+        <textarea class="form-input form-textarea" id="reg-contribution"
+                  name="community_contribution"
+                  required minlength="50" maxlength="400"
+                  rows="4"
+                  placeholder="Examples: protocol-level discussion, hardware integration, security review, deployment notes, documentation."></textarea>
+        <div class="form-hint">Required. 50-400 characters.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="reg-focus">What is your current focus or open question?</label>
+        <textarea class="form-input form-textarea" id="reg-focus"
+                  name="current_focus"
+                  maxlength="300"
+                  rows="3"
+                  placeholder="The thing you would actually post about in your first week."></textarea>
+        <div class="form-hint">Optional. Up to 300 characters.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="reg-notes">Anything else we should know?</label>
+        <textarea class="form-input form-textarea" id="reg-notes"
+                  name="application_notes"
+                  maxlength="200"
+                  rows="2"
+                  placeholder=""></textarea>
+        <div class="form-hint">Optional. Up to 200 characters.</div>
+      </div>
+
       <div class="form-error" role="alert"></div>
 
       <div class="auth-submit-row">
-        <button type="submit" class="btn btn-primary btn-lg">Create account</button>
+        <button type="submit" class="btn btn-primary btn-lg">Submit application</button>
       </div>
     </form>
 
