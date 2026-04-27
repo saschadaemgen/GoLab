@@ -7884,3 +7884,134 @@ img.avatar {
   font-size: 0.7rem;
   color: var(--text-muted);
 }
+
+/* =============================================================
+   Sprint 16g.4 - Form shell + form grid (non-wizard forms)
+   =============================================================
+   Centered card up to 960px wide. The grid splits into two
+   columns at 768px+ so Status / Visibility / Icon / Color do
+   NOT eat the entire viewport on a wide screen. Fields that
+   should span the row carry .full-width (Parent, Description,
+   Quill editor). */
+
+.wiz-form-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+@media (min-width: 1024px) {
+  .wiz-form-shell { padding: 4rem; }
+}
+
+.wiz-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem 1.25rem;
+}
+@media (min-width: 768px) {
+  .wiz-form-grid { grid-template-columns: 1fr 1fr; }
+}
+.wiz-form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.wiz-flash {
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+.wiz-flash-error {
+  background: rgba(248, 81, 73, 0.08);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  color: var(--danger);
+}
+
+.wiz-danger-zone {
+  margin-top: 3rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(248, 81, 73, 0.06);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  border-radius: 4px;
+}
+.wiz-danger-zone-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  color: var(--danger);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+.wiz-danger-zone-desc {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 0 0 1rem;
+}
+.wiz-action-danger {
+  background: none;
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  color: var(--danger);
+  padding: 0.55rem 1rem;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  text-transform: uppercase;
+  text-decoration: none;
+  display: inline-block;
+  transition: background 150ms, color 150ms, border-color 150ms;
+}
+.wiz-action-danger:hover {
+  background: var(--danger);
+  color: white;
+}
+
+/* ---- Quill editor (used by project-doc-edit and season-close) ---- */
+.wiz-doc-editor-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 160ms;
+}
+.wiz-doc-editor-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+.wiz-doc-editor { min-height: 24rem; }
+
+.wiz-doc-editor-wrap .ql-toolbar.ql-snow {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-deep);
+  padding: 0.5rem 0.65rem;
+}
+.wiz-doc-editor-wrap .ql-container.ql-snow {
+  border: 0;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.wiz-doc-editor-wrap .ql-editor {
+  min-height: 24rem;
+  padding: 1.25rem 1.5rem;
+}
+.wiz-doc-editor-wrap .ql-editor.ql-blank::before {
+  color: var(--text-muted);
+  font-style: normal;
+}
+.wiz-doc-editor-wrap .ql-snow .ql-stroke { stroke: var(--text-dim); }
+.wiz-doc-editor-wrap .ql-snow .ql-fill { fill: var(--text-dim); }
+.wiz-doc-editor-wrap .ql-snow .ql-picker { color: var(--text-dim); }
+.wiz-doc-editor-wrap .ql-snow.ql-toolbar button:hover .ql-stroke,
+.wiz-doc-editor-wrap .ql-snow.ql-toolbar button.ql-active .ql-stroke {
+  stroke: var(--accent);
+}
+.wiz-doc-editor-wrap .ql-snow.ql-toolbar button:hover .ql-fill,
+.wiz-doc-editor-wrap .ql-snow.ql-toolbar button.ql-active .ql-fill {
+  fill: var(--accent);
+}

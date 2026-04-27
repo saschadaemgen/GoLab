@@ -1,109 +1,99 @@
 {{ define "content" }}
 {{ with .Content }}
-{{ $space := .Space }}
-{{ $project := .Project }}
-{{ $doc := .Doc }}
-{{ $docType := .DocType }}
-{{ $err := .Error }}
-{{ $isCustom := eq $docType "custom" }}
+{{ $isCustom := eq .DocType "custom" }}
 
-<div class="brut-page">
-  <header class="brut-hero brut-hero-compact"
-          style="{{ if $project.Color }}--brut-accent: {{ $project.Color }};{{ end }}">
-    <div class="brut-hero-inner brut-stagger">
-      <div class="brut-hero-id">
-        PROJECT · #{{ $project.ID }} · {{ upper $project.Name }}
-        <span class="brut-hero-meta-sep">·</span>
-        DOC · {{ upper $docType }}
-        <span class="brut-hero-meta-sep">·</span>
-        ACTION · EDIT
-      </div>
-      <h1 class="brut-hero-title">
-        {{ if $doc }}Edit {{ .DocLabel }}{{ else }}New {{ .DocLabel }}{{ end }}
+{{/* ============================================================
+     Doc edit form (Sprint 16g.4 visual reset).
+     Single-column layout (no .wiz-form-grid) since the body is
+     a tall Quill editor. Canonical docs hide the title (it is
+     fixed by doc type); custom docs expose title + sort order
+     and add a delete entry in the danger zone. ============= */}}
+
+<div class="page-shell">
+  <div class="wiz-form-shell">
+
+    <header class="wiz-header">
+      <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/docs" class="wiz-back-btn" hx-boost="true">&larr; ALL DOCS</a>
+    </header>
+
+    <div class="wiz-content" style="margin-bottom: 2rem;">
+      <div class="wiz-prompt-eyebrow">PROJECT &middot; {{ upper .Project.Name }} &middot; DOC &middot; {{ upper .DocType }} &middot; EDIT</div>
+      <h1 class="wiz-prompt-headline">
+        {{ if .Doc }}Edit {{ .DocLabel }}{{ else }}New {{ .DocLabel }}{{ end }}
       </h1>
-      <p class="brut-hero-subtitle">
-        Quill WYSIWYG editor. Headings, lists, code blocks, links, images all work. Output is sanitized server-side before storage.
-      </p>
+      <p class="wiz-prompt-helper">Quill WYSIWYG editor. Headings, lists, code blocks, links, images all work. Output is sanitized server-side before storage.</p>
     </div>
-    <div class="brut-hero-actions">
-      <a class="brut-btn brut-btn-ghost brut-btn-sm"
-         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs"
-         hx-boost="true">&larr; All docs</a>
-    </div>
-  </header>
 
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      {{ if $err }}
-      <div class="brut-flash brut-flash-error" role="alert">{{ $err }}</div>
+    {{ if .Error }}
+    <div class="wiz-flash wiz-flash-error" role="alert">{{ .Error }}</div>
+    {{ end }}
+
+    <form method="POST"
+          action="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/docs/{{ .DocType }}"
+          hx-boost="false"
+          x-data="docEditor()"
+          @submit.prevent="onSubmit($event)">
+
+      {{ if $isCustom }}
+      <div class="wiz-input-block">
+        <label class="wiz-input-label" for="dc-title">TITLE</label>
+        <input class="wiz-input" type="text" id="dc-title"
+               name="title" required minlength="1" maxlength="120"
+               value="{{ if .Doc }}{{ .Doc.Title }}{{ end }}"
+               placeholder="ADR 001: Trust Level model">
+      </div>
+      {{ else }}
+      <input type="hidden" name="title" value="{{ .DocLabel }}">
       {{ end }}
 
-      <form class="brut-form brut-stagger"
-            method="POST"
-            action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $docType }}"
-            hx-boost="false"
-            x-data="docEditor()"
-            @submit.prevent="onSubmit($event)">
-
-        {{ if $isCustom }}
-        <div class="brut-field">
-          <label class="brut-label" for="dc-title">Title</label>
-          <input class="brut-input" type="text" id="dc-title"
-                 name="title" required minlength="1" maxlength="120"
-                 value="{{ if $doc }}{{ $doc.Title }}{{ end }}"
-                 placeholder="ADR 001: Trust Level model">
+      <div class="wiz-input-block">
+        <label class="wiz-input-label">CONTENT</label>
+        <div class="wiz-doc-editor-wrap">
+          <div x-ref="editor" class="wiz-doc-editor"
+               data-initial-html="{{ if .Doc }}{{ .Doc.ContentHTML }}{{ end }}"></div>
         </div>
-        {{ else }}
-        <input type="hidden" name="title" value="{{ .DocLabel }}">
-        {{ end }}
+        <input type="hidden" name="content_html" x-ref="contentField" value="">
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.4rem 0 0;">Headings, lists, code blocks, links, images all work. Output is sanitized server-side.</p>
+      </div>
 
-        <div class="brut-field">
-          <label class="brut-label">Content</label>
-          <div class="brut-doc-editor-wrap">
-            <div x-ref="editor" class="brut-doc-editor"
-                 data-initial-html="{{ if $doc }}{{ $doc.ContentHTML }}{{ end }}"></div>
-          </div>
-          <input type="hidden" name="content_html" x-ref="contentField" value="">
-          <div class="brut-help">
-            Headings, lists, code blocks, links, images all work. Output is sanitized server-side.
-          </div>
-        </div>
+      {{ if $isCustom }}
+      <div class="wiz-input-block">
+        <label class="wiz-input-label" for="dc-sort">SORT ORDER</label>
+        <input class="wiz-input" type="number" id="dc-sort"
+               name="sort_order" min="0" max="999"
+               value="{{ if .Doc }}{{ .Doc.SortOrder }}{{ else }}0{{ end }}">
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.4rem 0 0;">Custom docs are listed by sort order, lowest first.</p>
+      </div>
+      {{ end }}
 
-        {{ if $isCustom }}
-        <div class="brut-field">
-          <label class="brut-label" for="dc-sort">Sort order</label>
-          <input class="brut-input" type="number" id="dc-sort"
-                 name="sort_order" min="0" max="999"
-                 value="{{ if $doc }}{{ $doc.SortOrder }}{{ else }}0{{ end }}">
-          <div class="brut-help">Custom docs are listed by sort order, lowest first.</div>
-        </div>
-        {{ end }}
-
-        <div class="brut-form-actions">
-          <a href="{{ if $doc }}/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $docType }}{{ else }}/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs{{ end }}"
-             class="brut-btn brut-btn-secondary" hx-boost="true">Cancel</a>
-          <button type="submit" class="brut-btn brut-btn-primary"
+      <div class="wiz-footer">
+        <div class="wiz-action-group" style="margin-left: auto;">
+          <a href="{{ if .Doc }}/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/docs/{{ .DocType }}{{ else }}/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/docs{{ end }}"
+             class="wiz-action-secondary" hx-boost="true">CANCEL</a>
+          <button type="submit" class="wiz-begin-btn"
                   :disabled="submitting">
-            <span x-show="!submitting">Save</span>
-            <span x-show="submitting" x-cloak>Saving...</span>
+            <span x-show="!submitting">SAVE</span>
+            <span x-show="submitting" x-cloak>SAVING&hellip;</span>
           </button>
         </div>
-      </form>
-
-      {{ if and $doc (eq $doc.DocType "custom") }}
-      <div class="brut-form-danger">
-        <h2 class="brut-form-danger-title">Delete this custom doc</h2>
-        <p class="brut-form-danger-desc">This cannot be undone.</p>
-        <form method="POST"
-              action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $doc.ID }}/delete"
-              hx-boost="false"
-              onsubmit="return confirm('Delete this custom doc? This cannot be undone.');">
-          <button type="submit" class="brut-btn brut-btn-danger brut-btn-sm">Delete</button>
-        </form>
       </div>
-      {{ end }}
+    </form>
+
+    {{ if and .Doc (eq .Doc.DocType "custom") }}
+    <div class="wiz-danger-zone">
+      <h2 class="wiz-danger-zone-title">DELETE THIS CUSTOM DOC</h2>
+      <p class="wiz-danger-zone-desc">This cannot be undone.</p>
+      <form method="POST"
+            action="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/docs/{{ .Doc.ID }}/delete"
+            hx-boost="false"
+            onsubmit="return confirm('Delete this custom doc? This cannot be undone.');">
+        <button type="submit" class="wiz-action-danger">DELETE</button>
+      </form>
     </div>
-  </section>
+    {{ end }}
+
+  </div>
 </div>
+
 {{ end }}
 {{ end }}

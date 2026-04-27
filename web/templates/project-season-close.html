@@ -1,85 +1,70 @@
 {{ define "content" }}
 {{ with .Content }}
-{{ $space := .Space }}
-{{ $project := .Project }}
-{{ $season := .Season }}
-{{ $err := .Error }}
-{{ $postCount := .PostCount }}
-{{ $contributors := .Contributors }}
-{{ $startedFmt := .StartedLabel }}
-{{ $seedHTML := .SeedHTML }}
 
-<div class="brut-page">
-  <header class="brut-hero brut-hero-compact"
-          style="{{ if $project.Color }}--brut-accent: {{ $project.Color }};{{ end }}">
-    <div class="brut-hero-inner brut-stagger">
-      <div class="brut-hero-id">
-        PROJECT · #{{ $project.ID }} · {{ upper $project.Name }}
-        <span class="brut-hero-meta-sep">·</span>
-        SEASON · #{{ $season.SeasonNumber }}
-        <span class="brut-hero-meta-sep">·</span>
-        ACTION · CLOSE
-      </div>
-      <h1 class="brut-hero-title">Closing Season {{ $season.SeasonNumber }}: {{ $season.Title }}</h1>
-      <p class="brut-hero-subtitle">
-        Once closed, no new posts can be assigned to this season. The closing document below becomes part of the project record - members will see it on the season detail page.
-      </p>
+{{/* ============================================================
+     Close season form (Sprint 16g.4 visual reset).
+     A summary card shows the season's posts / contributors /
+     start date, and a Quill editor captures the closing
+     document. Submit triggers a confirm() before posting since
+     closing a season is irreversible. ============= */}}
+
+<div class="page-shell">
+  <div class="wiz-form-shell">
+
+    <header class="wiz-header">
+      <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons/{{ .Season.SeasonNumber }}" class="wiz-back-btn" hx-boost="true">&larr; BACK TO SEASON</a>
+    </header>
+
+    <div class="wiz-content" style="margin-bottom: 2rem;">
+      <div class="wiz-prompt-eyebrow">PROJECT &middot; {{ upper .Project.Name }} &middot; SEASON &middot; #{{ .Season.SeasonNumber }} &middot; CLOSE</div>
+      <h1 class="wiz-prompt-headline">Close Season {{ .Season.SeasonNumber }}: {{ .Season.Title }}</h1>
+      <p class="wiz-prompt-helper">Once closed, no new posts can be assigned to this season. The closing document below becomes part of the project record - members will see it on the season detail page.</p>
     </div>
-    <div class="brut-hero-actions">
-      <a class="brut-btn brut-btn-ghost brut-btn-sm"
-         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}"
-         hx-boost="true">&larr; Back to season</a>
+
+    <div class="page-card" style="margin-bottom: 2rem;">
+      <div class="page-shell-sidebar-block-label" style="margin-bottom: 0.6rem;">SEASON SUMMARY</div>
+      <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 1rem 2rem; font-size: 0.9rem; color: var(--text);">
+        <li><strong style="color: var(--text-bright);">{{ .PostCount }}</strong> {{ pluralize .PostCount "post" "posts" }}</li>
+        <li><strong style="color: var(--text-bright);">{{ .Contributors }}</strong> {{ pluralize .Contributors "contributor" "contributors" }}</li>
+        {{ if .StartedLabel }}<li>Started {{ .StartedLabel }}</li>{{ end }}
+      </ul>
     </div>
-  </header>
 
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <!-- Season summary -->
-      <div class="brut-aside-card brut-stagger" style="margin-bottom: 24px;">
-        <div class="brut-aside-title">Season Summary</div>
-        <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 14px 28px; font: 400 13px/1.5 var(--brut-sans); color: var(--brut-text);">
-          <li><strong style="color: var(--brut-text);">{{ $postCount }}</strong> {{ pluralize $postCount "post" "posts" }}</li>
-          <li><strong style="color: var(--brut-text);">{{ $contributors }}</strong> {{ pluralize $contributors "contributor" "contributors" }}</li>
-          {{ if $startedFmt }}<li>Started {{ $startedFmt }}</li>{{ end }}
-        </ul>
-      </div>
+    {{ if .Error }}
+    <div class="wiz-flash wiz-flash-error" role="alert">{{ .Error }}</div>
+    {{ end }}
 
-      {{ if $err }}
-      <div class="brut-flash brut-flash-error" role="alert">{{ $err }}</div>
-      {{ end }}
+    <form method="POST"
+          action="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons/{{ .Season.SeasonNumber }}/close"
+          hx-boost="false"
+          x-data="docEditor()"
+          @submit.prevent="onSubmit($event)">
 
-      <form class="brut-form brut-stagger"
-            method="POST"
-            action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}/close"
-            hx-boost="false"
-            x-data="docEditor()"
-            @submit.prevent="onSubmit($event)">
-
-        <div class="brut-field">
-          <label class="brut-label">Closing document</label>
-          <div class="brut-doc-editor-wrap">
-            <div x-ref="editor" class="brut-doc-editor"
-                 data-initial-html="{{ $seedHTML }}"></div>
-          </div>
-          <input type="hidden" name="content_html" x-ref="contentField" value="">
-          <div class="brut-help">
-            Markdown-style headings, lists, and code blocks all work. Required.
-          </div>
+      <div class="wiz-input-block">
+        <label class="wiz-input-label">CLOSING DOCUMENT</label>
+        <div class="wiz-doc-editor-wrap">
+          <div x-ref="editor" class="wiz-doc-editor"
+               data-initial-html="{{ .SeedHTML }}"></div>
         </div>
+        <input type="hidden" name="content_html" x-ref="contentField" value="">
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.4rem 0 0;">Markdown-style headings, lists, and code blocks all work. Required.</p>
+      </div>
 
-        <div class="brut-form-actions">
-          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}"
-             class="brut-btn brut-btn-secondary" hx-boost="true">Cancel</a>
-          <button type="submit" class="brut-btn brut-btn-danger"
+      <div class="wiz-footer">
+        <div class="wiz-action-group" style="margin-left: auto;">
+          <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons/{{ .Season.SeasonNumber }}" class="wiz-action-secondary" hx-boost="true">CANCEL</a>
+          <button type="submit" class="wiz-action-danger"
                   :disabled="submitting"
-                  onclick="return confirm('Close Season {{ $season.SeasonNumber }}? This is final - posts can no longer be assigned to it.')">
-            <span x-show="!submitting">Close Season {{ $season.SeasonNumber }}</span>
-            <span x-show="submitting" x-cloak>Closing...</span>
+                  onclick="return confirm('Close Season {{ .Season.SeasonNumber }}? This is final - posts can no longer be assigned to it.')">
+            <span x-show="!submitting">CLOSE SEASON {{ .Season.SeasonNumber }}</span>
+            <span x-show="submitting" x-cloak>CLOSING&hellip;</span>
           </button>
         </div>
-      </form>
-    </div>
-  </section>
+      </div>
+    </form>
+
+  </div>
 </div>
+
 {{ end }}
 {{ end }}

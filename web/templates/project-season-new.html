@@ -1,76 +1,63 @@
 {{ define "content" }}
 {{ with .Content }}
-{{ $space := .Space }}
-{{ $project := .Project }}
-{{ $form := .Form }}
-{{ $err := .Error }}
-{{ $nextNum := .NextNumber }}
 
-<div class="brut-page">
-  <header class="brut-hero brut-hero-compact"
-          style="{{ if $project.Color }}--brut-accent: {{ $project.Color }};{{ end }}">
-    <div class="brut-hero-inner brut-stagger">
-      <div class="brut-hero-id">
-        PROJECT · #{{ $project.ID }} · {{ upper $project.Name }}
-        <span class="brut-hero-meta-sep">·</span>
-        ACTION · PLAN SEASON {{ $nextNum }}
+{{/* ============================================================
+     New season form (Sprint 16g.4 visual reset).
+     Single-column inside the wiz-form-shell. Title and
+     description are the only fields; the season number is
+     auto-assigned and the season starts in `planned` state. =============== */}}
+
+<div class="page-shell">
+  <div class="wiz-form-shell">
+
+    <header class="wiz-header">
+      <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons" class="wiz-back-btn" hx-boost="true">&larr; ALL SEASONS</a>
+    </header>
+
+    <div class="wiz-content" style="margin-bottom: 2rem;">
+      <div class="wiz-prompt-eyebrow">PROJECT &middot; #{{ .Project.ID }} &middot; {{ upper .Project.Name }} &middot; PLAN SEASON {{ .NextNumber }}</div>
+      <h1 class="wiz-prompt-headline">Plan Season {{ .NextNumber }}</h1>
+      <p class="wiz-prompt-helper">Seasons are sequential iterations within {{ .Project.Name }}. The number is auto-assigned. The new season starts as <strong>planned</strong>; activate it later to start posting.</p>
+    </div>
+
+    {{ if .Error }}
+    <div class="wiz-flash wiz-flash-error" role="alert">{{ .Error }}</div>
+    {{ end }}
+
+    <form method="POST"
+          action="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons"
+          hx-boost="false"
+          autocomplete="off">
+
+      <div class="wiz-input-block">
+        <label class="wiz-input-label" for="sf-title">TITLE</label>
+        <input class="wiz-input" type="text" id="sf-title"
+               name="title" required minlength="1" maxlength="120"
+               value="{{ .Form.Title }}"
+               placeholder="Foundation, Polish, Migration to v2 ...">
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.4rem 0 0;">A short label that captures what this season is about. 1-120 characters.</p>
       </div>
-      <h1 class="brut-hero-title">Plan Season {{ $nextNum }}</h1>
-      <p class="brut-hero-subtitle">
-        Seasons are sequential iterations within {{ $project.Name }}. Number is auto-assigned. The new season starts in
-        <span class="brut-pill brut-pill-draft" style="vertical-align: 1px;">
-          <span class="brut-pill-dot" aria-hidden="true"></span>planned</span>
-        state - activate it later to start posting.
-      </p>
-    </div>
-    <div class="brut-hero-actions">
-      <a class="brut-btn brut-btn-ghost brut-btn-sm"
-         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
-         hx-boost="true">&larr; All seasons</a>
-    </div>
-  </header>
 
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      {{ if $err }}
-      <div class="brut-flash brut-flash-error" role="alert">{{ $err }}</div>
-      {{ end }}
+      <div class="wiz-input-block">
+        <label class="wiz-input-label" for="sf-desc">DESCRIPTION</label>
+        <textarea class="wiz-input wiz-textarea" id="sf-desc"
+                  name="description" maxlength="2000" rows="6"
+                  x-data="{ len: {{ len .Form.Description }} }"
+                  @input="len = $el.value.length"
+                  placeholder="One or two paragraphs about goals, deliverables, deadline.">{{ .Form.Description }}</textarea>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.4rem 0 0;">Optional. <span x-text="len">0</span> / 2000</p>
+      </div>
 
-      <form class="brut-form brut-stagger"
-            method="POST"
-            action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
-            hx-boost="false"
-            autocomplete="off">
-
-        <div class="brut-field">
-          <label class="brut-label" for="sf-title">Title</label>
-          <input class="brut-input" type="text" id="sf-title"
-                 name="title" required minlength="1" maxlength="120"
-                 value="{{ $form.Title }}"
-                 placeholder="Foundation, Polish, Migration to v2 ...">
-          <div class="brut-help">A short label that captures what this season is about. 1-120 characters.</div>
+      <div class="wiz-footer">
+        <div class="wiz-action-group" style="margin-left: auto;">
+          <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons" class="wiz-action-secondary" hx-boost="true">CANCEL</a>
+          <button type="submit" class="wiz-begin-btn">CREATE SEASON {{ .NextNumber }}</button>
         </div>
+      </div>
+    </form>
 
-        <div class="brut-field">
-          <label class="brut-label" for="sf-desc">Description</label>
-          <textarea class="brut-textarea" id="sf-desc"
-                    name="description" maxlength="2000" rows="5"
-                    x-data="{ len: {{ len $form.Description }} }"
-                    @input="len = $el.value.length"
-                    placeholder="One or two paragraphs about goals, deliverables, deadline.">{{ $form.Description }}</textarea>
-          <div class="brut-help">
-            Optional. <span x-text="len">0</span> / 2000
-          </div>
-        </div>
-
-        <div class="brut-form-actions">
-          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
-             class="brut-btn brut-btn-secondary" hx-boost="true">Cancel</a>
-          <button type="submit" class="brut-btn brut-btn-primary">Create Season {{ $nextNum }}</button>
-        </div>
-      </form>
-    </div>
-  </section>
+  </div>
 </div>
+
 {{ end }}
 {{ end }}
