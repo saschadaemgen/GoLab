@@ -6,9 +6,9 @@
 {{/* ============================================================
      Sprint 16g.8 redesign: tab strip without icon prefixes.
      Each space-pill is a flat tab with an accent underline on
-     active state - matches .page-tabs / .brut-tabs visual
-     language. Mobile (< 768px) collapses to a native <select>
-     so users don't horizontally scroll. ============= */}}
+     active state - matches the .page-tabs visual language used
+     across project / space pages. Mobile (< 768px) collapses
+     to a native <select> so users don't horizontally scroll. =============== */}}
 
 <nav class="space-bar" aria-label="Spaces">
   <a href="/feed" class="space-pill{{ if eq $currentPath "/feed" }} active{{ end }}"

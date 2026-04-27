@@ -31,7 +31,14 @@
   </script>
 </head>
 <body hx-boost="true" hx-ext=""{{ if eq .CurrentPath "/" }} class="hero-page"{{ end }}>
-  <canvas id="sg-bg-canvas" aria-hidden="true"></canvas>
+  {{/* hx-preserve keeps the same canvas DOM node across hx-boost
+       page swaps so particles.js's IIFE-scoped reference and the
+       canvas's intrinsic dpr-aware bitmap dimensions stay valid.
+       Without it, every same-tab navigation would re-create the
+       canvas at default 300x150 while the JS still drew at the
+       old W x H, producing the "riesengroß und verschwommen"
+       artefact the Prinz saw on re-clicks. (16g.8 fix.) */}}
+  <canvas id="sg-bg-canvas" hx-preserve="true" aria-hidden="true"></canvas>
 
   {{ template "util-bar.html" . }}
   {{ template "navbar.html" . }}
