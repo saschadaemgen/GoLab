@@ -1525,6 +1525,20 @@ a.brut-pill-pickable { text-decoration: none; }
   color: hsl(220, 12%, 65%);
 }
 
+/* Season badge on post cards. Anchor-style pill, accent-tinted. */
+a.brut-pill-season {
+  text-decoration: none;
+  color: var(--brut-accent);
+  border-color: var(--brut-accent-mid);
+  background: var(--brut-accent-faint);
+  transition: background 200ms ease-out, border-color 200ms ease-out;
+}
+
+a.brut-pill-season:hover {
+  background: var(--brut-accent-mid);
+  border-color: var(--brut-accent);
+}
+
 /* =============================================================
    Single doc view (rendered HTML body)
    ============================================================= */
