@@ -65,20 +65,28 @@
            sit side by side on desktop, stack on mobile. -->
       <section class="season-dashboard" aria-label="Season dashboard">
         <ul class="kpi-grid kpi-grid-1x4 stagger-in">
-          <li class="kpi-card">
-            <span class="kpi-num">{{ .PostCount }}</span>
+          <li class="kpi-card glass-surface">
+            <span class="kpi-num"
+                  x-data="kpiCounter({{ .PostCount }}, 1000)"
+                  x-text="current">{{ .PostCount }}</span>
             <span class="kpi-label">Posts</span>
           </li>
-          <li class="kpi-card">
-            <span class="kpi-num">{{ .ContributorCount }}</span>
+          <li class="kpi-card glass-surface">
+            <span class="kpi-num"
+                  x-data="kpiCounter({{ .ContributorCount }}, 800)"
+                  x-text="current">{{ .ContributorCount }}</span>
             <span class="kpi-label">{{ pluralize .ContributorCount "Contributor" "Contributors" }}</span>
           </li>
-          <li class="kpi-card">
-            <span class="kpi-num">{{ .DaysRunning }}</span>
+          <li class="kpi-card glass-surface">
+            <span class="kpi-num"
+                  x-data="kpiCounter({{ .DaysRunning }}, 1100)"
+                  x-text="current">{{ .DaysRunning }}</span>
             <span class="kpi-label">{{ pluralize .DaysRunning "Day running" "Days running" }}</span>
           </li>
-          <li class="kpi-card">
-            <span class="kpi-num">{{ .LinkedDocs }}</span>
+          <li class="kpi-card glass-surface">
+            <span class="kpi-num"
+                  x-data="kpiCounter({{ .LinkedDocs }}, 700)"
+                  x-text="current">{{ .LinkedDocs }}</span>
             <span class="kpi-label">Linked docs</span>
           </li>
         </ul>

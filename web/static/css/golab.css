@@ -6690,8 +6690,17 @@ img.avatar {
 }
 
 .doc-status-card:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   border-color: var(--accent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), 0 0 0 1px var(--accent-faint);
+}
+
+.doc-status-card .doc-status-icon {
+  transition: transform 240ms ease-out;
+}
+
+.doc-status-card:hover .doc-status-icon {
+  transform: scale(1.08);
 }
 
 .doc-status-filled {
@@ -6811,6 +6820,16 @@ img.avatar {
 .season-line-active .season-line-card {
   border-color: rgba(46, 204, 113, 0.45);
   box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.18);
+  animation: seasonLineActivePulse 3s ease-in-out infinite;
+}
+
+@keyframes seasonLineActivePulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.18); }
+  50%      { box-shadow: 0 0 0 4px rgba(46, 204, 113, 0.10); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .season-line-active .season-line-card { animation: none; }
 }
 
 .season-line-planned .season-line-card {
@@ -6851,6 +6870,16 @@ img.avatar {
   width: 100%;
   height: auto;
   max-height: 130px;
+  animation: heatmapFadeIn 600ms ease-out;
+}
+
+@keyframes heatmapFadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-heatmap { animation: none; }
 }
 
 .heatmap-cell,

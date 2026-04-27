@@ -187,19 +187,25 @@
        hierarchy reads: identity (header) -> situation (KPIs) -> docs
        -> timeline -> activity -> description. -->
   <ul class="kpi-grid kpi-grid-1x4 stagger-in" aria-label="Project at a glance">
-    <li class="kpi-card">
-      <span class="kpi-num">{{ .TotalPosts }}</span>
+    <li class="kpi-card glass-surface">
+      <span class="kpi-num"
+            x-data="kpiCounter({{ .TotalPosts }}, 1100)"
+            x-text="current">{{ .TotalPosts }}</span>
       <span class="kpi-label">Posts</span>
     </li>
-    <li class="kpi-card">
-      <span class="kpi-num">{{ .TotalContributors }}</span>
+    <li class="kpi-card glass-surface">
+      <span class="kpi-num"
+            x-data="kpiCounter({{ .TotalContributors }}, 900)"
+            x-text="current">{{ .TotalContributors }}</span>
       <span class="kpi-label">Contributors</span>
     </li>
-    <li class="kpi-card">
-      <span class="kpi-num">{{ len .Seasons }}</span>
+    <li class="kpi-card glass-surface">
+      <span class="kpi-num"
+            x-data="kpiCounter({{ len .Seasons }}, 700)"
+            x-text="current">{{ len .Seasons }}</span>
       <span class="kpi-label">Seasons</span>
     </li>
-    <li class="kpi-card">
+    <li class="kpi-card glass-surface">
       <span class="kpi-num">{{ .DocsCompleted }} / 4</span>
       <span class="kpi-label">Docs filled</span>
     </li>
