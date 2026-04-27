@@ -7038,6 +7038,23 @@ img.avatar {
   -webkit-backdrop-filter: var(--glass-blur);
 }
 
+/* Empty-state illustration: a small line-art SVG above the title.
+   The SVG uses currentColor so it picks up the parent text colour
+   plus the accent-mid override for a soft glyph that doesn't shout
+   over the friendly copy. */
+.empty-state-illustration {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto var(--space-3);
+  color: var(--accent-mid);
+  opacity: 0.85;
+}
+
+.empty-state-illustration svg {
+  width: 100%;
+  height: 100%;
+}
+
 /* Reduced motion: kill the looping ambient animations. Hover and
    click feedback transitions stay (they're explicit user input
    responses, not ambient motion), but the mesh drift, status pulse

@@ -70,6 +70,13 @@
     </div>
     {{ else }}
     <div class="empty-state">
+      <div class="empty-state-illustration" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 12 L42 12 L52 22 L52 52 L14 52 Z"/>
+          <path d="M42 12 L42 22 L52 22"/>
+          <path d="M22 32 L44 32 M22 38 L44 38 M22 44 L34 44"/>
+        </svg>
+      </div>
       <h3>No documentation yet</h3>
       <p>
         {{ if .CanEdit }}

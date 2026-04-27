@@ -58,6 +58,14 @@
     </ol>
     {{ else }}
     <div class="empty-state">
+      <div class="empty-state-illustration" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="14" cy="32" r="6"/>
+          <circle cx="32" cy="32" r="6"/>
+          <circle cx="50" cy="32" r="6"/>
+          <path d="M20 32 L26 32 M38 32 L44 32" stroke-dasharray="2 2"/>
+        </svg>
+      </div>
       <h3>No seasons yet</h3>
       <p>
         {{ if .CanManage }}
