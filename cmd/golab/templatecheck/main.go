@@ -26,6 +26,7 @@ func main() {
 		ID: 1, Username: "prinz", DisplayName: "Der Prinz", Bio: "Builder.", PowerLevel: 100,
 	}
 
+	dummyPostSeasonID := int64(22)
 	dummyPost := model.Post{
 		ID: 1, ASType: "Note", AuthorID: 1,
 		Content:           "Hello GoLab, first post!",
@@ -38,6 +39,13 @@ func main() {
 		SpaceName:         "SimpleX Protocol",
 		SpaceSlug:         "simplex",
 		SpaceColor:        "#45BDD1",
+		// Sprint 16b Phase 4: season badge fields. dummyPostSeasonID
+		// makes one of the rendered posts demonstrate the badge.
+		SeasonID:     &dummyPostSeasonID,
+		SeasonNumber: 2,
+		SeasonTitle:  "Polish",
+		ProjectSlug:  "trust-engine",
+		ProjectName:  "Trust Level Engine",
 		Tags: []model.Tag{
 			{ID: 1, Name: "smp-protocol", Slug: "smp-protocol", UseCount: 7},
 			{ID: 2, Name: "docker", Slug: "docker", UseCount: 5},
