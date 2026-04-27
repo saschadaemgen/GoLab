@@ -10,6 +10,72 @@
 {{ template "project-header.html" . }}
 
 <div class="page-container project-dashboard">
+  {{ if or .Children .CanCreateProject }}
+  <!-- Sprint 16d: sub-projects section. Plain cards in 16d -
+       Sprint 16e turns this into the animated cockpit. The section
+       only renders when there is at least one child or the user
+       could create one. -->
+  <section class="sub-projects-section" aria-label="Sub-projects">
+    <header class="sub-projects-section-head">
+      <div>
+        <h2 class="project-section-title">
+          Sub-Projects
+          {{ if .Children }}<span class="sub-projects-count">{{ len .Children }}</span>{{ end }}
+        </h2>
+        {{ if .ParentStats }}
+        <p class="sub-projects-section-sub">
+          {{ .ParentStats.ChildPostsCount }} {{ pluralize .ParentStats.ChildPostsCount "post" "posts" }} ·
+          {{ .ParentStats.ChildContributors }} {{ pluralize .ParentStats.ChildContributors "contributor" "contributors" }} ·
+          {{ .ParentStats.ActiveChildSeasons }} active {{ pluralize .ParentStats.ActiveChildSeasons "season" "seasons" }}
+        </p>
+        {{ end }}
+      </div>
+      {{ if .CanCreateProject }}
+      <a class="btn btn-primary btn-sm press-effect"
+         href="/spaces/{{ $space.Slug }}/projects/new?parent_id={{ $project.ID }}"
+         hx-boost="true">+ New Sub</a>
+      {{ end }}
+    </header>
+    {{ if .Children }}
+    <div class="sub-projects-grid stagger-in">
+      {{ range .Children }}
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ .Slug }}"
+         class="sub-project-card{{ if eq .Status "active" }} is-active{{ end }}"
+         style="{{ if .Color }}--project-color: {{ .Color }};{{ end }}"
+         hx-boost="true">
+        <span class="sub-project-card-stripe" aria-hidden="true"></span>
+        <div class="sub-project-card-head">
+          <span class="sub-project-card-icon" aria-hidden="true">
+            {{ if .Icon }}{{ .Icon }}{{ else }}+{{ end }}
+          </span>
+          <span class="sub-project-card-name">{{ .Name }}</span>
+        </div>
+        {{ if .Description }}
+        <p class="sub-project-card-desc">{{ truncate .Description 140 }}</p>
+        {{ end }}
+        <div class="sub-project-card-foot">
+          <span class="status-pill status-pill-{{ .Status }}">
+            <span class="status-pill-dot" aria-hidden="true"></span>
+            {{ .Status }}
+          </span>
+          <span class="sub-project-card-time">{{ timeAgo .UpdatedAt }}</span>
+        </div>
+      </a>
+      {{ end }}
+    </div>
+    {{ else }}
+    <div class="project-dashboard-empty">
+      <p>No sub-projects yet.</p>
+      {{ if .CanCreateProject }}
+      <a class="btn btn-primary btn-sm press-effect"
+         href="/spaces/{{ $space.Slug }}/projects/new?parent_id={{ $project.ID }}"
+         hx-boost="true">Create the first sub-project</a>
+      {{ end }}
+    </div>
+    {{ end }}
+  </section>
+  {{ end }}
+
   <!-- Compact KPI strip directly below the header so the visual
        hierarchy reads: identity (header) -> situation (KPIs) -> docs
        -> timeline -> activity -> description. -->
