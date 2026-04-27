@@ -283,6 +283,35 @@ func main() {
 					ActiveChildSeasons: 1,
 				},
 				"CanCreateProject": true,
+				// Sprint 16e cockpit + showcase data.
+				"CockpitChart": map[string]any{
+					"hasData": true,
+					"labels":  []string{"Mar 1", "Mar 8", "Mar 15", "Mar 22", "Mar 29", "Apr 5"},
+					"datasets": []map[string]any{
+						{
+							"label":           "Trust Level Engine",
+							"backgroundColor": "#3CDFCF",
+							"data":            []int{2, 5, 4, 7, 8, 3},
+						},
+						{
+							"label":           "Reading Tracker",
+							"backgroundColor": "#9B59B6",
+							"data":            []int{0, 1, 0, 2, 1, 0},
+						},
+					},
+				},
+				"ProjectDaysOld": 142,
+				// Sparklines map keyed by child project id; empty when
+				// no posts in window. Templatecheck just needs it
+				// non-nil so `index .Sparklines .ID` returns a zero
+				// value rather than panicking.
+				"Sparklines": map[int64]map[string]any{
+					8: {
+						"Points": "0,15 4.6,12 9.2,8 13.8,10 18.4,5 23.0,8 27.6,11 32.2,6 36.8,3 41.4,7 46.0,9 50.6,4 55.2,2 60.0,6",
+						"Color":  "#9B59B6",
+						"Max":    9,
+					},
+				},
 				// Sprint 16b polish dashboard data.
 				"TotalPosts":        18,
 				"TotalContributors": 3,

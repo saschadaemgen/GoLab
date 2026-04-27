@@ -7,6 +7,88 @@
 {{ $heatmap := .Heatmap }}
 {{ $seasonsChart := .SeasonsChart }}
 
+{{ if .Children }}
+<!-- Sprint 16e: animated cockpit hero. Only renders for parent
+     projects (those with at least one visible child). The mesh
+     gradient drifts via CSS, KPI tiles count up via the kpiCounter
+     Alpine component, and the chart draws in via Chart.js. The
+     existing project-header (breadcrumb + tabs) still renders below
+     so navigation stays in the usual place. -->
+<section class="cockpit-hero{{ if eq $project.Status "active" }} cockpit-hero-active{{ end }}"
+         aria-label="Project cockpit"
+         style="{{ if $project.Color }}--project-color: {{ $project.Color }};{{ end }}">
+  <div class="cockpit-mesh" aria-hidden="true"></div>
+  <div class="cockpit-inner">
+    <header class="cockpit-head">
+      <div class="cockpit-title-row">
+        <span class="cockpit-icon" aria-hidden="true">
+          {{ if $project.Icon }}{{ $project.Icon }}{{ else }}+{{ end }}
+        </span>
+        <div class="cockpit-title-block">
+          <h1 class="cockpit-title">{{ $project.Name }}</h1>
+          {{ if $project.Description }}
+          <p class="cockpit-sub">{{ truncate $project.Description 220 }}</p>
+          {{ end }}
+        </div>
+      </div>
+      <span class="status-pill status-pill-{{ $project.Status }}">
+        <span class="status-pill-dot" aria-hidden="true"></span>{{ $project.Status }}
+      </span>
+    </header>
+
+    <ul class="cockpit-kpis">
+      <li class="cockpit-kpi glass-surface">
+        <span class="cockpit-kpi-num"
+              x-data="kpiCounter({{ len .Children }}, 900)"
+              x-text="current">{{ len .Children }}</span>
+        <span class="cockpit-kpi-label">Sub-Projects</span>
+      </li>
+      <li class="cockpit-kpi glass-surface">
+        <span class="cockpit-kpi-num"
+              x-data="kpiCounter({{ if .ParentStats }}{{ .ParentStats.ChildPostsCount }}{{ else }}0{{ end }}, 1200)"
+              x-text="current">0</span>
+        <span class="cockpit-kpi-label">Posts Total</span>
+      </li>
+      <li class="cockpit-kpi glass-surface">
+        <span class="cockpit-kpi-num"
+              x-data="kpiCounter({{ if .ParentStats }}{{ .ParentStats.ActiveChildSeasons }}{{ else }}0{{ end }}, 800)"
+              x-text="current">0</span>
+        <span class="cockpit-kpi-label">Active Seasons</span>
+      </li>
+      <li class="cockpit-kpi glass-surface">
+        <span class="cockpit-kpi-num"
+              x-data="kpiCounter({{ if .ParentStats }}{{ .ParentStats.ChildContributors }}{{ else }}0{{ end }}, 1000)"
+              x-text="current">0</span>
+        <span class="cockpit-kpi-label">Contributors</span>
+      </li>
+      <li class="cockpit-kpi glass-surface">
+        <span class="cockpit-kpi-num"
+              x-data="kpiCounter({{ len .Members }}, 800)"
+              x-text="current">0</span>
+        <span class="cockpit-kpi-label">Members</span>
+      </li>
+      <li class="cockpit-kpi glass-surface">
+        <span class="cockpit-kpi-num"
+              x-data="kpiCounter({{ .ProjectDaysOld }}, 1100)"
+              x-text="current">0</span>
+        <span class="cockpit-kpi-label">Days Old</span>
+      </li>
+    </ul>
+
+    {{ if .CockpitChart.HasData }}
+    <div class="cockpit-chart-card glass-surface"
+         x-data="cockpitActivityChart()"
+         data-chart='{{ jsonData .CockpitChart }}'>
+      <h3 class="cockpit-chart-title">Activity (last 90 days)</h3>
+      <div class="chart-container chart-container-tall">
+        <canvas x-ref="canvas" aria-label="Posts per week, stacked by sub-project"></canvas>
+      </div>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
+
 {{ template "project-header.html" . }}
 
 <div class="page-container project-dashboard">
@@ -38,9 +120,12 @@
     </header>
     {{ if .Children }}
     <div class="sub-projects-grid stagger-in">
+      {{ $sparklines := $.Content.Sparklines }}
       {{ range .Children }}
+      {{ $progress := .SimpleProgress }}
+      {{ $sl := index $sparklines .ID }}
       <a href="/spaces/{{ $space.Slug }}/projects/{{ .Slug }}"
-         class="sub-project-card{{ if eq .Status "active" }} is-active{{ end }}"
+         class="sub-project-card sub-project-card-rich{{ if eq .Status "active" }} is-active{{ end }}"
          style="{{ if .Color }}--project-color: {{ .Color }};{{ end }}"
          hx-boost="true">
         <span class="sub-project-card-stripe" aria-hidden="true"></span>
@@ -48,11 +133,33 @@
           <span class="sub-project-card-icon" aria-hidden="true">
             {{ if .Icon }}{{ .Icon }}{{ else }}+{{ end }}
           </span>
-          <span class="sub-project-card-name">{{ .Name }}</span>
+          <div class="sub-project-card-title-block">
+            <span class="sub-project-card-name">{{ .Name }}</span>
+            <div class="sub-project-card-progress" aria-label="Season progress">
+              {{ range $i := iter 5 }}
+              <span class="progress-dot{{ if lt $i $progress }} progress-dot-on{{ end }}"></span>
+              {{ end }}
+            </div>
+          </div>
         </div>
         {{ if .Description }}
-        <p class="sub-project-card-desc">{{ truncate .Description 140 }}</p>
+        <p class="sub-project-card-desc">{{ truncate .Description 130 }}</p>
         {{ end }}
+        <div class="sub-project-card-spark">
+          {{ if $sl.Max }}
+          <svg class="sparkline" viewBox="0 0 60 20" width="100%" height="22"
+               preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="{{ $sl.Points }}"
+                      fill="none"
+                      stroke="{{ $sl.Color }}"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"/>
+          </svg>
+          {{ else }}
+          <span class="sparkline-empty">No activity yet</span>
+          {{ end }}
+        </div>
         <div class="sub-project-card-foot">
           <span class="status-pill status-pill-{{ .Status }}">
             <span class="status-pill-dot" aria-hidden="true"></span>
@@ -80,19 +187,25 @@
        hierarchy reads: identity (header) -> situation (KPIs) -> docs
        -> timeline -> activity -> description. -->
   <ul class="kpi-grid kpi-grid-1x4 stagger-in" aria-label="Project at a glance">
-    <li class="kpi-card">
-      <span class="kpi-num">{{ .TotalPosts }}</span>
+    <li class="kpi-card glass-surface">
+      <span class="kpi-num"
+            x-data="kpiCounter({{ .TotalPosts }}, 1100)"
+            x-text="current">{{ .TotalPosts }}</span>
       <span class="kpi-label">Posts</span>
     </li>
-    <li class="kpi-card">
-      <span class="kpi-num">{{ .TotalContributors }}</span>
+    <li class="kpi-card glass-surface">
+      <span class="kpi-num"
+            x-data="kpiCounter({{ .TotalContributors }}, 900)"
+            x-text="current">{{ .TotalContributors }}</span>
       <span class="kpi-label">Contributors</span>
     </li>
-    <li class="kpi-card">
-      <span class="kpi-num">{{ len .Seasons }}</span>
+    <li class="kpi-card glass-surface">
+      <span class="kpi-num"
+            x-data="kpiCounter({{ len .Seasons }}, 700)"
+            x-text="current">{{ len .Seasons }}</span>
       <span class="kpi-label">Seasons</span>
     </li>
-    <li class="kpi-card">
+    <li class="kpi-card glass-surface">
       <span class="kpi-num">{{ .DocsCompleted }} / 4</span>
       <span class="kpi-label">Docs filled</span>
     </li>

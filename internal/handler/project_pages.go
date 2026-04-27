@@ -160,6 +160,40 @@ func (h *ProjectHandler) DetailPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Sprint 16e: cockpit activity chart, last 90 days, stacked by
+	// child project. Only built when the project has at least one
+	// visible child; sub-projects (which can never themselves have
+	// children) skip this entirely.
+	var cockpitChart spaceActivityChart
+	if len(children) > 0 {
+		if weekly, err := h.Projects.PostCountsByParentLast90Days(r.Context(), project.ID, viewerID); err == nil {
+			cockpitChart = buildCockpitActivityChart(weekly, children)
+		} else {
+			slog.Warn("project detail: cockpit chart", "id", project.ID, "error", err)
+		}
+	}
+	// Project age in days for the cockpit's sixth KPI tile.
+	projectDaysOld := int(time.Since(project.CreatedAt).Hours() / 24)
+	if projectDaysOld < 0 {
+		projectDaysOld = 0
+	}
+
+	// Sprint 16e showcase: per-child 14-day sparkline. Map keyed by
+	// child project id so the template can do `index .Sparklines .ID`
+	// and either render the SVG or fall through to a placeholder.
+	sparklines := map[int64]sparkline{}
+	if len(children) > 0 {
+		if daily, err := h.Projects.PostCountsByChildLast14Days(r.Context(), project.ID, viewerID); err == nil {
+			for _, c := range children {
+				if counts, ok := daily[c.ID]; ok {
+					sparklines[c.ID] = buildSparkline(counts, c.Color)
+				}
+			}
+		} else {
+			slog.Warn("project detail: child sparklines", "id", project.ID, "error", err)
+		}
+	}
+
 	// Dashboard aggregates. GetProjectStats runs three indexed
 	// aggregate queries; failure logs and falls back to empty state
 	// so the rest of the page still renders.
@@ -209,6 +243,10 @@ func (h *ProjectHandler) DetailPage(w http.ResponseWriter, r *http.Request) {
 		"Children":         children,
 		"ParentStats":      parentStats,
 		"CanCreateProject": canCreateProject,
+		// Sprint 16e cockpit chart + computed KPI input.
+		"CockpitChart":   cockpitChart,
+		"ProjectDaysOld": projectDaysOld,
+		"Sparklines":     sparklines,
 	}
 	if err := h.Render.Render(w, "project-show", data); err != nil {
 		slog.Error("render project-show", "error", err)

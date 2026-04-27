@@ -1835,6 +1835,60 @@
     });
 
     // ============================================================
+    // Sprint 16e visual polish: animated KPI counter.
+    // Counts the displayed value from 0 to `target` once the host
+    // element scrolls into view. Pure ease-out cubic, ~1200ms by
+    // default. The component disconnects its observer after firing
+    // so HTMX page swaps can re-mount cleanly.
+    //
+    // Usage:
+    //   <span x-data="kpiCounter(73)" x-text="current">0</span>
+    //   <span x-data="kpiCounter(73, 800)" x-text="current">0</span>
+    // ============================================================
+    window.Alpine.data('kpiCounter', function (target, duration) {
+      target = parseInt(target, 10) || 0;
+      duration = parseInt(duration, 10) || 1200;
+      var prefersReduced = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      return {
+        current: prefersReduced ? target : 0,
+        init: function () {
+          if (prefersReduced) return; // user opted out of motion
+          var self = this;
+          // Fall back to a synchronous animate() if the browser is
+          // ancient enough to lack IntersectionObserver - the count-up
+          // still fires; it just doesn't wait for visibility.
+          if (!('IntersectionObserver' in window)) {
+            self._animate(target, duration);
+            return;
+          }
+          var observer = new IntersectionObserver(function (entries) {
+            if (entries[0] && entries[0].isIntersecting) {
+              self._animate(target, duration);
+              observer.disconnect();
+            }
+          });
+          observer.observe(this.$el);
+        },
+        _animate: function (target, duration) {
+          var self = this;
+          var start = performance.now();
+          var step = function (now) {
+            var t = Math.min((now - start) / duration, 1);
+            var eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+            self.current = Math.floor(target * eased);
+            if (t < 1) {
+              requestAnimationFrame(step);
+            } else {
+              self.current = target;
+            }
+          };
+          requestAnimationFrame(step);
+        }
+      };
+    });
+
+    // ============================================================
     // Sprint 16b visual polish: Chart.js panels.
     // Each component reads its dataset from a `data-chart` JSON
     // attribute on the host element, instantiates the matching
@@ -1859,6 +1913,119 @@
         grid:   (s.getPropertyValue('--border')     || 'rgba(149,165,166,0.15)').trim(),
         accent: (s.getPropertyValue('--accent')     || '#45BDD1').trim()
       };
+    }
+
+    // Stacked-area chart inside the parent-project cockpit. Same
+    // dataset shape as spaceActivityChart but rendered as smooth-
+    // tensioned area bands so the cockpit reads as ambient motion
+    // instead of a hard bar histogram. One band per child project,
+    // child accent colour as fill at 25% opacity, line at 90%.
+    window.Alpine.data('cockpitActivityChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.datasets || data.datasets.length === 0) return;
+          var t = chartThemeColors();
+
+          // Translate the (label, backgroundColor, data) triples into
+          // line-chart datasets with stacked area fills. The
+          // backgroundColor we got from the server is the project's
+          // accent colour; we derive the fill (25% alpha) and line
+          // (90% alpha) inline so the server stays palette-neutral.
+          var datasets = data.datasets.map(function (ds, i) {
+            var c = ds.backgroundColor || t.accent;
+            return {
+              label: ds.label,
+              data: ds.data,
+              borderColor: hexWithAlpha(c, 0.9),
+              backgroundColor: hexWithAlpha(c, 0.25),
+              fill: i === 0 ? 'origin' : '-1',
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4
+            };
+          });
+
+          chart = new window.Chart(canvas, {
+            type: 'line',
+            data: { labels: data.labels, datasets: datasets },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 1200, easing: 'easeOutCubic' },
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                  labels: {
+                    color: t.text, boxWidth: 10, padding: 12,
+                    font: { size: 11 }, usePointStyle: true,
+                    pointStyle: 'circle'
+                  }
+                },
+                tooltip: { mode: 'index', intersect: false }
+              },
+              scales: {
+                x: {
+                  ticks: {
+                    color: t.text, font: { size: 10 },
+                    maxRotation: 0, autoSkip: true, maxTicksLimit: 8
+                  },
+                  grid: { color: t.grid, display: false }
+                },
+                y: {
+                  stacked: true,
+                  beginAtZero: true,
+                  display: false,
+                  grid: { display: false }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
+    // hexWithAlpha takes a hex / rgba colour and returns an rgba
+    // string with the given alpha. Used by cockpitActivityChart so
+    // the server can ship plain accent hexes and we layer stacked
+    // bands on top with the right transparency.
+    function hexWithAlpha(input, alpha) {
+      if (!input) return 'rgba(69,189,209,' + alpha + ')';
+      var s = String(input).trim();
+      // Already rgba? Replace the alpha component.
+      var m = s.match(/^rgba?\(([^)]+)\)$/i);
+      if (m) {
+        var parts = m[1].split(',').map(function (p) { return p.trim(); });
+        if (parts.length >= 3) {
+          return 'rgba(' + parts[0] + ',' + parts[1] + ',' + parts[2] + ',' + alpha + ')';
+        }
+      }
+      // Hex? #RGB or #RRGGBB.
+      if (s.charAt(0) === '#') {
+        var hex = s.slice(1);
+        if (hex.length === 3) {
+          hex = hex[0]+hex[0] + hex[1]+hex[1] + hex[2]+hex[2];
+        }
+        if (hex.length === 6) {
+          var r = parseInt(hex.slice(0, 2), 16);
+          var g = parseInt(hex.slice(2, 4), 16);
+          var b = parseInt(hex.slice(4, 6), 16);
+          return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+        }
+      }
+      return s; // fall back to raw input - caller gets whatever it gave us
     }
 
     // Stacked bar chart on the Space landing page. Posts per week per
