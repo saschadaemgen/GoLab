@@ -7,107 +7,357 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Sprint 14: Multi-reactions and @mentions
+### Planned for Season 3
 
-#### Added
+- Sprint 16: Project layer between Spaces and Posts
+  (Spaces > Projects > Seasons > Posts hierarchy)
+- Sprint 17: Argon2id password hashing migration
+- Sprint 17: CSP headers with Alpine CSP build
+- Sprint 17: Upload encryption at rest (AES-256-GCM with per-file IV)
+- Sprint 17: Session timeout enforcement (30min idle, 7d absolute)
+- Sprint 17: CSRF token validation beyond SameSite cookies
+- Sprint 17: Forgot password flow (passwordless via SimpleGoX considered)
+- Sprint 18: Trust Levels TL0-TL4 (Discourse-style)
+- Sprint 18: Knowledge questions V2 (dynamic rotation)
+- Sprint 18: Re-application cooldown (30-day enforcement)
+- Sprint 18: Two-factor authentication (TOTP + backup codes)
+- Sprint 18: Application Ratings UI for filtering approved users
 
-- GitHub-style multi-emoji reactions. Each user can now place any
-  subset of the 6 emoji types (heart, thumbsup, laugh, surprised,
-  sad, fire) on any post, and every post card renders all six as
-  a persistent chip bar with counts and a per-user highlight.
-- `ReactionStore.StateFor` + `StateForMany` for O(2) batched
-  reaction state across a feed / thread / profile / space / tag
-  page. Feed pages no longer N+1 on reaction counts.
-- `ReactionStore.AttachTo` convenience method - populates
-  `Post.ReactionCounts` and `Post.UserReactionTypes` on a post
-  slice in place.
-- Two indexes on reactions (user_id, created_at DESC) and
-  (reaction_type, created_at DESC) that cover the aggregation
-  queries a later ranking sprint will need.
-- `@mention` system: new `mentions` join table, `MentionStore`
-  with `ExtractUsernames`, `RecordMentions`, `SyncMentions`,
-  `ForUser`, and server-side HTML post-processing via
-  `render.LinkMentions`. `@username` becomes
-  `<a href="/u/username" class="mention">@username</a>` only
-  when the target user exists and is active.
-- `NotifMention` fan-out on post create. Self-mentions do not
-  notify. Edit path uses `SyncMentions` and does not re-notify
-  existing mentions.
-- `GET /api/users/autocomplete?q=` endpoint (RequireAuth, 60/min
-  per user). Prefix match on username, excludes banned and
-  non-active users, limit 8.
-- `quill-mention.js`: vendored, no-deps, ~270 line Quill module
-  that wires typeahead + keyboard nav (up/down/enter/tab/escape)
-  into the compose editor. Dropdown renders above modals.
-- Template helpers `emojiFor`, `reactionTypes`, `contains` so
-  post-card.html can range over the 6 types without hard-coding
-  them in HTML.
-- Pure-function test coverage: `ExtractUsernames` (9 scenarios),
-  `LinkMentions` (6 scenarios), `IsValidReactionType` (positive
-  and negative paths).
+### Phase 2 preparation (Season 4+)
 
-#### Changed
+- SimpleGoX Plugin specification document
+- GoLab protocol design over SMP transport
+- simplex-chat CLI integration prototype
+- Bot service skeleton in Go
+- Tor Onion Service v3 setup
+- I2P service setup
+- Public/Private content visibility flags
+- ActivityStreams 2.0 implementation
 
-- `ReactionStore.Toggle` semantics: removed the "switched" branch.
-  Every call adds or removes one `(user, post, type)` row. The
-  `React` JSON response now returns `{result, user_types, counts}`
-  where counts is a map with all 6 types populated (zero when
-  none). The pre-Sprint-14 `{user_type, count}` shape is gone.
-- Reaction notifications fire on every `ReactAdded` (including a
-  second distinct emoji on the same post) and never on
-  `ReactRemoved`. `NotificationStore.Create` still dedupes within
-  60 seconds so rapid add/remove cycles don't spam the author.
-- Post-card footer: the single heart + count button is replaced
-  by a horizontal chip bar. The old picker popup and its
-  positioning code are gone; chips are inline with delegated
-  click handling and optimistic UI that rolls back on server
-  error. Mobile (below 420px) hides the zero-count label to
-  keep the bar inside a 375px viewport without wrapping.
+## [0.2.0] - 2026-04-27
 
-#### Deprecated
+### Season 2: From open community to curated platform
 
-- `ReactionStore.UserReactionType` (single-type getter) stays as
-  a shim returning the first type a user holds. Remove in a
-  future sprint once no caller references it. `UserReactionTypes`
-  is the replacement.
-- `POST /api/posts/:id/unreact` still accepts legacy clients and
-  wipes every reaction the user holds on a post. Every call is
-  logged at Warn with the user agent so the remaining callers
-  can be tracked down.
+Season 2 transformed GoLab from an open registration platform into
+a curated developer community with application-based write access.
+Major work clusters: rich code-tooling features, comprehensive
+security audit and hardening via Ultrareview, complete registration
+overhaul with brutalist UX, and a full strategic exploration of SMP
+migration without committing to implementation.
 
-#### Fixed
+The platform stayed live throughout. All 18+ pull requests were
+deployed to production on lab.simplego.dev. Total: 15 sub-sprints,
+7 new database migrations, 1370+ lines of frontend changes.
 
-- N+1 on reaction counts in the /feed API, /feed page, thread
-  page, profile page, space page, and tag page. Every list now
-  calls `AttachTo` once and fans the result out into view models.
+### Added
 
-#### Migrations
+#### Sprint 13: Account management
 
-- `023_reactions_multi_emoji.sql` - drops the old (user_id,
-  post_id) PK, wipes the reactions table (five users, no
-  published content that relied on historical reactions), adds
-  the (user_id, post_id, reaction_type) PK, drops the now-
-  redundant unique-triple index, adds two ranking indexes, and
-  resets `posts.reaction_count` to 0. DOWN is a no-op per the
-  live-DB rule.
-- `024_mentions.sql` - creates the `mentions` join table with
-  FK cascades on both sides and an idx on (mentioned_user,
-  created_at DESC) for "posts that mention me" lookups. DOWN is
-  a no-op.
+- Password change in Settings with old-password verification
+- Session invalidation across all devices on password change
+- Username change with live availability check (debounced 500ms)
+- Admin can change usernames with audit trail (bypasses platform toggle)
+- Settings UI redesign with collapsible sections
+- `allow_username_change` platform setting (Owner toggle, default on)
+- Power-level protection: admins cannot rename users at or above their level
 
-### Planned
+#### Sprint 14: Code features block
 
-- Argon2id password hashing migration (Phase 1, 0.2.x)
+- Mermaid diagram support in posts (server-rendered SVG, no client dependency)
+- KaTeX math rendering inline and block
+- Liquid Tags syntax for embedded content
+- Code snippet permalinks at `/s/:id` with line range support `#L10-L20`
+- Diff viewer for code comparisons
+- Code block copy-to-clipboard buttons
+
+#### Sprint 14 (preceding): Multi-reactions and @mentions
+
+- GitHub-style multi-emoji reactions (heart, thumbsup, laugh, surprised, sad, fire)
+- Persistent chip bar with counts and per-user highlight on every post
+- `ReactionStore.StateFor` + `StateForMany` for O(2) batched reaction state
+- `ReactionStore.AttachTo` populates reaction data on post slices
+- Two ranking indexes on reactions for future ranking sprint
+- `@mention` system: `mentions` join table, `MentionStore`,
+  `ExtractUsernames`, `RecordMentions`, `SyncMentions`, `ForUser`
+- Server-side HTML post-processing via `render.LinkMentions`
+- `NotifMention` fan-out on post create (self-mentions excluded)
+- `GET /api/users/autocomplete?q=` endpoint (60/min rate limit)
+- `quill-mention.js` vendored Quill module (no deps, ~270 lines)
+- Test coverage: ExtractUsernames (9), LinkMentions (6), reaction validation
+
+#### Sprint 15: Edit/Delete and threading polish
+
+- Posts editable for 30 minutes after creation
+- Edit history visible to admins via `post_edit_history` table
+- Soft delete with author/admin recovery window
+- Reply thread improvements (collapse, jump-to-parent)
+- Post permalinks with anchor scroll
+
+#### Sprint 15a: Real-time edit propagation + bug hunt
+
+- WebSocket broadcasts post edits live to all viewers
+- "edited" badge with hover tooltip showing timestamp
+- Six bug fixes in Sprint 15a.5 series:
+  - Alpine Reactive Proxy breaking Quill identity (closure pattern)
+  - x-cloak silent no-op (added CSS rule `[x-cloak] { display: none !important; }`)
+  - Quill text-change reactivity bridge for Alpine
+  - Save-only-on-changes baseline-after-seed dirty check
+  - Modal CSS default `display: none` with template-driven reveal
+  - HTMX hx-boost re-init via `htmx:beforeSwap`/`afterSwap` glue
+  - Removed redundant `window.location.reload()` after post submit
+
+#### Sprint 15a B7: Ultrareview Round 1
+
+- 5 production bugs uncovered by cloud-based multi-agent review:
+  - Race-proof dual-render fix for post-submit author context
+    (WebSocket echo arrives before HTTP response)
+  - Edit modal Markdown corruption fix (seed with `content_html`)
+  - WebSocket edit broadcast via new `PublishPostUpdated`
+  - PATCH endpoint rate-limited at 30/min
+  - Defensive `postId` capture in edit modal closure
+
+#### Sprint 15a B8: Ultrareview nits cleanup
+
+- Symmetric error logging in `pages.go`
+- `post_edit_history` NULL handling via pointer scan
+- `IsSemanticallyEmpty` helper with NBSP/zero-width/BOM stripping
+- `GET /api/posts/{id}` now includes `edited_at` consistently
+- Shared `attachEditedBadge` helper with tooltip
+- Edited-badge rendering matches template placement
+
+#### Sprint X: Application-based registration core
+
+- Migration 026 drops `users.email` column (with explicit Prinz authorization)
+- Five application fields added to users table:
+  - `external_links` (optional)
+  - `ecosystem_connection` (required, 30-800 chars)
+  - `community_contribution` (required, 30-600 chars)
+  - `current_focus` (optional, 0-400 chars)
+  - `application_notes` (optional, 0-300 chars)
+- Login switched from email lookup to username lookup
+- Application content stripped from public profiles even on self-view
+- Server-side URL validation for HTTPS-only external links
+- Force `require_approval=true` setting in Migration 026
+
+#### Sprint X.1: Application form UX
+
+- External links optional (was required, removed by user feedback)
+- Form preservation on validation errors via Alpine + fetch
+- Live character counters with neutral/near-limit/over-limit states
+- Server returns structured field errors for inline display
+- 33 validation test cases for `validateApplication`
+- 17 test cases for `hasValidHTTPSURL`
+
+#### Sprint X.2: Critical bug fixes + first-user auto-promote
+
+- Alpine `registerForm` reference fix (template syntax: `name` vs `name()`)
+- Counter color from `--text-muted` to `--accent` for visibility
+- Submit button text rendering after Alpine fix
+- Two-layer first-user auto-promote (UserStore + Handler)
+- First user auto-approved as admin (require_approval bypass)
+- Integration test scaffolding with build tag
+
+#### Sprint Y: Application ratings system
+
+- Migration 027 with `application_ratings` table
+- 5-dimensional star rating widget for admin review:
+  - `track_record` (1-10)
+  - `ecosystem_fit` (1-10)
+  - `contribution_potential` (1-10)
+  - `relevance` (1-10)
+  - `communication` (1-10)
+- Optimistic UI update with rollback on failure
+- Toggle-off pattern for clearing ratings
+- `ApplicationRatingStore.AttachTo` bulk-load (no N+1 queries)
+- SQL injection hardening with double allow-list (column whitelist)
+- 8 ApplicationRating average subtests
+- 20 admin rating handler subtests
+
+#### Sprint Y.1: Knowledge questions
+
+- Three new questions added to application:
+  - Technical depth (a/b/c choice + 100-500 char answer, required)
+  - Practical experience (optional, 0-400 chars)
+  - Critical thinking (optional, 0-400 chars)
+- Migration 028 with CHECK constraint on `technical_depth_choice IN ('', 'a', 'b', 'c')`
+- Knowledge answers shown to admin separately from numerical ratings
+- "No answer (optional)" muted display for skipped fields
+- Editorial-decision design (knowledge filter, not numerical score)
+
+#### Sprint Y.1.1: Goose statement boundary fix
+
+- Migration 028 DO-block split by goose default semicolon parser
+- Fixed with `-- +goose StatementBegin` / `-- +goose StatementEnd` markers
+- Documented goose internal-semicolon behavior
+
+#### Sprint Y.2: Cinematic wizard (replaced by Y.3)
+
+- First wizard implementation with 5 steps
+- Direction-aware step transitions
+- Form preservation across steps
+- Replaced entirely by Y.3 brutalist redesign after Prinz feedback
+
+#### Sprint Y.3: Brutalist wizard redesign
+
+- Complete redesign as 11-step wizard with full-screen layout
+- 280px cyan sidebar with full step list and contextual quote per step
+- Dark right column (#0a0a0a) with question content
+- Monospace technical accents (step badges "STEP 04 · ECOSYSTEM CONNECTION")
+- One question per step, no scrolling within steps
+- Keyboard navigation: Enter advances, Esc goes back, Tab navigates form
+- Visual hints update contextually ("↵ Press Enter to continue")
+- Skip button only visible on optional steps (4 optional, 4 required)
+- Direction-aware slide transitions (forward and backward mirrored)
+- `.wiz-` namespace fully isolated from existing `.btn-*`/`.form-*` styles
+- Y.2 wizard CSS (425 lines) replaced with 688 brutalist lines
+
+#### Sprint Y.4: Polish v1 - live username availability + personalization
+
+- Live username availability check via `/api/auth/username-available`
+- 7 status states: idle/checking/available/taken/reserved/invalid/error
+- 17-entry `reservedUsernames` blocklist enforced server-side:
+  admin, root, system, moderator, mod, support, help, api, www, mail,
+  info, golab, simplego, anonymous, null, undefined, test
+- 30/min/IP rate limit on availability endpoint
+- 400ms debounce with stale-response guard
+- Server-side check in both `CheckUsernameAvailable` and `Register` handlers
+- @username personalization on 4 strategic wizard steps:
+  - Step 3 headline: "Tell us, @username, how you connect to SimpleGo"
+  - Step 4 helper: "What perspective would @username bring..."
+  - Step 7 helper: "@username, pick ONE sub-question..."
+  - Step 10 headline: "Looking good, @username. Look it over."
+- Contextual sidebar quotes per step (7 of 11 steps)
+- 38 username availability test cases (26 reserved, 7 invalid, 5 patterns)
+
+#### Sprint Y.5: Cinematic stagger + content-driven height
+
+- Cascade animations on step content with timing 60/220/380/540/700ms:
+  - Step badge: 60ms delay, 400ms duration
+  - Step headline: 220ms delay, 500ms duration
+  - Step helper: 380ms delay, 500ms duration
+  - Step input area: 540ms delay, 500ms duration
+  - Step meta row: 700ms delay, 400ms duration
+- Template `<template x-if>` pattern triggers fresh DOM mount per step
+- CSS animations fire on each step entry (re-trigger via remount)
+- `animation-fill-mode: backwards` on all cascades (critical fix)
+- Removed all `min-height: 100dvh` from wizard layout (4 declarations)
+- Sidebar quote pinned with `margin-top: auto` in flex column
+- Wizard total height now follows content (364px on 1243px viewport)
+- `align-items: stretch` keeps sidebar matching right column height
+
+### Changed
+
+- Application content (5 about-you fields + 4 knowledge fields) stripped
+  from public profile responses even when user views own profile
+- Login form switched from email field to username field after Migration 026
+- `require_approval` setting forced to `true` in Migration 026 (was Owner toggle)
+- First user auto-promote no longer relies solely on Migration 012's
+  blind UPDATE (which fails on empty DB) - now two-layer with handler fallback
+- Wizard CSS namespace `.wiz-*` replaces previous `.wizard-*` (Y.2 to Y.3)
+
+### Fixed
+
+- Goose parser greedy on `+goose` mention in any comment text
+  (not just real markers) - documented in code comments
+- VPS deploy `git reset --hard` wipes docker-compose.yml secrets
+  (mandatory secret-restore block via sed after each deploy)
+- Browser cache hides bugs after frontend changes
+  (always test in incognito after wizard changes)
+- Alpine.data() registered components use `x-data="name"` (no parens)
+  vs global functions `x-data="name()"` (with parens) - templates
+  silently get this wrong
+- Direction-aware step transitions need direction set BEFORE step mutation
+  so x-transition CSS sees correct data attribute
+- `animation-fill-mode: backwards` is critical for staggered cascades
+  (without it, delayed elements flash visible during their delay period)
+- Content-driven height needs zero `min-height: 100vh/dvh` on parent
+  containers (any one forces stretching)
+- WebSocket echo can arrive before HTTP response on post submit
+  (author-context render must explicitly remove and replace anonymous version)
+- `IsSemanticallyEmpty` now strips NBSP, zero-width, and BOM characters
+  before checking emptiness (Quill's `<p><br></p>` is 11 bytes but empty)
+- `EditedAt` field now appears in every post read path consistently
+  (feed, single GET, POST response, PATCH response, WebSocket render)
+
+### Migrations
+
+- `025_post_edit_history.sql` - Sprint 15: posts.edited_at, posts.edit_count,
+  post_edit_history table for admin-visible edit log. DOWN no-op.
+- `026_email_removal.sql` - Sprint X: drops users.email column with explicit
+  authorization, adds 5 application fields, forces require_approval=true.
+  Email is permanently gone. DOWN no-op.
+- `027_application_ratings.sql` - Sprint Y: application_ratings table with
+  user_id PK, 5 nullable INT dimensions (track_record, ecosystem_fit,
+  contribution_potential, relevance, communication), reviewer_id, reviewed_at,
+  notes, updated_at. DOWN no-op.
+- `028_knowledge_questions.sql` - Sprint Y.1: 4 knowledge fields on users
+  (technical_depth_choice, technical_depth_answer, practical_experience,
+  critical_thinking), CHECK constraint on choice values, wrapped DO-block
+  in goose StatementBegin/End markers. DOWN no-op.
+
+### Infrastructure
+
+- GOLAB_ENV moved to "production" on VPS
+- Production secrets restored via secret-restore block after each deploy:
+  GOLAB_DB_PASSWORD, POSTGRES_PASSWORD, GOLAB_SECRET, GOLAB_BACKUP_KEY
+- Email column permanently dropped from production database
+- Mermaid 10.x added (server-rendered SVG, no client dependency)
+- KaTeX added (client-side, ~280KB but worth it for math)
+- Diff library for code comparisons
+- Ultrareview CLI tool integrated for cloud-based code review
+  (2 free runs used: B7 implemented, B9 deferred)
+- Browser preview tool used extensively for design verification
+
+### Strategic discussions (documented, not implemented)
+
+- SMP migration architecture: hybrid Clearnet+SimpleGoX model adopted
+- Browser-native SMP confirmed not feasible:
+  - WebSocket lacks TLS channel binding
+  - WebCrypto missing Curve448/Ed448
+  - No Go SDK for SMP
+- SimpleGoX plugin identified as proper integration point for write path
+- Tor Onion Service v3 + I2P planned for Phase 3
+- Identity layer design (Ed25519 + GoUNITY certs + GoKey hardware) discussed
+- Account recovery without email reframed around hardware tokens
+
+### Removed
+
+- `users.email` column (Migration 026, deliberate, no recovery)
+- All email-related code paths (registration, login, password reset)
+- Sprint Y.2 wizard CSS (replaced by Sprint Y.3 brutalist redesign)
+
+### Known issues (deferred to Season 3)
+
+- Argon2id password hashing migration (still bcrypt cost 12)
 - Upload encryption at rest (AES-256-GCM)
-- Email verification on registration
-- 2FA via TOTP
-- Account export (GDPR Art. 20)
-- Ranking UI on top of the Sprint 14 aggregation indexes
-- Email notifications for mentions
-- Group mentions (@admins, @here)
-- Phase 2: SMP transport layer migration (simplex-js + GoBot relay)
-- Phase 2: GoUNITY certificate-based identity
-- Phase 2: Server becomes a blind relay (no plaintext visibility)
+- CSP headers with Alpine CSP build
+- Forgot password / password reset flow (no email infrastructure)
+- Two-factor authentication
+- Email notifications (no SMTP intentional)
+- Automated backups (manual via deploy.sh)
+- No monitoring or alerting
+- No CI/CD pipeline
+- docker-compose.yml still has deprecated "version" key
+- secret-restore block still required after every deploy
+- Spaces are flat (no Project containers yet - Sprint 16 priority)
+- application_ratings has no UI for filtering/sorting by score
+- Knowledge questions are static V1 (V2 dynamic rotation planned)
+- Wizard state not persisted (no save-as-draft)
+- No re-application cooldown enforcement (only stated in copy)
+
+### Metrics at Season 2 close
+
+- Users: 4+ registered (steady from Season 1, curation working)
+- Posts: 30+ (grew from Season 1)
+- Spaces: 8 thematic (unchanged)
+- Tags: 20+ user-extended
+- Application fields: 9 total (5 about-you + 4 knowledge)
+- Migrations: 28 total (021 + 7 new in Season 2)
+- Database tables: 14 (added post_edit_history, application_ratings)
+- Sprint count: 15 sub-sprints in Season 2
+- Pull requests merged: 18+
+- NPM dependencies: 0 (still zero, principle holds)
+- Binary size: ~28 MB (grew with code features)
 
 ## [0.1.0] - 2026-04-18
 
@@ -175,41 +425,27 @@ By Sprint 13 the platform had real users posting real content.
 
 - Quill.js 2.0.3 WYSIWYG editor (self-hosted, no CDN)
 - Image upload in posts with 1200px resize, JPEG q85
-- HTML sanitization via bluemonday UGCPolicy
-- goldmark `html.WithUnsafe()` explicitly disabled
-- Rate limiting via go-chi/httprate:
-  - Registration: 5/hour per IP
-  - Login: 10/minute per IP
-  - Post creation: 30/minute per user
-  - Avatar upload: 10/hour per user
-  - Image upload: 10/hour per user
-- Security headers middleware: CSP, XFO, XCTO, Referrer-Policy,
-  Permissions-Policy
-- Session cookie `__Host-` prefix in production (HTTPS-only,
-  Path=/, no Domain attribute)
-- Admin power level management with server-enforced rules
-- Image lightbox with backdrop blur on click
-- highlight.js 11.9.0 for code block rendering (self-hosted)
-- Production deploy script with automatic `pg_dump` backup
+- Bluemonday HTML sanitization on all user content
+- Rate limiting (registration, login, post, password change, upload)
+- Security headers (X-Content-Type-Options, X-Frame-Options,
+  Referrer-Policy, Permissions-Policy)
+- `__Host-` cookie prefix in production
+- Admin power level dropdown with server-enforced protection rules
+- Image lightbox with backdrop blur effect
+- highlight.js for client-side code block fallback
 
 #### Sprint 9: Security hardening
 
-- All auth forms converted from GET to POST (no credentials in
-  URL bar or browser history)
-- Password validation per NIST SP 800-63B: 8-128 chars, length
-  only, no composition rules
-- POST-Redirect-GET pattern for all auth flows
-- `wantsFormResponse`, `redirectOrJSON`, `errorRedirectOrJSON`
-  helpers so a single handler serves both JSON and HTML clients
-- Avatar display in post cards and profile headers
-- `initial` template function for avatar letter fallback
+- All forms converted from GET to POST (no credentials in URL bar)
+- Password validation (8-128 chars, NIST SP 800-63B compliant)
+- POST-Redirect-GET pattern for login and register
+- Avatar display in post cards and profile pages
 
-#### Sprint 10: Content organization
+#### Sprint 10: Spaces, Tags, Post Types
 
-- 8 thematic Spaces seeded via migration 018 (later 020):
-  SimpleX Protocol, Matrix / Element, Cybersecurity, Privacy,
-  Hardware, SimpleGo Ecosystem, Dev Tools, Off-Topic / Meta
-- Tag system with autocomplete and 20+ seeded tags
+- 8 thematic Spaces (SimpleX, Matrix, Cybersecurity, Privacy,
+  Hardware, SimpleGo, Dev Tools, Off-Topic)
+- Tag system with autocomplete (max 5 per post, 20 seeded tags)
 - Post Types: Discussion, Question, Tutorial, Code, Showcase, Link
 - Space bar navigation rendered on every page via `base.html`
 - Space pages at `/s/:slug` with post type filter tabs
@@ -272,28 +508,6 @@ By Sprint 13 the platform had real users posting real content.
 - Admin notification fan-out on new-user registration
 - Rejected users get logged out on next session touch
 
-#### Sprint 13: Account security
-
-- Password change from /settings (current / new / confirm fields)
-- `POST /api/users/me/password` endpoint with bcrypt verify,
-  length validation (8-128), and full session revocation
-- Rate limit 3 attempts per hour per user on password change
-- All sessions revoked on password change (including the caller's)
-- Redirect to `/login?msg=password-changed` with a success flash
-- Client-side confirm-password match check (Alpine `passwordForm`)
-- Username change from /settings (case-insensitive unique check,
-  3-32 chars, `^[a-zA-Z0-9_]+$`)
-- Live availability check via `GET /api/users/check-username`
-  (debounced 500ms, 60/min rate limit)
-- Alpine `usernameEditor` component with status indicator
-  (available / taken / invalid / checking)
-- `allow_username_change` platform setting (Owner toggle, default on)
-- Admin rename via `PUT /api/admin/users/:id/username` (bypasses
-  the platform toggle, enforced power-level hierarchy)
-- "Rename" button in admin user table (only shown when the admin
-  outranks the target)
-- `allow_username_change` toggle added to admin dashboard
-
 ### Infrastructure
 
 - Docker Compose deployment (Go 1.24-alpine build stage, alpine:3.21
@@ -325,11 +539,7 @@ By Sprint 13 the platform had real users posting real content.
 - POST-only forms (no credentials in URLs or browser history)
 - Admin endpoints gated by `RequireAdmin` middleware (power >= 75)
 - Owner-only operations gated inside handlers (`actor.ID == 1`)
-- Power-level protection rules server-enforced:
-  - Cannot change own power level
-  - Cannot assign higher than own level
-  - Only id=1 can promote to Owner
-  - Admins cannot rename users at or above their level
+- Power-level protection rules server-enforced
 - Identical error messages for "no such email" and "wrong
   password" to prevent account enumeration
 - `DeleteAllForUser` on password change, ban, and reject revokes
@@ -365,7 +575,7 @@ By Sprint 13 the platform had real users posting real content.
 - Channels no longer surfaced in top-level navigation (Spaces
   replaced them); `channels` table retained for Phase 2
 - Mobile space bar converted from horizontal scroll to native
-  `<select>` dropdown after user feedback ("ZUM LETZTEN MAL")
+  `<select>` dropdown after user feedback
 
 ### Removed
 
@@ -374,16 +584,7 @@ By Sprint 13 the platform had real users posting real content.
 - All GET-based auth forms (replaced with POST equivalents in
   Sprint 9)
 
-### Known issues (deferred to future sprints)
-
-- No email verification on registration
-- No password reset flow (admin must reset manually)
-- No 2FA
-- bcrypt instead of argon2id (migration planned)
-- No account export (GDPR Art. 20 compliance TBD)
-- Uploads stored unencrypted in the `golab_uploads` volume
-
 ---
 
-*GoLab CHANGELOG v1 - April 2026*
+*GoLab CHANGELOG - April 27, 2026*
 *IT and More Systems, Recklinghausen, Germany*
