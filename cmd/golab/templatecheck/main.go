@@ -391,6 +391,43 @@ func main() {
 		pages[name] = page
 	}
 
+	// Sprint 16b Phase 3: Season management forms.
+	seasonFormPages := map[string]map[string]any{
+		"project-season-new": {
+			"Title":       "Plan Season - Trust Level Engine",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/seasons/new",
+			"Content": map[string]any{
+				"Space":      dummyProjectSpace,
+				"Project":    dummyProject,
+				"NextNumber": 3,
+				"Form":       map[string]any{"Title": "", "Description": ""},
+				"Error":      "",
+			},
+		},
+		"project-season-close": {
+			"Title":       "Close Season 2 - Trust Level Engine",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/seasons/2/close",
+			"Content": map[string]any{
+				"Space":        dummyProjectSpace,
+				"Project":      dummyProject,
+				"Season":       &dummySeasons[1],
+				"Form":         map[string]any{},
+				"Error":        "",
+				"PostCount":    18,
+				"Contributors": 3,
+				"StartedLabel": "Apr 1, 2026",
+				"SeedHTML":     "<h1>Season 2 Closing Document</h1><h2>What was built</h2><p></p>",
+			},
+		},
+	}
+	for name, page := range seasonFormPages {
+		pages[name] = page
+	}
+
 	for name, data := range pages {
 		// Make sure every page has the space-bar data base.html reads.
 		if m, ok := data.(map[string]any); ok {
