@@ -90,5 +90,11 @@
   <script defer src="/static/js/theme.js"></script>
   <script defer src="/static/js/golab.js"></script>
   <script defer src="/static/js/alpine.min.js"></script>
+  <!-- Sprint 16b Phase 5 (visual polish): Chart.js 4.4.7 UMD build,
+       self-hosted (no CDN). Loaded AFTER alpine so any chart-init
+       code that relies on Alpine reactivity has it available.
+       defer is fine - charts mount inside Alpine init / x-init
+       handlers, not before DOMContentLoaded. -->
+  <script defer src="/static/js/chart.umd.min.js"></script>
 </body>
 </html>{{ end }}
