@@ -27,7 +27,9 @@ import (
 
 // projectFormValues is what the project-new / project-edit templates
 // read from .Content.Form. Mirrors the shape ValidateProjectSlug + the
-// ProjectStore expect after parsing.
+// ProjectStore expect after parsing. Sprint 16d adds ParentID (int64
+// with zero meaning "top-level") so the template's option-selected
+// comparison stays simple.
 type projectFormValues struct {
 	Name        string
 	Slug        string
@@ -36,6 +38,7 @@ type projectFormValues struct {
 	Visibility  string
 	Icon        string
 	Color       string
+	ParentID    int64 // Sprint 16d; 0 = top-level
 }
 
 func defaultProjectFormValues() projectFormValues {
@@ -46,7 +49,7 @@ func defaultProjectFormValues() projectFormValues {
 }
 
 func formValuesFromProject(p *model.Project) projectFormValues {
-	return projectFormValues{
+	out := projectFormValues{
 		Name:        p.Name,
 		Slug:        p.Slug,
 		Description: p.Description,
@@ -55,9 +58,19 @@ func formValuesFromProject(p *model.Project) projectFormValues {
 		Icon:        p.Icon,
 		Color:       p.Color,
 	}
+	if p.ParentProjectID != nil {
+		out.ParentID = *p.ParentProjectID
+	}
+	return out
 }
 
 func formValuesFromRequest(r *http.Request) projectFormValues {
+	parentID := int64(0)
+	if v := strings.TrimSpace(r.PostFormValue("parent_project_id")); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			parentID = n
+		}
+	}
 	return projectFormValues{
 		Name:        strings.TrimSpace(r.PostFormValue("name")),
 		Slug:        strings.TrimSpace(strings.ToLower(r.PostFormValue("slug"))),
@@ -66,7 +79,18 @@ func formValuesFromRequest(r *http.Request) projectFormValues {
 		Visibility:  strings.TrimSpace(r.PostFormValue("visibility")),
 		Icon:        strings.TrimSpace(r.PostFormValue("icon")),
 		Color:       strings.TrimSpace(r.PostFormValue("color")),
+		ParentID:    parentID,
 	}
+}
+
+// parentPointer turns the form's int64 (0 = none) into the *int64 the
+// store layer expects. Keeps the form value type ergonomic for
+// template comparisons while still letting the SQL accept NULL.
+func parentPointer(id int64) *int64 {
+	if id <= 0 {
+		return nil
+	}
+	return &id
 }
 
 // ============================================================
@@ -76,6 +100,10 @@ func formValuesFromRequest(r *http.Request) projectFormValues {
 // NewProjectPage renders the empty create form. Owner-only
 // (power_level >= 100). Sprint 20 will replace the hard threshold
 // with a TL-based, site-settings-configurable gate.
+//
+// Sprint 16d: the optional `?parent_id=` query parameter pre-fills
+// the parent dropdown. The "+ New Sub" button on a parent project
+// overview links here with the parent already pinned.
 func (h *ProjectHandler) NewProjectPage(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	if user == nil || user.PowerLevel < 100 {
@@ -86,7 +114,13 @@ func (h *ProjectHandler) NewProjectPage(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	h.renderProjectNew(w, r, space, defaultProjectFormValues(), "")
+	form := defaultProjectFormValues()
+	if v := strings.TrimSpace(r.URL.Query().Get("parent_id")); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			form.ParentID = n
+		}
+	}
+	h.renderProjectNew(w, r, space, form, "")
 }
 
 // CreateProjectFromForm handles the POST that follows NewProjectPage.
@@ -147,16 +181,29 @@ func (h *ProjectHandler) CreateProjectFromForm(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Sprint 16d: parent validation. Only kicks in when the user
+	// picked something; an empty / zero ParentID stays a top-level
+	// project. The store enforces depth = 1 + same-space + visibility
+	// in one place via ValidateParent.
+	if form.ParentID > 0 {
+		if err := h.Projects.ValidateParent(r.Context(),
+			form.ParentID, space.ID, 0, user.ID); err != nil {
+			h.renderProjectNew(w, r, space, form, parentValidationMessage(err))
+			return
+		}
+	}
+
 	project, err := h.Projects.Create(r.Context(), model.ProjectCreateParams{
-		SpaceID:     space.ID,
-		Slug:        form.Slug,
-		Name:        form.Name,
-		Description: form.Description,
-		Status:      form.Status,
-		Visibility:  form.Visibility,
-		OwnerID:     user.ID,
-		Icon:        form.Icon,
-		Color:       form.Color,
+		SpaceID:         space.ID,
+		Slug:            form.Slug,
+		Name:            form.Name,
+		Description:     form.Description,
+		Status:          form.Status,
+		Visibility:      form.Visibility,
+		OwnerID:         user.ID,
+		Icon:            form.Icon,
+		Color:           form.Color,
+		ParentProjectID: parentPointer(form.ParentID),
 	})
 	if err != nil {
 		switch {
@@ -181,11 +228,21 @@ func (h *ProjectHandler) CreateProjectFromForm(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ProjectHandler) renderProjectNew(w http.ResponseWriter, r *http.Request, space *model.Space, form projectFormValues, errMsg string) {
+	user := auth.UserFromContext(r.Context())
+	var viewerID int64
+	if user != nil {
+		viewerID = user.ID
+	}
+	parents, err := h.Projects.ListPotentialParents(r.Context(), space.ID, viewerID, 0)
+	if err != nil {
+		slog.Warn("project new: list parents", "space", space.ID, "error", err)
+	}
 	data := h.newProjectPageData(r, "New project - "+space.Name, space)
 	data["Content"] = map[string]any{
-		"Space": space,
-		"Form":  form,
-		"Error": errMsg,
+		"Space":            space,
+		"Form":             form,
+		"Error":            errMsg,
+		"PotentialParents": parents,
 	}
 	if errMsg != "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -258,14 +315,39 @@ func (h *ProjectHandler) UpdateProjectFromForm(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Sprint 16d: parent reparenting. Two extra checks beyond the
+	// shared ValidateParent rules:
+	//   1. cannot pick yourself (ValidateParent handles this)
+	//   2. cannot set a parent on a project that has its own
+	//      children (would push depth > 1).
+	if form.ParentID > 0 {
+		if err := h.Projects.ValidateParent(r.Context(),
+			form.ParentID, space.ID, project.ID, user.ID); err != nil {
+			h.renderProjectEdit(w, r, space, project, form, parentValidationMessage(err))
+			return
+		}
+		hasKids, err := h.Projects.HasOwnChildren(r.Context(), project.ID)
+		if err != nil {
+			slog.Error("update project: has-own-children", "id", project.ID, "error", err)
+			h.renderProjectEdit(w, r, space, project, form, "Internal error - please try again")
+			return
+		}
+		if hasKids {
+			h.renderProjectEdit(w, r, space, project, form,
+				"This project has sub-projects, so it cannot itself become a sub-project")
+			return
+		}
+	}
+
 	if err := h.Projects.Update(r.Context(), model.ProjectUpdateParams{
-		ID:          project.ID,
-		Name:        form.Name,
-		Description: form.Description,
-		Status:      form.Status,
-		Visibility:  form.Visibility,
-		Icon:        form.Icon,
-		Color:       form.Color,
+		ID:              project.ID,
+		Name:            form.Name,
+		Description:     form.Description,
+		Status:          form.Status,
+		Visibility:      form.Visibility,
+		Icon:            form.Icon,
+		Color:           form.Color,
+		ParentProjectID: parentPointer(form.ParentID),
 	}); err != nil {
 		if errors.Is(err, model.ErrProjectNotFound) {
 			http.NotFound(w, r)
@@ -285,12 +367,30 @@ func (h *ProjectHandler) UpdateProjectFromForm(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ProjectHandler) renderProjectEdit(w http.ResponseWriter, r *http.Request, space *model.Space, project *model.Project, form projectFormValues, errMsg string) {
+	user := auth.UserFromContext(r.Context())
+	var viewerID int64
+	if user != nil {
+		viewerID = user.ID
+	}
+	parents, err := h.Projects.ListPotentialParents(r.Context(), space.ID, viewerID, project.ID)
+	if err != nil {
+		slog.Warn("project edit: list parents", "space", space.ID, "error", err)
+	}
+	// If the project has its own children, the parent dropdown must
+	// stay disabled - reparenting it would create depth > 1. Pass
+	// the flag to the template so it can lock the field.
+	hasKids, err := h.Projects.HasOwnChildren(r.Context(), project.ID)
+	if err != nil {
+		slog.Warn("project edit: has-children", "id", project.ID, "error", err)
+	}
 	data := h.newProjectPageData(r, "Edit "+project.Name, space)
 	data["Content"] = map[string]any{
-		"Space":   space,
-		"Project": project,
-		"Form":    form,
-		"Error":   errMsg,
+		"Space":            space,
+		"Project":          project,
+		"Form":             form,
+		"Error":            errMsg,
+		"PotentialParents": parents,
+		"HasChildren":      hasKids,
 	}
 	if errMsg != "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -298,6 +398,23 @@ func (h *ProjectHandler) renderProjectEdit(w http.ResponseWriter, r *http.Reques
 	if err := h.Render.Render(w, "project-edit", data); err != nil {
 		slog.Error("render project-edit", "error", err)
 	}
+}
+
+// parentValidationMessage maps the store-layer parent sentinels to
+// user-friendly form-error copy. Keeps the per-handler if/else
+// chain dry.
+func parentValidationMessage(err error) string {
+	switch {
+	case errors.Is(err, model.ErrParentSameSpace):
+		return "Parent project must be in the same space"
+	case errors.Is(err, model.ErrParentNotTopLevel):
+		return "Parent must be a top-level project (cannot pick a sub-project)"
+	case errors.Is(err, model.ErrParentSelfReference):
+		return "A project cannot be its own parent"
+	case errors.Is(err, model.ErrParentInvalid):
+		return "Selected parent project is not available"
+	}
+	return "Parent selection invalid"
 }
 
 // ============================================================

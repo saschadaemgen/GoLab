@@ -81,8 +81,10 @@ func (s *ProjectStore) ListBySpaceWithStats(ctx context.Context, spaceID, viewer
 	rows, err := s.DB.Query(ctx, `
 		SELECT
 			p.id, p.space_id, p.slug, p.name, p.description, p.status, p.visibility,
-			p.owner_id, p.icon, p.color, p.deleted_at, p.created_at, p.updated_at,
+			p.owner_id, p.icon, p.color, p.parent_project_id,
+			p.deleted_at, p.created_at, p.updated_at,
 			COALESCE(s.slug, ''), COALESCE(s.name, ''),
+			COALESCE(parent.slug, ''), COALESCE(parent.name, ''),
 			COALESCE(stats.post_count, 0)::bigint,
 			stats.last_activity_at,
 			cur.season_number,
@@ -92,6 +94,7 @@ func (s *ProjectStore) ListBySpaceWithStats(ctx context.Context, spaceID, viewer
 			COALESCE(member_count.total, 0)::int
 		FROM projects p
 		LEFT JOIN spaces s ON p.space_id = s.id
+		LEFT JOIN projects parent ON parent.id = p.parent_project_id
 		LEFT JOIN (
 			SELECT pr.id,
 			       COUNT(po.id) AS post_count,
@@ -140,8 +143,10 @@ func (s *ProjectStore) ListBySpaceWithStats(ctx context.Context, spaceID, viewer
 		if err := rows.Scan(
 			&ps.ID, &ps.SpaceID, &ps.Slug, &ps.Name, &ps.Description,
 			&ps.Status, &ps.Visibility, &ps.OwnerID, &ps.Icon, &ps.Color,
+			&ps.ParentProjectID,
 			&ps.DeletedAt, &ps.CreatedAt, &ps.UpdatedAt,
 			&ps.SpaceSlug, &ps.SpaceName,
+			&ps.ParentSlug, &ps.ParentName,
 			&ps.PostCount, &ps.LastActivityAt,
 			&ps.CurrentSeasonNumber, &ps.CurrentSeasonStartedAt, &ps.CurrentSeasonStatus,
 			&ps.TotalSeasonCount, &ps.MemberCount,
