@@ -7023,6 +7023,197 @@ img.avatar {
 }
 
 /* ============================================================
+   Sprint 16e: Cockpit hero on parent project overview
+   ============================================================
+   The cockpit only renders when a project has visible children.
+   Mesh gradient drifts behind glassmorphic KPI tiles + a stacked
+   area activity chart. The whole hero respects the project's
+   --project-color so each parent feels tonally distinct. */
+
+.cockpit-hero {
+  --project-color: var(--accent);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, var(--cockpit-bg-1), var(--cockpit-bg-2));
+  padding: var(--space-6) var(--content-padding, 1.25rem) var(--space-5);
+}
+
+/* The mesh layer is decorative; absolute-positioned so it sits
+   behind everything else in the hero. Uses three radial gradients
+   that drift slowly via the meshDrift keyframe defined in the
+   foundation block above. */
+.cockpit-mesh {
+  position: absolute;
+  inset: -10% -10% -10% -10%;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(at 20% 30%, var(--cockpit-mesh-1) 0%, transparent 45%),
+    radial-gradient(at 80% 70%, var(--cockpit-mesh-2) 0%, transparent 55%),
+    radial-gradient(at 50% 100%, var(--cockpit-mesh-3) 0%, transparent 60%);
+  background-size: 110% 110%, 110% 110%, 110% 110%;
+  animation: meshDrift 24s ease-in-out infinite;
+}
+
+.cockpit-hero-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 0 80px var(--accent-faint);
+}
+
+.cockpit-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.cockpit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.cockpit-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cockpit-icon {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--project-color);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.cockpit-title-block {
+  min-width: 0;
+}
+
+.cockpit-title {
+  margin: 0 0 var(--space-2);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.cockpit-sub {
+  margin: 0;
+  color: var(--text-normal);
+  max-width: 60ch;
+  line-height: 1.55;
+  font-size: 0.95rem;
+}
+
+/* KPI tile grid -------------------------------------------- */
+.cockpit-kpis {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-3);
+}
+
+.cockpit-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  transition: transform 200ms ease-out, border-color 200ms ease-out;
+}
+
+.cockpit-kpi:hover {
+  transform: translateY(-2px);
+  border-color: var(--project-color);
+}
+
+.cockpit-kpi-num {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  animation: counterFinished 1.6s ease-out 1.2s both;
+}
+
+.cockpit-kpi-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* Activity chart card ------------------------------------- */
+.cockpit-chart-card {
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.cockpit-chart-title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* Mobile (<=768px): KPI grid collapses to 3x2, then 2x3 below
+   480px so the cockpit stays readable on a phone. The chart card
+   keeps its proportions but loses some height to free vertical
+   space for the post feed below. */
+@media (max-width: 1024px) {
+  .cockpit-kpis { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .cockpit-hero {
+    padding: var(--space-5) var(--space-3) var(--space-4);
+  }
+  .cockpit-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.5rem;
+  }
+  .cockpit-title { font-size: 1.5rem; }
+  .cockpit-sub { font-size: 0.9rem; }
+  .cockpit-kpi-num { font-size: 1.9rem; }
+  .chart-container.chart-container-tall { height: 220px; }
+}
+@media (max-width: 480px) {
+  .cockpit-kpis { grid-template-columns: 1fr 1fr; }
+}
+
+/* ============================================================
    Sprint 16d: Project hierarchy
    ============================================================
    Plain styles for the parent breadcrumb / parent label / sub-

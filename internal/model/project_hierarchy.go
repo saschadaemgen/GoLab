@@ -320,3 +320,48 @@ func (s *ProjectStore) GetParentProjectStats(ctx context.Context, parentID, view
 
 	return stats, nil
 }
+
+// PostCountsByParentLast90Days returns weekly post-count buckets per
+// child project of `parentID` for the last 90 days. Powers the
+// stacked-area Activity chart in the Sprint 16e cockpit.
+//
+// Schema is identical to PostCountsBySpaceLast90Days so the chart-
+// builder can be shared. The visibility filter only includes children
+// the viewer can see, matching ListChildProjects.
+func (s *ProjectStore) PostCountsByParentLast90Days(ctx context.Context, parentID, viewerID int64) ([]WeeklyProjectCount, error) {
+	rows, err := s.DB.Query(ctx, `
+		SELECT date_trunc('week', po.created_at)::date AS week_start,
+		       pr.id AS project_id,
+		       COUNT(*) AS post_count
+		  FROM posts po
+		  JOIN seasons  se ON se.id = po.season_id
+		  JOIN projects pr ON pr.id = se.project_id
+		 WHERE pr.parent_project_id = $1
+		   AND pr.deleted_at IS NULL
+		   AND po.created_at >= NOW() - INTERVAL '90 days'
+		   AND (
+		       pr.visibility = 'public'
+		       OR EXISTS (
+		           SELECT 1 FROM project_members pm
+		            WHERE pm.project_id = pr.id AND pm.user_id = $2
+		       )
+		   )
+		 GROUP BY week_start, pr.id
+		 ORDER BY week_start`,
+		parentID, viewerID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("post counts by parent last 90: %w", err)
+	}
+	defer rows.Close()
+
+	var out []WeeklyProjectCount
+	for rows.Next() {
+		var w WeeklyProjectCount
+		if err := rows.Scan(&w.WeekStart, &w.ProjectID, &w.Count); err != nil {
+			return nil, fmt.Errorf("scan parent weekly count: %w", err)
+		}
+		out = append(out, w)
+	}
+	return out, rows.Err()
+}
