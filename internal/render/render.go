@@ -47,6 +47,10 @@ var pageNames = []string{
 	"project-seasons",
 	"project-season",
 	"project-members",
+	// Sprint 16b Phase 2: Project authoring forms.
+	"project-new",
+	"project-edit",
+	"project-doc-edit",
 }
 
 func New(templatesDir string) (*Engine, error) {
