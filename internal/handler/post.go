@@ -22,6 +22,8 @@ type PostHandler struct {
 	Users       *model.UserStore             // Sprint 14: resolve @username -> link on render
 	Mentions    *model.MentionStore          // Sprint 14: record mentions on post create/update
 	EditHistory *model.PostEditHistoryStore  // Sprint 15a B6: list / count edits
+	Seasons     *model.SeasonStore           // Sprint 16b Phase 4: validate season_id assignment
+	Projects    *model.ProjectStore          // Sprint 16b Phase 4: visibility check on season
 	Markdown    *render.Markdown
 	Sanitizer   *render.Sanitizer
 	Hub         *Hub           // optional; when present, new posts get broadcast
@@ -34,6 +36,7 @@ type createPostRequest struct {
 	ChannelID *int64   `json:"channel_id,omitempty"`
 	ParentID  *int64   `json:"parent_id,omitempty"`
 	SpaceID   *int64   `json:"space_id,omitempty"`
+	SeasonID  *int64   `json:"season_id,omitempty"` // Sprint 16b: optional project season
 	PostType  string   `json:"post_type,omitempty"`
 	Tags      []string `json:"tags,omitempty"`
 }
@@ -173,6 +176,41 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Sprint 16b: Validate season assignment. The season must exist,
+	// must not be closed, and the user must have read access to the
+	// project (otherwise we'd let users assign posts to seasons of
+	// hidden projects they can't see).
+	if req.SeasonID != nil {
+		if h.Seasons == nil || h.Projects == nil {
+			writeError(w, http.StatusBadRequest, "season assignment not available")
+			return
+		}
+		season, err := h.Seasons.FindByID(r.Context(), *req.SeasonID)
+		if err != nil {
+			slog.Error("create post: find season", "id", *req.SeasonID, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if season == nil {
+			writeError(w, http.StatusBadRequest, "season not found")
+			return
+		}
+		if season.Status == model.SeasonStatusClosed {
+			writeError(w, http.StatusBadRequest, "season is closed; pick a different season")
+			return
+		}
+		allowed, err := h.Projects.CanUserAccess(r.Context(), season.ProjectID, user.ID)
+		if err != nil {
+			slog.Error("create post: project access for season", "season", season.ID, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if !allowed {
+			writeError(w, http.StatusBadRequest, "season not found")
+			return
+		}
+	}
+
 	// Dual-format support:
 	//
 	// - If the content looks like HTML (Quill output from the rich editor),
@@ -223,6 +261,7 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ChannelID:   req.ChannelID,
 		ParentID:    req.ParentID,
 		SpaceID:     req.SpaceID,
+		SeasonID:    req.SeasonID,
 		PostType:    postType,
 		Content:     req.Content,
 		ContentHTML: contentHTML,

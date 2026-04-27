@@ -184,6 +184,8 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Users:       users,       // Sprint 14: resolve @mentions -> profile links
 		Mentions:    mentions,    // Sprint 14: record mention rows on Create / Update
 		EditHistory: editHistory, // Sprint 15a B6: LastEditAt for the edited badge
+		Seasons:     seasons,     // Sprint 16b Phase 4: validate season_id assignment
+		Projects:    projectStore, // Sprint 16b Phase 4: visibility on season
 		Markdown:    md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
 	}
 	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}
