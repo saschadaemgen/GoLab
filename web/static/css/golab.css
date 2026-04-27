@@ -1504,12 +1504,17 @@ img.avatar {
    can tint per-space without duplicating CSS.
 ================================================================ */
 
+/* Sprint 16g.8 redesign: the space bar reads as a tab strip
+   matching .page-tabs - underline on active, no pill chrome,
+   no per-space color tinting, no icon prefixes. Sticky under
+   the navbar, backdrop-blurred, horizontal scroll on overflow. */
+
 .space-bar {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--content-padding);
-  background: rgba(var(--bg-card-rgb), 0.88);
+  align-items: stretch;
+  gap: 0;
+  padding: 0 var(--content-padding);
+  background: rgba(var(--bg-card-rgb), 0.92);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
@@ -1517,86 +1522,54 @@ img.avatar {
   position: sticky;
   top: var(--header-total);
   z-index: 500;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 .space-bar::-webkit-scrollbar { display: none; }
 
 .space-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  padding: 0.85rem 1rem;
+  border: 0;
   background: transparent;
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-size: var(--font-sm);
   font-weight: var(--weight-medium);
   white-space: nowrap;
   text-decoration: none;
-  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.15s ease;
-  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 150ms, border-color 150ms;
   flex-shrink: 0;
-  position: relative;
 }
 .space-pill:hover {
-  border-color: var(--space-color);
-  color: var(--space-color);
-  background: var(--bg-card-hover);
-}
-.space-pill:active {
-  transform: scale(0.97);
+  color: var(--text);
 }
 .space-pill.active {
-  border-color: var(--space-color);
-  background: var(--space-color);
-  color: #fff;
-  font-weight: var(--weight-semibold);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-.space-pill.active::after {
-  /* Little dot below the active pill. Sits inside the sticky bar; the
-     bar's border-bottom clips it cleanly. */
-  content: '';
-  position: absolute;
-  bottom: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--space-color);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
-.space-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.95rem;
-  line-height: 1;
-}
-/* Post-count badge sits flush on the right of each pill. Renders in
-   the space's own tint on inactive pills, white-on-transparent on the
-   active pill. */
+/* Per-space count badge: monospace, muted by default, accent on
+   the active tab. No coloured background, no per-space tint. */
 .space-count {
   display: inline-block;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--font-xs);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.05em;
   padding: 0.1rem 0.4rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--space-color) 15%, transparent);
-  color: var(--space-color);
+  border-radius: 4px;
+  background: var(--bg-deep);
+  color: var(--text-muted);
   line-height: 1.4;
 }
 .space-pill.active .space-count {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: var(--accent);
+  background: var(--accent-subtle);
 }
 
 /* Mobile swap: hide the pill bar and show a native <select>. Avoids
