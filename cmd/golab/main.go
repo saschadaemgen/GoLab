@@ -189,7 +189,15 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Markdown:    md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
 	}
 	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}
-	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags, Reactions: reactions, EditHistory: editHistory}
+	spaceH := &handler.SpaceHandler{
+		Render:      tmpls,
+		Spaces:      spaces,
+		Posts:       posts,
+		Tags:        tags,
+		Reactions:   reactions,
+		EditHistory: editHistory,
+		Projects:    projectStore, // Sprint 16b polish
+	}
 	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts, Spaces: spaces, Reactions: reactions, EditHistory: editHistory}
 	feedH := &handler.FeedHandler{Posts: posts, Reactions: reactions, EditHistory: editHistory}
 	profileH := &handler.ProfileHandler{

@@ -1834,6 +1834,246 @@
       };
     });
 
+    // ============================================================
+    // Sprint 16b visual polish: Chart.js panels.
+    // Each component reads its dataset from a `data-chart` JSON
+    // attribute on the host element, instantiates the matching
+    // Chart.js chart, and tears it down on Alpine destroy so HTMX
+    // page swaps don't leak canvases.
+    // ============================================================
+
+    function readChartData(el) {
+      try {
+        return JSON.parse(el.dataset.chart || '{}');
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function chartThemeColors() {
+      var s = getComputedStyle(document.documentElement);
+      return {
+        text:   (s.getPropertyValue('--text-dim')   || '#9aa5b1').trim(),
+        bright: (s.getPropertyValue('--text-bright')|| '#e6edf3').trim(),
+        muted:  (s.getPropertyValue('--text-muted') || '#7a8590').trim(),
+        grid:   (s.getPropertyValue('--border')     || 'rgba(149,165,166,0.15)').trim(),
+        accent: (s.getPropertyValue('--accent')     || '#45BDD1').trim()
+      };
+    }
+
+    // Stacked bar chart on the Space landing page. Posts per week per
+    // project, last 90 days. Server pre-aggregates the dataset; this
+    // component only handles theme + Chart.js wiring.
+    window.Alpine.data('spaceActivityChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.datasets || data.datasets.length === 0) return;
+          var t = chartThemeColors();
+          chart = new window.Chart(canvas, {
+            type: 'bar',
+            data: data,
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 350 },
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                  labels: { color: t.text, boxWidth: 10, padding: 12, font: { size: 11 } }
+                },
+                tooltip: { mode: 'index', intersect: false }
+              },
+              scales: {
+                x: {
+                  stacked: true,
+                  ticks: { color: t.text, font: { size: 10 }, maxRotation: 0, autoSkip: true },
+                  grid:  { color: t.grid, display: false }
+                },
+                y: {
+                  stacked: true,
+                  beginAtZero: true,
+                  ticks: { color: t.text, font: { size: 10 }, precision: 0 },
+                  grid:  { color: t.grid }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
+    // Bar chart "posts per season" on the project landing dashboard.
+    window.Alpine.data('projectSeasonsChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.data || data.data.length === 0) return;
+          var t = chartThemeColors();
+          chart = new window.Chart(canvas, {
+            type: 'bar',
+            data: {
+              labels: data.labels,
+              datasets: [{
+                label: 'Posts',
+                data: data.data,
+                backgroundColor: data.backgroundColor,
+                borderRadius: 6,
+                maxBarThickness: 36
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 350 },
+              plugins: {
+                legend: { display: false },
+                tooltip: { intersect: false }
+              },
+              scales: {
+                x: {
+                  ticks: { color: t.text, font: { size: 11 } },
+                  grid:  { color: t.grid, display: false }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: t.text, font: { size: 10 }, precision: 0 },
+                  grid:  { color: t.grid }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
+    // Line chart "posts over time" on the season detail dashboard.
+    window.Alpine.data('seasonDailyChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.labels) return;
+          var t = chartThemeColors();
+          chart = new window.Chart(canvas, {
+            type: 'line',
+            data: {
+              labels: data.labels,
+              datasets: [{
+                label: 'Posts',
+                data: data.data,
+                borderColor: t.accent,
+                backgroundColor: t.accent + '33',
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                pointRadius: 2,
+                pointHoverRadius: 4
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 350 },
+              plugins: {
+                legend: { display: false },
+                tooltip: { intersect: false, mode: 'index' }
+              },
+              scales: {
+                x: {
+                  ticks: { color: t.text, font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+                  grid:  { color: t.grid, display: false }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: t.text, font: { size: 10 }, precision: 0 },
+                  grid:  { color: t.grid }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
+    // Donut chart "posts by type" on the season detail dashboard.
+    window.Alpine.data('seasonTypeChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.data || data.data.length === 0) return;
+          var t = chartThemeColors();
+          chart = new window.Chart(canvas, {
+            type: 'doughnut',
+            data: {
+              labels: data.labels,
+              datasets: [{
+                data: data.data,
+                backgroundColor: data.backgroundColor,
+                borderWidth: 1,
+                borderColor: 'rgba(0,0,0,0.0)'
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: '62%',
+              animation: { duration: 350 },
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                  labels: { color: t.text, boxWidth: 10, padding: 10, font: { size: 11 } }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
     // Sprint 16b Phase 2: Project form helper. Auto-derives the slug
     // from the name on type, stops auto-deriving once the user types
     // into the slug field directly. Slug rules mirror the server-side

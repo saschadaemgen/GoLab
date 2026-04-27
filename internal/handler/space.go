@@ -18,8 +18,9 @@ type SpaceHandler struct {
 	Spaces      *model.SpaceStore
 	Posts       *model.PostStore
 	Tags        *model.TagStore
-	Reactions   *model.ReactionStore            // Sprint 14: batch-attach reaction state
-	EditHistory *model.PostEditHistoryStore     // Sprint 15a B6: batch-attach edited_at
+	Reactions   *model.ReactionStore        // Sprint 14: batch-attach reaction state
+	EditHistory *model.PostEditHistoryStore // Sprint 15a B6: batch-attach edited_at
+	Projects    *model.ProjectStore         // Sprint 16b polish: project overview block
 }
 
 // validPostTypeQuery matches the briefing: all six post types from the
@@ -103,13 +104,50 @@ func (h *SpaceHandler) SpacePage(w http.ResponseWriter, r *http.Request) {
 		popular = []model.Tag{}
 	}
 
+	// Sprint 16b visual polish: project overview block + activity
+	// chart. Both queries are visibility-scoped so a non-member only
+	// sees public projects and their post counts. Failures degrade
+	// gracefully - the section just disappears for that request.
+	var projectsWithStats []model.ProjectWithStats
+	var activity spaceActivityChart
+	var totalProjectPosts int64
+	var totalProjectSeasons int
+	if h.Projects != nil {
+		var viewerID int64
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			viewerID = u.ID
+		}
+		ps, err := h.Projects.ListBySpaceWithStats(r.Context(), sp.ID, viewerID)
+		if err != nil {
+			slog.Warn("space page: project stats", "error", err)
+		} else {
+			projectsWithStats = ps
+			for _, p := range ps {
+				totalProjectPosts += p.PostCount
+				totalProjectSeasons += p.TotalSeasonCount
+			}
+		}
+		if len(projectsWithStats) > 0 {
+			weekly, err := h.Projects.PostCountsBySpaceLast90Days(r.Context(), sp.ID, viewerID)
+			if err != nil {
+				slog.Warn("space page: weekly counts", "error", err)
+			} else {
+				activity = buildSpaceActivityChart(weekly, projectsWithStats)
+			}
+		}
+	}
+
 	data := h.newPageData(r, sp.Name+" - GoLab", sp.Slug)
 	data["Content"] = map[string]any{
-		"Space":       sp,
-		"Posts":       posts,
-		"PopularTags": popular,
-		"ActiveType":  postType,
-		"ActiveTag":   tagFilter,
+		"Space":             sp,
+		"Posts":             posts,
+		"PopularTags":       popular,
+		"ActiveType":        postType,
+		"ActiveTag":         tagFilter,
+		"Projects":            projectsWithStats,
+		"ProjectActivity":     activity,
+		"TotalProjectPosts":   totalProjectPosts,
+		"TotalProjectSeasons": totalProjectSeasons,
 	}
 	if err := h.Render.Render(w, "space", data); err != nil {
 		slog.Error("render space", "error", err)
