@@ -1858,6 +1858,19 @@
             self._animate(target, duration);
             return;
           }
+          // Sprint 16f bug fix: tiles in the cockpit are above the
+          // fold on first paint, so they're already intersecting
+          // when the observer attaches. Some browsers / timing paths
+          // skip the initial "now intersecting" callback in that
+          // case and the count never starts. Check geometry up
+          // front and animate immediately when the element is
+          // already on screen; otherwise fall back to the observer.
+          var rect = this.$el.getBoundingClientRect();
+          var alreadyVisible = rect.top < window.innerHeight && rect.bottom > 0;
+          if (alreadyVisible) {
+            self._animate(target, duration);
+            return;
+          }
           var observer = new IntersectionObserver(function (entries) {
             if (entries[0] && entries[0].isIntersecting) {
               self._animate(target, duration);

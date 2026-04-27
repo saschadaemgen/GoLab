@@ -4976,7 +4976,12 @@ img.avatar {
 }
 
 .wiz-step-pane > * {
-  animation: wiz-element-enter 500ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  /* Sprint 16f bug-fix sweep: switched from `backwards` to `both`
+     so the rule still works if a future style adds `opacity: 0` on
+     the wiz pane children. The rendered behaviour for plain
+     wiz-step-pane > * is identical (no opacity rule on the bare
+     selector), the change is defensive. */
+  animation: wiz-element-enter 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Stagger by direct-child position. The :nth-child sequence is
