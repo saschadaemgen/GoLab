@@ -24,6 +24,13 @@
         <span class="space-stat-number">{{ $sp.PostCount }}</span>
         <span class="space-stat-label">Posts</span>
       </div>
+      <a href="/spaces/{{ $sp.Slug }}/projects"
+         class="space-stat space-stat-link"
+         hx-boost="true"
+         aria-label="View projects in {{ $sp.Name }}">
+        <span class="space-stat-number" aria-hidden="true">&rarr;</span>
+        <span class="space-stat-label">Projects</span>
+      </a>
     </div>
   </div>
 </header>

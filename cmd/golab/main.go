@@ -225,6 +225,11 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Users:       users,
 		Markdown:    md,
 		Sanitizer:   sanitizer,
+		// Sprint 16b page-rendering deps.
+		Render:      tmpls,
+		Posts:       posts,
+		Reactions:   reactions,
+		EditHistory: editHistory,
 	}
 
 	// Page handlers
@@ -275,6 +280,18 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		// reuses the same handler. UpdateMe reads form-encoded bodies
 		// and redirects back to /settings on success.
 		r.Post("/settings", profileH.UpdateMe)
+
+		// Sprint 16b: Project system pages. Reads require auth +
+		// visibility check (handler-side); writes (Phase 2/3) land
+		// later. Hidden / members-only projects 404 to non-members
+		// rather than 403 so the URL doesn't leak existence.
+		r.Get("/spaces/{space_slug}/projects", projectH.ListPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}", projectH.DetailPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/docs", projectH.DocsPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_type}", projectH.DocPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons", projectH.SeasonsPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}", projectH.SeasonPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/members", projectH.MembersPage)
 	})
 
 	// Admin page (HTML)
