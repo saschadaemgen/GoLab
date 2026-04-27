@@ -489,6 +489,331 @@ func (h *ProjectHandler) renderDocEdit(w http.ResponseWriter, r *http.Request, s
 // Doc delete (custom only)
 // ============================================================
 
+// ============================================================
+// Season management
+// ============================================================
+
+// NewSeasonPage renders the create-season form. Owner-or-admin only.
+func (h *ProjectHandler) NewSeasonPage(w http.ResponseWriter, r *http.Request) {
+	space, project, ok := h.loadProjectByPath(w, r)
+	if !ok {
+		return
+	}
+	user := auth.UserFromContext(r.Context())
+	if !h.canUserManageProject(user, project) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	h.renderSeasonNew(w, r, space, project, seasonFormValues{}, "")
+}
+
+// CreateSeasonFromForm processes the POST. Season number is
+// auto-assigned by the store. On success redirects to the new season's
+// detail page.
+func (h *ProjectHandler) CreateSeasonFromForm(w http.ResponseWriter, r *http.Request) {
+	space, project, ok := h.loadProjectByPath(w, r)
+	if !ok {
+		return
+	}
+	user := auth.UserFromContext(r.Context())
+	if !h.canUserManageProject(user, project) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		h.renderSeasonNew(w, r, space, project, seasonFormValues{}, "Could not parse form")
+		return
+	}
+
+	form := seasonFormValues{
+		Title:       strings.TrimSpace(r.PostFormValue("title")),
+		Description: r.PostFormValue("description"),
+	}
+	if form.Title == "" || len(form.Title) > maxSeasonTitleLen {
+		h.renderSeasonNew(w, r, space, project, form, "Title must be 1-120 characters")
+		return
+	}
+	if len(form.Description) > maxSeasonDescLen {
+		h.renderSeasonNew(w, r, space, project, form, "Description is too long (max 2000 characters)")
+		return
+	}
+
+	season, err := h.Seasons.Create(r.Context(), model.SeasonCreateParams{
+		ProjectID:   project.ID,
+		Title:       form.Title,
+		Description: form.Description,
+	})
+	if err != nil {
+		slog.Error("create season from form", "project", project.ID, "error", err)
+		h.renderSeasonNew(w, r, space, project, form, "Internal error - please try again")
+		return
+	}
+
+	slog.Info("season created via form",
+		"project", project.ID, "season", season.SeasonNumber,
+		"actor", user.Username)
+
+	http.Redirect(w, r,
+		"/spaces/"+space.Slug+"/projects/"+project.Slug+
+			"/seasons/"+strconv.Itoa(season.SeasonNumber),
+		http.StatusSeeOther)
+}
+
+// ActivateSeasonFromForm processes the small confirm form on the
+// season detail page. Owner-or-admin only.
+func (h *ProjectHandler) ActivateSeasonFromForm(w http.ResponseWriter, r *http.Request) {
+	space, project, ok := h.loadProjectByPath(w, r)
+	if !ok {
+		return
+	}
+	user := auth.UserFromContext(r.Context())
+	if !h.canUserManageProject(user, project) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	num, err := strconv.Atoi(chi.URLParam(r, "number"))
+	if err != nil || num <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	season, err := h.Seasons.GetByNumber(r.Context(), project.ID, num)
+	if err != nil || season == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.Seasons.Activate(r.Context(), season.ID); err != nil {
+		switch {
+		case errors.Is(err, model.ErrSeasonNotFound):
+			http.NotFound(w, r)
+		case errors.Is(err, model.ErrSeasonNotPlanned):
+			// Race or stale tab; redirect back without changing state.
+			http.Redirect(w, r,
+				"/spaces/"+space.Slug+"/projects/"+project.Slug+
+					"/seasons/"+strconv.Itoa(num)+"?error=already-activated",
+				http.StatusSeeOther)
+		default:
+			slog.Error("activate season from form", "id", season.ID, "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
+		return
+	}
+	slog.Info("season activated via form",
+		"id", season.ID, "project", project.ID,
+		"season", num, "actor", user.Username)
+	http.Redirect(w, r,
+		"/spaces/"+space.Slug+"/projects/"+project.Slug+
+			"/seasons/"+strconv.Itoa(num),
+		http.StatusSeeOther)
+}
+
+// CloseSeasonPage renders the dedicated close-season page with the
+// Quill editor pre-seeded with a closing-doc template.
+func (h *ProjectHandler) CloseSeasonPage(w http.ResponseWriter, r *http.Request) {
+	space, project, ok := h.loadProjectByPath(w, r)
+	if !ok {
+		return
+	}
+	user := auth.UserFromContext(r.Context())
+	if !h.canUserManageProject(user, project) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	num, err := strconv.Atoi(chi.URLParam(r, "number"))
+	if err != nil || num <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	season, err := h.Seasons.GetByNumber(r.Context(), project.ID, num)
+	if err != nil || season == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if season.Status != model.SeasonStatusActive {
+		// Only active seasons can be closed; bounce back to detail.
+		http.Redirect(w, r,
+			"/spaces/"+space.Slug+"/projects/"+project.Slug+
+				"/seasons/"+strconv.Itoa(num),
+			http.StatusSeeOther)
+		return
+	}
+	h.renderSeasonClose(w, r, space, project, season, "")
+}
+
+// CloseSeasonFromForm processes the POST. Sanitizes the Quill HTML,
+// stores it as the closing doc, transitions the season to closed.
+func (h *ProjectHandler) CloseSeasonFromForm(w http.ResponseWriter, r *http.Request) {
+	space, project, ok := h.loadProjectByPath(w, r)
+	if !ok {
+		return
+	}
+	user := auth.UserFromContext(r.Context())
+	if !h.canUserManageProject(user, project) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	num, err := strconv.Atoi(chi.URLParam(r, "number"))
+	if err != nil || num <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	season, err := h.Seasons.GetByNumber(r.Context(), project.ID, num)
+	if err != nil || season == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		h.renderSeasonClose(w, r, space, project, season, "Could not parse form")
+		return
+	}
+
+	rawHTML := r.PostFormValue("content_html")
+	if strings.TrimSpace(stripTags(rawHTML)) == "" {
+		h.renderSeasonClose(w, r, space, project, season, "Closing document is required")
+		return
+	}
+	if len(rawHTML) > maxClosingDocLen {
+		h.renderSeasonClose(w, r, space, project, season, "Closing document too long (max 100,000 characters)")
+		return
+	}
+	closingHTML := rawHTML
+	if h.Sanitizer != nil {
+		closingHTML = h.Sanitizer.Clean(rawHTML)
+	}
+
+	if err := h.Seasons.Close(r.Context(), season.ID, "", closingHTML); err != nil {
+		switch {
+		case errors.Is(err, model.ErrSeasonNotFound):
+			http.NotFound(w, r)
+		case errors.Is(err, model.ErrSeasonNotActive):
+			http.Redirect(w, r,
+				"/spaces/"+space.Slug+"/projects/"+project.Slug+
+					"/seasons/"+strconv.Itoa(num)+"?error=not-active",
+				http.StatusSeeOther)
+		default:
+			slog.Error("close season from form", "id", season.ID, "error", err)
+			h.renderSeasonClose(w, r, space, project, season, "Internal error - please try again")
+		}
+		return
+	}
+
+	slog.Info("season closed via form",
+		"id", season.ID, "project", project.ID,
+		"season", num, "actor", user.Username)
+
+	http.Redirect(w, r,
+		"/spaces/"+space.Slug+"/projects/"+project.Slug+
+			"/seasons/"+strconv.Itoa(num),
+		http.StatusSeeOther)
+}
+
+// seasonFormValues mirrors the inputs on project-season-new.html.
+type seasonFormValues struct {
+	Title       string
+	Description string
+}
+
+func (h *ProjectHandler) renderSeasonNew(w http.ResponseWriter, r *http.Request, space *model.Space, project *model.Project, form seasonFormValues, errMsg string) {
+	// Compute the next season number so the form headline reads
+	// "Plan Season N" with the right N before the user submits.
+	nextNum := 1
+	if seasons, err := h.Seasons.ListByProject(r.Context(), project.ID); err == nil {
+		for _, s := range seasons {
+			if s.SeasonNumber >= nextNum {
+				nextNum = s.SeasonNumber + 1
+			}
+		}
+	}
+	data := h.newProjectPageData(r, "Plan Season - "+project.Name, space)
+	data["Content"] = map[string]any{
+		"Space":      space,
+		"Project":    project,
+		"NextNumber": nextNum,
+		"Form":       form,
+		"Error":      errMsg,
+	}
+	if errMsg != "" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	if err := h.Render.Render(w, "project-season-new", data); err != nil {
+		slog.Error("render project-season-new", "error", err)
+	}
+}
+
+func (h *ProjectHandler) renderSeasonClose(w http.ResponseWriter, r *http.Request, space *model.Space, project *model.Project, season *model.Season, errMsg string) {
+	// Cheap aggregates for the season-close summary block. Kept inline
+	// because (a) ListBySeason already exists and (b) we expect
+	// O(50-200) posts per season at most.
+	postCount := 0
+	contributors := 0
+	if h.Posts != nil {
+		if posts, err := h.Posts.ListBySeason(r.Context(), season.ID, 1000, 0); err == nil {
+			postCount = len(posts)
+			seen := map[int64]struct{}{}
+			for _, p := range posts {
+				seen[p.AuthorID] = struct{}{}
+			}
+			contributors = len(seen)
+		}
+	}
+	startedLabel := ""
+	if season.StartedAt != nil {
+		startedLabel = season.StartedAt.UTC().Format("Jan 2, 2006")
+	}
+
+	// Seed template injected on first edit if the closing-doc field
+	// is still empty. Quill renders this verbatim when the editor
+	// initialises - the user starts with the structure already in
+	// place and just fills in the bullets.
+	seedHTML := season.ClosingDocHTML
+	if seedHTML == "" {
+		seedHTML = "<h1>Season " + strconv.Itoa(season.SeasonNumber) +
+			" Closing Document</h1>" +
+			"<h2>What was built</h2><p></p>" +
+			"<h2>What was learned</h2><p></p>" +
+			"<h2>What is next</h2><p></p>"
+	}
+
+	data := h.newProjectPageData(r, "Close Season "+strconv.Itoa(season.SeasonNumber)+" - "+project.Name, space)
+	data["Content"] = map[string]any{
+		"Space":        space,
+		"Project":      project,
+		"Season":       season,
+		"Form":         seasonFormValues{},
+		"Error":        errMsg,
+		"PostCount":    postCount,
+		"Contributors": contributors,
+		"StartedLabel": startedLabel,
+		"SeedHTML":     seedHTML,
+	}
+	if errMsg != "" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	if err := h.Render.Render(w, "project-season-close", data); err != nil {
+		slog.Error("render project-season-close", "error", err)
+	}
+}
+
+// stripTags is a cheap "is this empty after tags are removed" check.
+// Quill produces "<p><br></p>" when the editor is empty - we do not
+// want that to count as a real closing document. We don't need a
+// full HTML parser here, just a way to assert "non-whitespace text".
+func stripTags(html string) string {
+	var b strings.Builder
+	inTag := false
+	for _, ch := range html {
+		switch {
+		case ch == '<':
+			inTag = true
+		case ch == '>':
+			inTag = false
+		case !inTag:
+			b.WriteRune(ch)
+		}
+	}
+	return b.String()
+}
+
 // DeleteDocFromForm processes the danger-zone form on the doc editor
 // page for custom docs. Canonical types are not deletable - their
 // slot is permanent; users can edit content to empty if they want.
