@@ -134,6 +134,13 @@ func main() {
 				"PopularTags": []model.Tag{{ID: 1, Name: "smp-protocol", Slug: "smp-protocol", UseCount: 7}},
 				"ActiveType":  "",
 				"ActiveTag":   "",
+				// Sprint 16b polish: project overview block. Empty
+				// slice keeps the section hidden so the templatecheck
+				// also exercises the "no projects" path.
+				"Projects":            []map[string]any{},
+				"ProjectActivity":     map[string]any{"hasData": false},
+				"TotalProjectPosts":   int64(0),
+				"TotalProjectSeasons": 0,
 			},
 		},
 		"tag": map[string]any{
@@ -247,6 +254,28 @@ func main() {
 				"ActiveTab":     "overview",
 				"CanEdit":       true,
 				"CanManage":     true,
+				// Sprint 16b polish dashboard data.
+				"TotalPosts":        18,
+				"TotalContributors": 3,
+				"ActiveDays":        9,
+				"DocsCompleted":     2,
+				"Heatmap": map[string]any{
+					"hasData": true,
+					"cells": []map[string]any{
+						{"date": "2026-04-15", "count": 0, "level": 0, "col": 0, "row": 0, "x": 0,  "y": 0},
+						{"date": "2026-04-16", "count": 1, "level": 1, "col": 0, "row": 1, "x": 0,  "y": 14},
+						{"date": "2026-04-22", "count": 4, "level": 2, "col": 1, "row": 0, "x": 14, "y": 0},
+						{"date": "2026-04-25", "count": 8, "level": 3, "col": 1, "row": 3, "x": 14, "y": 42},
+						{"date": "2026-04-26", "count": 12, "level": 4, "col": 1, "row": 4, "x": 14, "y": 56},
+					},
+					"weekTop": time.Now().Add(-83 * 24 * time.Hour),
+				},
+				"SeasonsChart": map[string]any{
+					"hasData":         true,
+					"labels":          []string{"S1", "S2"},
+					"data":            []int{23, 12},
+					"backgroundColor": []string{"rgba(155, 89, 182, 0.5)", "#3CDFCF"},
+				},
 			},
 		},
 		"project-docs": {
@@ -313,6 +342,22 @@ func main() {
 				"Posts":     []model.Post{dummyPost},
 				"ActiveTab": "seasons",
 				"CanManage": true,
+				// Sprint 16b polish dashboard data.
+				"PostCount":        18,
+				"ContributorCount": 3,
+				"DaysRunning":      27,
+				"LinkedDocs":       4,
+				"DailyChart": map[string]any{
+					"hasData": true,
+					"labels":  []string{"Apr 1", "Apr 2", "Apr 3", "Apr 4", "Apr 5"},
+					"data":    []int{2, 1, 0, 4, 3},
+				},
+				"TypeChart": map[string]any{
+					"hasData":         true,
+					"labels":          []string{"discussion", "tutorial", "code"},
+					"data":            []int{8, 6, 4},
+					"backgroundColor": []string{"#45BDD1", "#2ECC71", "#F39C12"},
+				},
 			},
 		},
 		"project-members": {
