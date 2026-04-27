@@ -944,6 +944,135 @@
 
 .brut-compose-counter.is-over { color: hsl(0, 65%, 65%); }
 
+.brut-compose-select {
+  width: auto;
+  min-width: 160px;
+  height: 28px;
+  padding: 0 10px;
+  font: 400 12px/1 var(--brut-sans);
+}
+
+/* Quill mount inside the brut compose - inherits brut color tokens
+   so toolbar buttons and editor body match the rest of the form. */
+.brut-compose-editor .ql-toolbar.ql-snow {
+  border: 0;
+  padding: 0 0 8px;
+  background: transparent;
+}
+
+.brut-compose-editor .ql-container.ql-snow {
+  border: 0;
+  font: 400 15px/1.55 var(--brut-sans);
+  color: var(--brut-text);
+  min-height: 100px;
+}
+
+.brut-compose-editor .ql-editor { min-height: 100px; padding: 0; }
+.brut-compose-editor .ql-editor.ql-blank::before {
+  color: var(--brut-text-faint);
+  font-style: normal;
+  left: 0;
+}
+
+.brut-compose-editor .ql-snow .ql-stroke { stroke: var(--brut-text-muted); }
+.brut-compose-editor .ql-snow .ql-fill { fill: var(--brut-text-muted); }
+.brut-compose-editor .ql-snow.ql-toolbar button:hover .ql-stroke,
+.brut-compose-editor .ql-snow.ql-toolbar button.ql-active .ql-stroke {
+  stroke: var(--brut-accent);
+}
+.brut-compose-editor .ql-snow.ql-toolbar button:hover .ql-fill,
+.brut-compose-editor .ql-snow.ql-toolbar button.ql-active .ql-fill {
+  fill: var(--brut-accent);
+}
+
+/* Tag input + suggestions inside .brut-compose-row */
+.brut-tag-input-wrap {
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 140px;
+}
+
+.brut-tag-input {
+  width: 100%;
+  height: 24px;
+  padding: 0 10px;
+  font: 400 12px/1 var(--brut-sans);
+  color: var(--brut-text);
+  background: transparent;
+  border: 1px solid var(--brut-border);
+  border-radius: 100px;
+  transition: border-color 160ms ease-out;
+}
+
+.brut-tag-input:focus {
+  outline: none;
+  border-color: var(--brut-accent);
+}
+
+.brut-tag-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--brut-surface);
+  border: 1px solid var(--brut-border);
+  border-radius: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 30;
+}
+
+.brut-tag-suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--brut-border-faint);
+  color: var(--brut-text);
+  font: 400 13px/1 var(--brut-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.brut-tag-suggestion-item:hover {
+  background: var(--brut-surface-hi);
+  color: var(--brut-accent);
+}
+
+.brut-tag-chip {
+  cursor: default;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font: 500 11px/1 var(--brut-mono);
+  padding: 0 4px 0 10px;
+  gap: 4px;
+}
+
+.brut-tag-chip-x {
+  background: transparent;
+  border: 0;
+  color: var(--brut-text-muted);
+  font: 500 14px/1 var(--brut-sans);
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 100px;
+  transition: color 160ms;
+}
+
+.brut-tag-chip-x:hover { color: var(--brut-accent); }
+
+/* Post-type radio pickable: hide the actual input, light up the
+   surrounding pill. The label IS the visible pill. */
+.brut-pill-pickable input[type="radio"]:checked + * { display: contents; }
+.brut-pill-pickable:has(input[type="radio"]:checked) {
+  border-color: var(--brut-accent);
+  color: var(--brut-accent);
+  background: var(--brut-accent-faint);
+}
+
 /* =============================================================
    Cascade animation - .brut-stagger on a container fades children
    in upwards in a 60/220/380/540/700/860 ms sequence.

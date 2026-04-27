@@ -5,176 +5,159 @@
 {{ $powerLevel := 0 }}
 {{ if $currentUser }}{{ $powerLevel = $currentUser.PowerLevel }}{{ end }}
 {{/*
-  Sprint 15a B4: this form used to have method="POST" action="/api/posts"
-  as a no-JS fallback. Combined with the body-level hx-boost="true" on
-  base.html, htmx intercepted every submit and fired its own XHR in
-  parallel with Alpine's @submit.prevent -> submit() path. Network
-  tab then showed TWO requests: Alpine's correct JSON POST (content
-  in body) and htmx's form-encoded POST (only the named inputs -
-  post_type, tags, space_id - no content because Quill's editable
-  div has no `name` attribute). The server rejected the second one
-  with 400 after every successful post.
+  Sprint 16f: brutalist compose. Wrapped in .brut-compose so the
+  whole form sits inside the section padding instead of clattering
+  the section edges. Quill mounts on x-ref="editor"; composeEditor
+  in golab.js keeps the same x-refs (editor, spaceSelect,
+  projectSelect, seasonSelect) that 16b wired up.
 
-  Fix: the form is JS-driven, period. No action, no method, and
-  hx-boost="false" stops htmx from treating the form as a boost
-  target. If JS ever fails to load, the button simply does nothing
-  instead of leaking a half-populated native submit.
+  Sprint 15a B4 reminder: the form is JS-driven, no native action,
+  and hx-boost="false" stops htmx from intercepting submit.
 */}}
 <form id="compose-form"
-      class="compose-box compose-quill"
+      class="brut-compose"
       hx-boost="false"
       x-data="composeEditor({ powerLevel: {{ $powerLevel }} })"
       @submit.prevent="submit()">
 
-  <!-- Quill mounts here. Emoji button gets appended to the toolbar
-       by composeEditor.init() in golab.js. -->
-  <div x-ref="editor" class="compose-editor"></div>
-
-  <!-- Row: post type radio pills. Announcement appears only for admins
-       (power_level >= 75) since it's an admin-only post type across
-       every space. -->
-  <div class="compose-type-row" role="radiogroup" aria-label="Post type">
-    <label class="type-radio">
-      <input type="radio" name="post_type" value="discussion" checked>
-      <span class="type-radio-pill">Discussion</span>
-    </label>
-    <label class="type-radio">
-      <input type="radio" name="post_type" value="question">
-      <span class="type-radio-pill">Question</span>
-    </label>
-    <label class="type-radio">
-      <input type="radio" name="post_type" value="tutorial">
-      <span class="type-radio-pill">Tutorial</span>
-    </label>
-    <label class="type-radio">
-      <input type="radio" name="post_type" value="code">
-      <span class="type-radio-pill">Code</span>
-    </label>
-    <label class="type-radio">
-      <input type="radio" name="post_type" value="showcase">
-      <span class="type-radio-pill">Showcase</span>
-    </label>
-    <label class="type-radio">
-      <input type="radio" name="post_type" value="link">
-      <span class="type-radio-pill">Link</span>
-    </label>
-    {{ if ge $powerLevel 75 }}
-    <label class="type-radio">
-      <input type="radio" name="post_type" value="announcement">
-      <span class="type-radio-pill type-radio-pill-admin">Announcement</span>
-    </label>
-    {{ end }}
+  <!-- Quill mounts here. The editor host keeps the x-ref so
+       composeEditor.init() finds it; the brut wrapper styles
+       the surrounding container, the editor itself stays
+       Quill's responsibility. -->
+  <div class="brut-compose-editor">
+    <div x-ref="editor"></div>
   </div>
 
-  <!-- Row: tag input with autocomplete -->
-  <div class="compose-tags" x-data="tagInput()">
-    <template x-for="slug in selectedTags" :key="slug">
-      <span class="tag-chip">
-        #<span x-text="slug"></span>
-        <button type="button" class="tag-chip-remove"
-                @click="removeTag(slug)" aria-label="Remove tag">&times;</button>
-      </span>
-    </template>
-
-    <div class="tag-input-wrap" x-show="selectedTags.length < maxTags">
-      <input type="text"
-             class="tag-input"
-             x-model="query"
-             @input.debounce.200ms="searchTags()"
-             @keydown="handleKey($event)"
-             @focus="searchTags()"
-             placeholder="Add tag (Enter)"
-             maxlength="32"
-             autocomplete="off">
-
-      <div class="tag-suggestions"
-           x-show="suggestions.length > 0 || loading"
-           @click.outside="suggestions = []"
-           x-cloak>
-        <template x-if="loading">
-          <div class="tag-suggestion-item muted">Searching...</div>
-        </template>
-        <template x-for="s in suggestions" :key="s.slug">
-          <button type="button" class="tag-suggestion-item"
-                  @click="addTag(s.slug)">
-            <span>#<span x-text="s.name"></span></span>
-            <span class="tag-suggestion-count" x-text="s.use_count + ' posts'"></span>
-          </button>
-        </template>
-      </div>
+  <!-- Meta rows: post type, tags. Each row has a monospace label
+       prefix so the field shape reads like a terminal form. -->
+  <div class="brut-compose-meta">
+    <div class="brut-compose-row" role="radiogroup" aria-label="Post type">
+      <span class="brut-compose-rowlabel">Type ·</span>
+      <label class="brut-pill brut-pill-pickable">
+        <input type="radio" name="post_type" value="discussion" checked>Discussion
+      </label>
+      <label class="brut-pill brut-pill-pickable">
+        <input type="radio" name="post_type" value="question">Question
+      </label>
+      <label class="brut-pill brut-pill-pickable">
+        <input type="radio" name="post_type" value="tutorial">Tutorial
+      </label>
+      <label class="brut-pill brut-pill-pickable">
+        <input type="radio" name="post_type" value="code">Code
+      </label>
+      <label class="brut-pill brut-pill-pickable">
+        <input type="radio" name="post_type" value="showcase">Showcase
+      </label>
+      <label class="brut-pill brut-pill-pickable">
+        <input type="radio" name="post_type" value="link">Link
+      </label>
+      {{ if ge $powerLevel 75 }}
+      <label class="brut-pill brut-pill-pickable" style="border-color: hsl(0, 30%, 30%); color: hsl(0, 65%, 70%);">
+        <input type="radio" name="post_type" value="announcement">Announcement
+      </label>
+      {{ end }}
     </div>
 
-    <input type="hidden" name="tags" :value="selectedTags.join(',')">
+    <div class="brut-compose-row" x-data="tagInput()">
+      <span class="brut-compose-rowlabel">Tags ·</span>
+      <template x-for="slug in selectedTags" :key="slug">
+        <span class="brut-pill brut-tag-chip">
+          #<span x-text="slug"></span>
+          <button type="button" class="brut-tag-chip-x"
+                  @click="removeTag(slug)" aria-label="Remove tag">&times;</button>
+        </span>
+      </template>
+
+      <div class="brut-tag-input-wrap" x-show="selectedTags.length < maxTags">
+        <input type="text"
+               class="brut-tag-input"
+               x-model="query"
+               @input.debounce.200ms="searchTags()"
+               @keydown="handleKey($event)"
+               @focus="searchTags()"
+               placeholder="Add tag (Enter)"
+               maxlength="32"
+               autocomplete="off">
+        <div class="brut-tag-suggestions"
+             x-show="suggestions.length > 0 || loading"
+             @click.outside="suggestions = []"
+             x-cloak>
+          <template x-if="loading">
+            <div class="brut-tag-suggestion-item">Searching...</div>
+          </template>
+          <template x-for="s in suggestions" :key="s.slug">
+            <button type="button" class="brut-tag-suggestion-item"
+                    @click="addTag(s.slug)">
+              <span>#<span x-text="s.name"></span></span>
+              <span style="color: var(--brut-text-faint); font: 500 10px/1 var(--brut-mono);"
+                    x-text="s.use_count + ' posts'"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+      <input type="hidden" name="tags" :value="selectedTags.join(',')">
+    </div>
+
+    <!-- Where it goes: Space (required) + cascading Project + Season. -->
+    <div class="brut-compose-row">
+      <span class="brut-compose-rowlabel">Space ·</span>
+      {{ if $spaces }}
+      <select class="brut-select brut-compose-select"
+              name="space_id"
+              x-ref="spaceSelect"
+              @change="onSpaceChange($event)"
+              required>
+        <option value="" disabled{{ if not $selectedSpace }} selected{{ end }}>Where does this go?</option>
+        {{ range $spaces }}
+        <option value="{{ .ID }}"
+                data-slug="{{ .Slug }}"
+                {{ if eq .ID $selectedSpace }}selected{{ end }}>
+          {{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}
+        </option>
+        {{ end }}
+      </select>
+      {{ else if $selectedSpace }}
+      <input type="hidden" name="space_id" value="{{ $selectedSpace }}">
+      {{ end }}
+    </div>
+
+    <div class="brut-compose-row" x-show="projects.length > 0" x-cloak>
+      <span class="brut-compose-rowlabel">Project ·</span>
+      <select class="brut-select brut-compose-select"
+              x-ref="projectSelect"
+              @change="onProjectChange($event)">
+        <option value="">No project</option>
+        <template x-for="p in projects" :key="p.id">
+          <option :value="p.id" x-text="p.name"></option>
+        </template>
+      </select>
+    </div>
+
+    <div class="brut-compose-row" x-show="seasons.length > 0" x-cloak>
+      <span class="brut-compose-rowlabel">Season ·</span>
+      <select class="brut-select brut-compose-select"
+              name="season_id"
+              x-ref="seasonSelect">
+        <option value="">No season</option>
+        <template x-for="se in seasons" :key="se.id">
+          <option :value="se.id"
+                  :disabled="se.status === 'closed'"
+                  x-text="seasonOptionLabel(se)"></option>
+        </template>
+      </select>
+    </div>
   </div>
 
-  <!-- Row: counter + single space picker + post button -->
-  <div class="compose-footer">
-    <span class="compose-count" :class="{ over: charCount > max }">
+  <!-- Submit row: counter on the left, Post button on the right. -->
+  <div class="brut-compose-actions">
+    <span class="brut-compose-counter" :class="{ 'is-over': charCount > max }">
       <span x-text="charCount">0</span> / 5000
     </span>
-
-    {{ if $spaces }}
-    <select class="compose-select compose-space-select"
-            name="space_id"
-            x-ref="spaceSelect"
-            @change="onSpaceChange($event)"
-            required>
-      <option value="" disabled{{ if not $selectedSpace }} selected{{ end }}>Where does this go?</option>
-      {{ range $spaces }}
-      <option value="{{ .ID }}"
-              data-slug="{{ .Slug }}"
-              {{ if eq .ID $selectedSpace }}selected{{ end }}>
-        {{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}
-      </option>
-      {{ end }}
-    </select>
-    {{ else if $selectedSpace }}
-    <input type="hidden" name="space_id" value="{{ $selectedSpace }}">
-    {{ end }}
-
-    <!-- Sprint 16b Phase 4: optional Project + Season cascading selects.
-         Hidden until a Space is picked; populated by composeEditor() via
-         /api/spaces/{slug}/projects and /api/projects/{id}/seasons.
-         Both default to "no project" / "no season" - leaving them blank
-         keeps the existing free-Space post behaviour. -->
-    <select class="compose-select compose-project-select"
-            x-ref="projectSelect"
-            @change="onProjectChange($event)"
-            x-show="projects.length > 0"
-            x-cloak>
-      <option value="">No project</option>
-      <template x-for="p in projects" :key="p.id">
-        <option :value="p.id" x-text="p.name"></option>
-      </template>
-    </select>
-
-    <select class="compose-select compose-season-select"
-            name="season_id"
-            x-ref="seasonSelect"
-            x-show="seasons.length > 0"
-            x-cloak>
-      <option value="">No season</option>
-      <template x-for="se in seasons" :key="se.id">
-        <option :value="se.id"
-                :disabled="se.status === 'closed'"
-                x-text="seasonOptionLabel(se)"></option>
-      </template>
-    </select>
-
-    <button type="submit" class="btn btn-primary btn-sm press-effect"
+    <button type="submit" class="brut-btn brut-btn-primary"
             :disabled="!canSubmit()">
       <span x-show="!submitting">Post</span>
-      <span x-show="submitting" class="btn-spinner" x-cloak>
-        <svg class="spin" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="10" stroke="currentColor"
-                  stroke-width="3" fill="none" stroke-dasharray="31 31"/>
-        </svg>
-      </span>
+      <span x-show="submitting" x-cloak>Posting...</span>
     </button>
   </div>
-
-  {{/* Announcement is now a post_type. Server enforces admin-only;
-       the radio pill is only rendered for admins so there is no
-       client-side notice needed. */}}
 </form>
 {{ end }}
