@@ -112,7 +112,9 @@ func (h *ProjectHandler) ListPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // DetailPage renders /spaces/{space_slug}/projects/{project_slug} as
-// the Overview tab.
+// the Overview tab. Sprint 16b polish: also pulls project stats for
+// the doc-status, season-timeline, activity-heatmap, and
+// posts-per-season-chart panels on the dashboard.
 func (h *ProjectHandler) DetailPage(w http.ResponseWriter, r *http.Request) {
 	space, project, ok := h.loadProjectByPath(w, r)
 	if !ok {
@@ -132,20 +134,51 @@ func (h *ProjectHandler) DetailPage(w http.ResponseWriter, r *http.Request) {
 	docPresence := projectDocPresence(docs)
 	currentSeason := currentActiveSeason(seasons)
 
+	// Dashboard aggregates. GetProjectStats runs three indexed
+	// aggregate queries; failure logs and falls back to empty state
+	// so the rest of the page still renders.
+	var stats *model.ProjectStats
+	if s, err := h.Projects.GetProjectStats(r.Context(), project.ID); err == nil {
+		stats = s
+	} else {
+		slog.Warn("project detail: stats", "id", project.ID, "error", err)
+	}
+
+	var heatmap projectHeatmap
+	var seasonsChart projectSeasonsChart
+	totalPosts := 0
+	totalContributors := 0
+	activeDays := 0
+	docsCompleted := 0
+	if stats != nil {
+		heatmap = buildProjectHeatmap(stats.PostCountsByDay)
+		seasonsChart = buildProjectSeasonsChart(stats.PostCountsBySeason, project.Color)
+		totalPosts = stats.TotalPosts
+		totalContributors = stats.TotalContributors
+		activeDays = stats.ActiveDays
+		docsCompleted = stats.DocsCompleted
+	}
+
 	data := h.newProjectPageData(r, project.Name+" - GoLab", space)
 	data["Content"] = map[string]any{
-		"Space":           space,
-		"Project":         project,
-		"Owner":           owner,
-		"Tags":            tags,
-		"Docs":            docs,
-		"Seasons":         seasons,
-		"Members":         members,
-		"DocPresence":     docPresence,
-		"CurrentSeason":   currentSeason,
-		"ActiveTab":       "overview",
-		"CanEdit":         canEdit,
-		"CanManage":       canManage,
+		"Space":             space,
+		"Project":           project,
+		"Owner":             owner,
+		"Tags":              tags,
+		"Docs":              docs,
+		"Seasons":           seasons,
+		"Members":           members,
+		"DocPresence":       docPresence,
+		"CurrentSeason":     currentSeason,
+		"ActiveTab":         "overview",
+		"CanEdit":           canEdit,
+		"CanManage":         canManage,
+		"Heatmap":           heatmap,
+		"SeasonsChart":      seasonsChart,
+		"TotalPosts":        totalPosts,
+		"TotalContributors": totalContributors,
+		"ActiveDays":        activeDays,
+		"DocsCompleted":     docsCompleted,
 	}
 	if err := h.Render.Render(w, "project-show", data); err != nil {
 		slog.Error("render project-show", "error", err)
@@ -272,6 +305,9 @@ func (h *ProjectHandler) SeasonsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // SeasonPage renders a single season with the posts assigned to it.
+// Sprint 16b polish: also computes the four KPI numbers, a 30-day
+// posts-over-time line chart, and a donut chart of posts by type so
+// the season detail page reads as a mini dashboard.
 func (h *ProjectHandler) SeasonPage(w http.ResponseWriter, r *http.Request) {
 	space, project, ok := h.loadProjectByPath(w, r)
 	if !ok {
@@ -311,16 +347,46 @@ func (h *ProjectHandler) SeasonPage(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	canManage := h.canUserManageProject(user, project)
 
+	// Dashboard aggregates. Three small queries via GetSeasonStats;
+	// failures degrade to empty panels rather than 500-ing the page.
+	var stats *model.SeasonStats
+	if s, err := h.Seasons.GetSeasonStats(r.Context(), season.ID); err == nil {
+		stats = s
+	} else {
+		slog.Warn("season page: stats", "id", season.ID, "error", err)
+	}
+
+	var dailyChart seasonDailyChart
+	var typeChart seasonTypeChart
+	postCount := 0
+	contributorCount := 0
+	daysRunning := 0
+	linkedDocs := 0
+	if stats != nil {
+		dailyChart = buildSeasonDailyChart(stats.PostCountsByDay)
+		typeChart = buildSeasonTypeChart(stats.PostCountsByType)
+		postCount = stats.PostCount
+		contributorCount = stats.ContributorCount
+		daysRunning = stats.DaysRunning
+		linkedDocs = stats.LinkedDocsCount
+	}
+
 	data := h.newProjectPageData(r, "Season "+strconv.Itoa(num)+" - "+project.Name, space)
 	data["Content"] = map[string]any{
-		"Space":     space,
-		"Project":   project,
-		"Owner":     owner,
-		"Tags":      tags,
-		"Season":    season,
-		"Posts":     posts,
-		"ActiveTab": "seasons",
-		"CanManage": canManage,
+		"Space":            space,
+		"Project":          project,
+		"Owner":            owner,
+		"Tags":             tags,
+		"Season":           season,
+		"Posts":            posts,
+		"ActiveTab":        "seasons",
+		"CanManage":        canManage,
+		"PostCount":        postCount,
+		"ContributorCount": contributorCount,
+		"DaysRunning":      daysRunning,
+		"LinkedDocs":       linkedDocs,
+		"DailyChart":       dailyChart,
+		"TypeChart":        typeChart,
 	}
 	if err := h.Render.Render(w, "project-season", data); err != nil {
 		slog.Error("render project-season", "error", err)

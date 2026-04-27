@@ -4,49 +4,145 @@
 {{ $project := .Project }}
 {{ $docs := .DocPresence }}
 {{ $current := .CurrentSeason }}
+{{ $heatmap := .Heatmap }}
+{{ $seasonsChart := .SeasonsChart }}
 
 {{ template "project-header.html" . }}
 
-<div class="page-container">
-  <div class="two-col project-overview">
-    <main>
-      {{ if $project.Description }}
-      <section class="project-section">
-        <h2 class="project-section-title">About this project</h2>
-        <p class="project-section-text">{{ $project.Description }}</p>
-      </section>
-      {{ else }}
-      <section class="project-section">
-        <h2 class="project-section-title">About this project</h2>
-        <p class="project-section-text muted">No description set yet.{{ if .CanManage }} Edit the project to add one.{{ end }}</p>
-      </section>
-      {{ end }}
+<div class="page-container project-dashboard">
+  <!-- Compact KPI strip directly below the header so the visual
+       hierarchy reads: identity (header) -> situation (KPIs) -> docs
+       -> timeline -> activity -> description. -->
+  <ul class="kpi-grid kpi-grid-1x4 stagger-in" aria-label="Project at a glance">
+    <li class="kpi-card">
+      <span class="kpi-num">{{ .TotalPosts }}</span>
+      <span class="kpi-label">Posts</span>
+    </li>
+    <li class="kpi-card">
+      <span class="kpi-num">{{ .TotalContributors }}</span>
+      <span class="kpi-label">Contributors</span>
+    </li>
+    <li class="kpi-card">
+      <span class="kpi-num">{{ len .Seasons }}</span>
+      <span class="kpi-label">Seasons</span>
+    </li>
+    <li class="kpi-card">
+      <span class="kpi-num">{{ .DocsCompleted }} / 4</span>
+      <span class="kpi-label">Docs filled</span>
+    </li>
+  </ul>
 
+  <!-- Doc-status cards: 4-up grid, one per canonical doc type. Each
+       card flips between filled (word count + edit/view link) and
+       empty (Create CTA for editors, muted "Not written yet" for
+       viewers). -->
+  <section class="doc-status-grid stagger-in" aria-label="Documentation status">
+    {{ template "doc-status-card.html" (dict
+      "Space" $space "Project" $project
+      "Type" "concept" "Label" "Concept" "Doc" (index $docs "concept")
+      "CanEdit" .CanEdit) }}
+    {{ template "doc-status-card.html" (dict
+      "Space" $space "Project" $project
+      "Type" "architecture" "Label" "Architecture" "Doc" (index $docs "architecture")
+      "CanEdit" .CanEdit) }}
+    {{ template "doc-status-card.html" (dict
+      "Space" $space "Project" $project
+      "Type" "workflow" "Label" "Workflow" "Doc" (index $docs "workflow")
+      "CanEdit" .CanEdit) }}
+    {{ template "doc-status-card.html" (dict
+      "Space" $space "Project" $project
+      "Type" "roadmap" "Label" "Roadmap" "Doc" (index $docs "roadmap")
+      "CanEdit" .CanEdit) }}
+  </section>
+
+  <!-- Season timeline + activity heatmap, side by side on desktop. -->
+  <div class="project-dashboard-row">
+    <section class="project-dashboard-card project-dashboard-card-wide">
+      <header class="project-dashboard-card-head">
+        <h3 class="chart-card-title">Season timeline</h3>
+        {{ if .CanManage }}
+        <a class="project-dashboard-card-cta"
+           href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
+           hx-boost="true">+ New season</a>
+        {{ end }}
+      </header>
+      {{ if .Seasons }}
+      <ol class="season-line-timeline">
+        {{ range .Seasons }}
+        <li class="season-line-node season-line-{{ .Status }}">
+          <a class="season-line-card"
+             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ .SeasonNumber }}"
+             hx-boost="true">
+            <span class="season-line-num">S{{ .SeasonNumber }}</span>
+            <span class="season-line-title">{{ .Title }}</span>
+            <span class="season-line-status status-pill status-pill-{{ if eq .Status "active" }}active{{ else if eq .Status "closed" }}closed{{ else }}draft{{ end }}">
+              <span class="status-pill-dot" aria-hidden="true"></span>
+              {{ if eq .Status "planned" }}Planned
+              {{ else if eq .Status "active" }}Active
+              {{ else }}Closed{{ end }}
+            </span>
+            <span class="season-line-date">
+              {{ if .StartedAt }}{{ .StartedAt.UTC.Format "Jan 2" }}
+              {{ else }}-{{ end }}
+            </span>
+          </a>
+        </li>
+        {{ end }}
+      </ol>
+      {{ else }}
+      <div class="project-dashboard-empty">
+        <p>This project hasn't started its first Season yet.</p>
+        {{ if .CanManage }}
+        <a class="btn btn-primary btn-sm press-effect"
+           href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
+           hx-boost="true">Start Season 1</a>
+        {{ end }}
+      </div>
+      {{ end }}
+    </section>
+
+    <section class="project-dashboard-card project-dashboard-card-narrow">
+      <header class="project-dashboard-card-head">
+        <h3 class="chart-card-title">Activity</h3>
+        <span class="project-dashboard-card-aside">{{ .ActiveDays }} active days</span>
+      </header>
+      {{ if $heatmap.HasData }}
+      {{ template "activity-heatmap.html" $heatmap }}
+      {{ else }}
+      <div class="project-dashboard-empty project-dashboard-empty-tight">
+        <p>No posts yet. Once members start posting, daily activity shows up here.</p>
+      </div>
+      {{ end }}
+    </section>
+  </div>
+
+  <!-- Posts per season bar chart, full width. -->
+  {{ if $seasonsChart.HasData }}
+  <section class="project-dashboard-card"
+           x-data="projectSeasonsChart()"
+           data-chart='{{ jsonData $seasonsChart }}'>
+    <header class="project-dashboard-card-head">
+      <h3 class="chart-card-title">Posts per season</h3>
+    </header>
+    <div class="chart-container">
+      <canvas x-ref="canvas" aria-label="Posts assigned to each season"></canvas>
+    </div>
+  </section>
+  {{ end }}
+
+  <!-- Description + manage block. The dashboard already covers the
+       quantitative stuff so this row is just the qualitative narrative. -->
+  <div class="two-col project-overview-bottom">
+    <main>
       <section class="project-section">
-        <div class="project-section-head">
-          <h2 class="project-section-title">Documentation</h2>
-          <a class="project-section-link"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs"
-             hx-boost="true">View all</a>
-        </div>
-        <div class="project-doc-preview-grid">
-          {{ template "project-doc-preview-card.html" (dict
-            "Space" $space "Project" $project
-            "Type" "concept" "Label" "Concept" "Doc" (index $docs "concept")
-            "CanEdit" .CanEdit) }}
-          {{ template "project-doc-preview-card.html" (dict
-            "Space" $space "Project" $project
-            "Type" "architecture" "Label" "Architecture" "Doc" (index $docs "architecture")
-            "CanEdit" .CanEdit) }}
-          {{ template "project-doc-preview-card.html" (dict
-            "Space" $space "Project" $project
-            "Type" "workflow" "Label" "Workflow" "Doc" (index $docs "workflow")
-            "CanEdit" .CanEdit) }}
-          {{ template "project-doc-preview-card.html" (dict
-            "Space" $space "Project" $project
-            "Type" "roadmap" "Label" "Roadmap" "Doc" (index $docs "roadmap")
-            "CanEdit" .CanEdit) }}
-        </div>
+        <h2 class="project-section-title">About this project</h2>
+        {{ if $project.Description }}
+        <p class="project-section-text">{{ $project.Description }}</p>
+        {{ else }}
+        <p class="project-section-text muted">
+          No description set yet.{{ if .CanManage }} Edit the project to add one.{{ end }}
+        </p>
+        {{ end }}
       </section>
 
       {{ if $current }}
@@ -66,7 +162,9 @@
             {{ if $current.Description }}
             <p class="season-current-desc">{{ truncate $current.Description 200 }}</p>
             {{ end }}
-            <span class="season-status-badge season-status-active">Active</span>
+            <span class="status-pill status-pill-active">
+              <span class="status-pill-dot" aria-hidden="true"></span>Active
+            </span>
             {{ if $current.StartedAt }}
             <span class="season-current-date">Started {{ timeAgo $current.StartedAt.UTC }}</span>
             {{ end }}
@@ -77,30 +175,6 @@
     </main>
 
     <aside>
-      <section class="sidebar-card">
-        <h4 class="sidebar-title">Quick stats</h4>
-        <ul class="project-stats-list">
-          <li>
-            <span class="project-stat-label">Created</span>
-            <span class="project-stat-value">{{ timeAgo $project.CreatedAt }}</span>
-          </li>
-          <li>
-            <span class="project-stat-label">Members</span>
-            <span class="project-stat-value">{{ len .Members }}</span>
-          </li>
-          <li>
-            <span class="project-stat-label">Seasons</span>
-            <span class="project-stat-value">{{ len .Seasons }}</span>
-          </li>
-          <li>
-            <span class="project-stat-label">Status</span>
-            <span class="project-stat-value">
-              <span class="project-status-badge project-status-{{ $project.Status }}">{{ $project.Status }}</span>
-            </span>
-          </li>
-        </ul>
-      </section>
-
       {{ if .CanManage }}
       <section class="sidebar-card">
         <h4 class="sidebar-title">Manage</h4>
@@ -109,13 +183,19 @@
            class="btn btn-ghost btn-sm" hx-boost="true">Edit project</a>
       </section>
       {{ end }}
+      <section class="sidebar-card">
+        <h4 class="sidebar-title">Members</h4>
+        <p class="sidebar-text">{{ len .Members }} {{ pluralize (len .Members) "person" "people" }} on this project.</p>
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/members"
+           class="btn btn-ghost btn-sm" hx-boost="true">View members</a>
+      </section>
     </aside>
   </div>
 </div>
 {{ end }}
 {{ end }}
 
-{{ define "project-doc-preview-card.html" }}
+{{ define "doc-status-card.html" }}
 {{ $space := .Space }}
 {{ $project := .Project }}
 {{ $type := .Type }}
@@ -123,21 +203,55 @@
 {{ $doc := .Doc }}
 {{ $canEdit := .CanEdit }}
 {{ if $doc }}
-<a class="project-doc-preview-card"
+<a class="doc-status-card doc-status-filled"
    href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $type }}"
    hx-boost="true">
-  <span class="project-doc-preview-label">{{ $label }}</span>
-  <span class="project-doc-preview-meta">Updated {{ timeAgo $doc.UpdatedAt }}</span>
+  <span class="doc-status-icon doc-status-icon-filled" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  </span>
+  <span class="doc-status-label project-doc-type-{{ $type }}">{{ $label }}</span>
+  <span class="doc-status-count">{{ wordCount $doc.ContentHTML }} wd</span>
+  <span class="doc-status-meta">Updated {{ timeAgo $doc.UpdatedAt }}</span>
 </a>
 {{ else }}
-<div class="project-doc-preview-card project-doc-preview-empty">
-  <span class="project-doc-preview-label">{{ $label }}</span>
-  <span class="project-doc-preview-meta muted">Not written yet</span>
+<div class="doc-status-card doc-status-empty">
+  <span class="doc-status-icon doc-status-icon-empty" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+  </span>
+  <span class="doc-status-label project-doc-type-{{ $type }}">{{ $label }}</span>
+  <span class="doc-status-meta muted">Not written yet</span>
   {{ if $canEdit }}
-  <a class="project-doc-preview-cta"
+  <a class="doc-status-cta"
      href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $type }}/edit"
-     hx-boost="true">Add</a>
+     hx-boost="true">Create</a>
   {{ end }}
 </div>
 {{ end }}
+{{ end }}
+
+{{ define "activity-heatmap.html" }}
+<svg class="activity-heatmap" viewBox="0 0 168 100" role="img" aria-label="Activity heatmap, last 12 weeks">
+  {{ range .Cells }}
+  <rect class="heatmap-cell heatmap-level-{{ .Level }}"
+        x="{{ .X }}" y="{{ .Y }}"
+        width="12" height="12" rx="2" ry="2">
+    <title>{{ .Date }}: {{ .Count }} {{ pluralize .Count "post" "posts" }}</title>
+  </rect>
+  {{ end }}
+</svg>
+<div class="activity-heatmap-legend" aria-hidden="true">
+  <span class="heatmap-legend-label">Less</span>
+  <span class="heatmap-cell-static heatmap-level-0"></span>
+  <span class="heatmap-cell-static heatmap-level-1"></span>
+  <span class="heatmap-cell-static heatmap-level-2"></span>
+  <span class="heatmap-cell-static heatmap-level-3"></span>
+  <span class="heatmap-cell-static heatmap-level-4"></span>
+  <span class="heatmap-legend-label">More</span>
+</div>
 {{ end }}

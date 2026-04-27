@@ -60,6 +60,66 @@
       </details>
       {{ end }}
 
+      <!-- Sprint 16b polish: season dashboard. KPI strip + posts-
+           over-time line chart + posts-by-type donut. The two charts
+           sit side by side on desktop, stack on mobile. -->
+      <section class="season-dashboard" aria-label="Season dashboard">
+        <ul class="kpi-grid kpi-grid-1x4 stagger-in">
+          <li class="kpi-card">
+            <span class="kpi-num">{{ .PostCount }}</span>
+            <span class="kpi-label">Posts</span>
+          </li>
+          <li class="kpi-card">
+            <span class="kpi-num">{{ .ContributorCount }}</span>
+            <span class="kpi-label">{{ pluralize .ContributorCount "Contributor" "Contributors" }}</span>
+          </li>
+          <li class="kpi-card">
+            <span class="kpi-num">{{ .DaysRunning }}</span>
+            <span class="kpi-label">{{ pluralize .DaysRunning "Day running" "Days running" }}</span>
+          </li>
+          <li class="kpi-card">
+            <span class="kpi-num">{{ .LinkedDocs }}</span>
+            <span class="kpi-label">Linked docs</span>
+          </li>
+        </ul>
+
+        <div class="season-dashboard-row">
+          <div class="project-dashboard-card project-dashboard-card-wide"
+               x-data="seasonDailyChart()"
+               data-chart='{{ jsonData .DailyChart }}'>
+            <header class="project-dashboard-card-head">
+              <h3 class="chart-card-title">Posts over time (last 30 days)</h3>
+            </header>
+            {{ if .DailyChart.HasData }}
+            <div class="chart-container">
+              <canvas x-ref="canvas" aria-label="Posts per day, last 30 days"></canvas>
+            </div>
+            {{ else }}
+            <div class="project-dashboard-empty project-dashboard-empty-tight">
+              <p>No posts in the last 30 days yet.</p>
+            </div>
+            {{ end }}
+          </div>
+
+          <div class="project-dashboard-card project-dashboard-card-narrow"
+               x-data="seasonTypeChart()"
+               data-chart='{{ jsonData .TypeChart }}'>
+            <header class="project-dashboard-card-head">
+              <h3 class="chart-card-title">By type</h3>
+            </header>
+            {{ if .TypeChart.HasData }}
+            <div class="chart-container chart-container-sm">
+              <canvas x-ref="canvas" aria-label="Posts grouped by post type"></canvas>
+            </div>
+            {{ else }}
+            <div class="project-dashboard-empty project-dashboard-empty-tight">
+              <p>No posts to break down yet.</p>
+            </div>
+            {{ end }}
+          </div>
+        </div>
+      </section>
+
       <section class="season-posts">
         <h2 class="project-section-title">Posts in this season</h2>
         {{ if .Posts }}
