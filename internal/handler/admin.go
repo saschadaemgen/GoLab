@@ -33,6 +33,24 @@ func RequireAdmin(next http.Handler) http.Handler {
 	})
 }
 
+// RequireOwner blocks users whose power_level is below 100 (owner
+// tier). Used by the project-create endpoint in Sprint 16a so only
+// the platform owner can spin up new projects. Sprint 20 will replace
+// this hard threshold with a TL-based, site-settings-configurable
+// gate; until then, project creation stays curated.
+//
+// Place this middleware after RequireAuth.
+func RequireOwner(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u := auth.UserFromContext(r.Context())
+		if u == nil || u.PowerLevel < 100 {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // AdminHandler serves the /admin dashboard and its API companions.
 type AdminHandler struct {
 	DB            *pgxpool.Pool
