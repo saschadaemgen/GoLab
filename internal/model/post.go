@@ -248,6 +248,23 @@ func (s *PostStore) ListBySpace(ctx context.Context, spaceID int64, postType str
 	return scanPosts(rows)
 }
 
+// ListBySeason returns top-level posts assigned to the given season.
+// Sprint 16b: powers the season detail page. Order matches the rest of
+// the post-list endpoints: newest first.
+func (s *PostStore) ListBySeason(ctx context.Context, seasonID int64, limit, offset int) ([]Post, error) {
+	rows, err := s.DB.Query(ctx,
+		`SELECT `+postSelectCols+postJoins+`
+		 WHERE p.season_id = $1 AND p.parent_id IS NULL
+		 ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`,
+		seasonID, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing posts by season: %w", err)
+	}
+	defer rows.Close()
+	return scanPosts(rows)
+}
+
 // ListByTag returns top-level posts that have the given tag slug attached.
 func (s *PostStore) ListByTag(ctx context.Context, tagSlug string, limit, offset int) ([]Post, error) {
 	query := `SELECT ` + postSelectCols + postJoins + `

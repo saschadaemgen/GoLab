@@ -39,6 +39,14 @@ var pageNames = []string{
 	"space",
 	"tag",
 	"pending",
+	// Sprint 16b: Project system pages.
+	"project-list",
+	"project-show",
+	"project-docs",
+	"project-doc",
+	"project-seasons",
+	"project-season",
+	"project-members",
 }
 
 func New(templatesDir string) (*Engine, error) {
