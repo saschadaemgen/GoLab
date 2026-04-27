@@ -282,13 +282,21 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		r.Post("/settings", profileH.UpdateMe)
 
 		// Sprint 16b: Project system pages. Reads require auth +
-		// visibility check (handler-side); writes (Phase 2/3) land
-		// later. Hidden / members-only projects 404 to non-members
-		// rather than 403 so the URL doesn't leak existence.
+		// visibility check (handler-side). Hidden / members-only
+		// projects 404 to non-members rather than 403 so the URL
+		// doesn't leak existence.
 		r.Get("/spaces/{space_slug}/projects", projectH.ListPage)
+		r.Get("/spaces/{space_slug}/projects/new", projectH.NewProjectPage)
+		r.Post("/spaces/{space_slug}/projects", projectH.CreateProjectFromForm)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}", projectH.DetailPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/edit", projectH.EditProjectPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/edit", projectH.UpdateProjectFromForm)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/delete", projectH.DeleteProjectFromForm)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}/docs", projectH.DocsPage)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_type}", projectH.DocPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_type}/edit", projectH.EditDocPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_type}", projectH.SaveDocFromForm)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_id}/delete", projectH.DeleteDocFromForm)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons", projectH.SeasonsPage)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}", projectH.SeasonPage)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}/members", projectH.MembersPage)
