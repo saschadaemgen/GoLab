@@ -329,6 +329,68 @@ func main() {
 		pages[name] = page
 	}
 
+	// Sprint 16b Phase 2: project authoring forms.
+	projectFormDefaults := map[string]any{
+		"Name":        "",
+		"Slug":        "",
+		"Description": "",
+		"Status":      "draft",
+		"Visibility":  "public",
+		"Icon":        "",
+		"Color":       "",
+	}
+	projectFormFilled := map[string]any{
+		"Name":        "Trust Level Engine",
+		"Slug":        "trust-engine",
+		"Description": "TL0-TL4 with Discourse semantics.",
+		"Status":      "active",
+		"Visibility":  "public",
+		"Icon":        "+",
+		"Color":       "#3CDFCF",
+	}
+	formPages := map[string]map[string]any{
+		"project-new": {
+			"Title":       "New project - SimpleX Protocol",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/new",
+			"Content": map[string]any{
+				"Space": dummyProjectSpace,
+				"Form":  projectFormDefaults,
+				"Error": "",
+			},
+		},
+		"project-edit": {
+			"Title":       "Edit Trust Level Engine",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/edit",
+			"Content": map[string]any{
+				"Space":   dummyProjectSpace,
+				"Project": dummyProject,
+				"Form":    projectFormFilled,
+				"Error":   "",
+			},
+		},
+		"project-doc-edit": {
+			"Title":       "Edit Concept - Trust Level Engine",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/docs/concept/edit",
+			"Content": map[string]any{
+				"Space":    dummyProjectSpace,
+				"Project":  dummyProject,
+				"Doc":      &dummyDocs[0],
+				"DocType":  "concept",
+				"DocLabel": "Concept",
+				"Error":    "",
+			},
+		},
+	}
+	for name, page := range formPages {
+		pages[name] = page
+	}
+
 	for name, data := range pages {
 		// Make sure every page has the space-bar data base.html reads.
 		if m, ok := data.(map[string]any); ok {
