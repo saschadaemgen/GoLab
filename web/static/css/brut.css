@@ -1280,3 +1280,25 @@
   z-index: 0;
   box-shadow: inset 0 0 100px var(--brut-accent-faint);
 }
+
+/* =============================================================
+   Filter row - pills aligned to a monospace label prefix.
+   ============================================================= */
+.brut-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.brut-filter-label {
+  font: 500 11px/1 var(--brut-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brut-text-muted);
+  margin-right: 4px;
+}
+
+/* Pickable pills used as anchors should have hover affordance even
+   without :checked input, since they're plain links. */
+a.brut-pill-pickable { text-decoration: none; }

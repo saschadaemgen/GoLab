@@ -4,125 +4,131 @@
 {{ $form := .Form }}
 {{ $err := .Error }}
 
-<div class="page-container">
-  <main class="project-form-main">
-    <nav class="project-doc-view-back" aria-label="Form navigation">
-      <a href="/spaces/{{ $space.Slug }}/projects"
-         class="project-doc-view-back-link"
-         hx-boost="true">&larr; Projects</a>
-    </nav>
+<div class="brut-page">
+  <header class="brut-hero brut-hero-compact"
+          style="{{ if $space.Color }}--brut-accent: {{ $space.Color }};{{ end }}">
+    <div class="brut-hero-inner brut-stagger">
+      <div class="brut-hero-id">
+        SPACE · <strong>{{ upper $space.Name }}</strong>
+        <span class="brut-hero-meta-sep">·</span>
+        ACTION · NEW PROJECT
+      </div>
+      <h1 class="brut-hero-title">New project</h1>
+      <p class="brut-hero-subtitle">
+        Define the workstream so others can find it, follow it, and join when ready.
+      </p>
+    </div>
+    <div class="brut-hero-actions">
+      <a class="brut-btn brut-btn-ghost brut-btn-sm"
+         href="/spaces/{{ $space.Slug }}/projects" hx-boost="true">&larr; Cancel</a>
+    </div>
+  </header>
 
-    <div class="project-form-card">
-      <header class="project-form-head">
-        <h1 class="project-form-title">New project in {{ $space.Name }}</h1>
-        <p class="project-form-sub">Define the workstream so others can find it, follow it, and join when ready.</p>
-      </header>
-
+  <section class="brut-section">
+    <div class="brut-section-inner">
       {{ if $err }}
-      <div class="flash flash-error" role="alert">{{ $err }}</div>
+      <div class="brut-flash brut-flash-error" role="alert">{{ $err }}</div>
       {{ end }}
 
-      <form method="POST"
+      <form class="brut-form brut-stagger"
+            method="POST"
             action="/spaces/{{ $space.Slug }}/projects"
-            class="project-form"
             hx-boost="false"
             autocomplete="off"
             x-data="projectForm()">
+
         {{ if .PotentialParents }}
-        <div class="form-group">
-          <label class="form-label" for="pf-parent">Parent project (optional)</label>
-          <select class="form-input" id="pf-parent" name="parent_project_id">
+        <div class="brut-field">
+          <label class="brut-label" for="pf-parent">Parent project (optional)</label>
+          <select class="brut-select" id="pf-parent" name="parent_project_id">
             <option value=""{{ if eq $form.ParentID 0 }} selected{{ end }}>-- None (top-level project) --</option>
             {{ range .PotentialParents }}
             <option value="{{ .ID }}"{{ if eq .ID $form.ParentID }} selected{{ end }}>{{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}</option>
             {{ end }}
           </select>
-          <div class="form-hint">
-            This project will appear nested under the selected parent. Only top-level projects can be parents (max nesting depth is 1).
-          </div>
+          <div class="brut-help">This project will appear nested under the selected parent. Max nesting depth is 1.</div>
         </div>
         {{ end }}
 
-        <div class="form-group">
-          <label class="form-label" for="pf-name">Name</label>
-          <input class="form-input input-glow" type="text" id="pf-name"
+        <div class="brut-field">
+          <label class="brut-label" for="pf-name">Name</label>
+          <input class="brut-input" type="text" id="pf-name"
                  name="name" required minlength="3" maxlength="80"
                  x-ref="nameInput"
                  value="{{ $form.Name }}"
                  @input="onNameInput($event)"
                  placeholder="Trust Level Engine">
-          <div class="form-hint">A short, human-readable title. 3-80 characters.</div>
+          <div class="brut-help">A short, human-readable title. 3-80 characters.</div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="pf-slug">URL slug</label>
-          <input class="form-input input-glow" type="text" id="pf-slug"
+        <div class="brut-field">
+          <label class="brut-label" for="pf-slug">URL slug</label>
+          <input class="brut-input" type="text" id="pf-slug"
                  name="slug" required minlength="3" maxlength="64"
                  x-ref="slugInput"
                  value="{{ $form.Slug }}"
                  @input="onSlugInput()"
                  pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$"
                  placeholder="trust-level-engine">
-          <div class="form-hint">Lowercase letters, digits, and hyphens. Lives at <code>/spaces/{{ $space.Slug }}/projects/&lt;slug&gt;</code>.</div>
+          <div class="brut-help">Lowercase letters, digits, hyphens. Lives at <code>/spaces/{{ $space.Slug }}/projects/&lt;slug&gt;</code>.</div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="pf-desc">Description</label>
-          <textarea class="form-input form-textarea input-glow" id="pf-desc"
+        <div class="brut-field">
+          <label class="brut-label" for="pf-desc">Description</label>
+          <textarea class="brut-textarea" id="pf-desc"
                     name="description" maxlength="500" rows="4"
                     x-data="{ len: {{ len $form.Description }} }"
                     @input="len = $el.value.length"
                     placeholder="One paragraph that explains what this project is and why it exists.">{{ $form.Description }}</textarea>
-          <div class="form-hint">
+          <div class="brut-help">
             <span x-text="len">0</span> / 500
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="pf-status">Status</label>
-            <select class="form-input" id="pf-status" name="status">
+        <div class="brut-field-row">
+          <div>
+            <label class="brut-label" for="pf-status">Status</label>
+            <select class="brut-select" id="pf-status" name="status">
               <option value="draft"{{ if eq $form.Status "draft" }} selected{{ end }}>Draft</option>
               <option value="active"{{ if eq $form.Status "active" }} selected{{ end }}>Active</option>
             </select>
-            <div class="form-hint">Drafts are private to you until you flip to Active.</div>
+            <div class="brut-help">Drafts are private to you until you flip to Active.</div>
           </div>
-
-          <div class="form-group">
-            <label class="form-label" for="pf-vis">Visibility</label>
-            <select class="form-input" id="pf-vis" name="visibility">
-              <option value="public"{{ if eq $form.Visibility "public" }} selected{{ end }}>Public - any signed-in user can see</option>
+          <div>
+            <label class="brut-label" for="pf-vis">Visibility</label>
+            <select class="brut-select" id="pf-vis" name="visibility">
+              <option value="public"{{ if eq $form.Visibility "public" }} selected{{ end }}>Public &mdash; any signed-in user can see</option>
               <option value="members_only"{{ if eq $form.Visibility "members_only" }} selected{{ end }}>Members only</option>
-              <option value="hidden"{{ if eq $form.Visibility "hidden" }} selected{{ end }}>Hidden - invite only</option>
+              <option value="hidden"{{ if eq $form.Visibility "hidden" }} selected{{ end }}>Hidden &mdash; invite only</option>
             </select>
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="pf-icon">Icon</label>
-            <input class="form-input" type="text" id="pf-icon" name="icon"
+        <div class="brut-field-row">
+          <div>
+            <label class="brut-label" for="pf-icon">Icon</label>
+            <input class="brut-input" type="text" id="pf-icon" name="icon"
                    value="{{ $form.Icon }}" maxlength="16"
                    placeholder="+ * # > ~">
-            <div class="form-hint">A single character or short emoji. Optional.</div>
+            <div class="brut-help">A single character or short emoji. Optional.</div>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="pf-color">Accent color</label>
-            <input class="form-input" type="text" id="pf-color" name="color"
+          <div>
+            <label class="brut-label" for="pf-color">Accent color</label>
+            <input class="brut-input" type="text" id="pf-color" name="color"
                    value="{{ $form.Color }}" maxlength="16"
                    placeholder="#3CDFCF">
-            <div class="form-hint">Hex code shown on cards and headers. Optional.</div>
+            <div class="brut-help">Hex code shown on cards and headers. Optional.</div>
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="brut-form-actions">
           <a href="/spaces/{{ $space.Slug }}/projects"
-             class="btn btn-ghost btn-sm" hx-boost="true">Cancel</a>
-          <button type="submit" class="btn btn-primary press-effect">Create project</button>
+             class="brut-btn brut-btn-secondary" hx-boost="true">Cancel</a>
+          <button type="submit" class="brut-btn brut-btn-primary">Create project</button>
         </div>
       </form>
     </div>
-  </main>
+  </section>
 </div>
 {{ end }}
 {{ end }}
