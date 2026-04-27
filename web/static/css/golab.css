@@ -7606,3 +7606,189 @@ img.avatar {
   }
 }
 
+/* =============================================================
+   Sprint 16g - Shared layout primitives for non-wizard pages
+   =============================================================
+   Reuse all wiz-* tokens. Same visual rhythm as the wizard. */
+
+.page-shell {
+  position: relative;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.page-shell-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  max-width: 1280px;
+  margin: 0 auto;
+  align-items: stretch;
+}
+@media (min-width: 1024px) {
+  .page-shell-layout { grid-template-columns: 320px 1fr; }
+}
+
+.page-shell-sidebar {
+  display: none;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  padding: 2rem 1.5rem;
+  background: var(--bg-card);
+}
+@media (min-width: 1024px) {
+  .page-shell-sidebar { display: flex; }
+}
+
+.page-shell-main {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  position: relative;
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .page-shell-main { padding: 4rem; }
+}
+
+.page-shell-sidebar-block {
+  margin-bottom: 2rem;
+}
+.page-shell-sidebar-block-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+}
+
+.page-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.25rem;
+  transition: border-color 150ms;
+}
+.page-card:hover {
+  border-color: var(--border-hover);
+}
+
+.page-section {
+  margin-bottom: 3rem;
+}
+.page-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.page-section-eyebrow {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin: 0 0 0.4rem;
+}
+.page-section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text-bright);
+  margin: 0;
+}
+.page-section-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.page-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2rem;
+  padding-bottom: 0;
+}
+.page-tab {
+  padding: 0.85rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  text-decoration: none;
+  transition: color 150ms, border-color 150ms;
+}
+.page-tab:hover {
+  color: var(--text);
+}
+.page-tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.page-tab-count {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Doc body prose reset - prevents monospace bleed-through on
+   doc-show pages. Body text is sans, only code blocks monospace. */
+.doc-prose {
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  line-height: 1.7;
+  max-width: 70ch;
+}
+.doc-prose h1, .doc-prose h2, .doc-prose h3 {
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin: 2rem 0 1rem;
+  line-height: 1.3;
+}
+.doc-prose h1 { font-size: 1.75rem; }
+.doc-prose h2 { font-size: 1.4rem; }
+.doc-prose h3 { font-size: 1.15rem; }
+.doc-prose p { margin: 0 0 1rem; }
+.doc-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg-deep);
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.doc-prose pre {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+.doc-prose pre code {
+  background: none;
+  padding: 0;
+}
+.doc-prose ul, .doc-prose ol { margin: 0 0 1rem 1.5rem; }
+.doc-prose li { margin: 0.4rem 0; }
+.doc-prose blockquote {
+  border-left: 2px solid var(--accent);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.doc-prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-subtle);
+}
+.doc-prose a:hover {
+  text-decoration-color: var(--accent);
+}
