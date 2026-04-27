@@ -8241,3 +8241,38 @@ img.avatar {
   font-variant-numeric: tabular-nums;
 }
 .compose-counter.is-over { color: var(--danger); }
+
+/* =============================================================
+   Sprint 16g.7 - Post card season pill
+   =============================================================
+   Replaces .brut-pill-season + .brut-pill-dot inside post-card.
+   The dot now comes from a ::before pseudo (matches .status-pill
+   semantics) so the markup stays a single anchor element. */
+
+.post-season-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--accent-subtle);
+  border-radius: 100px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  text-decoration: none;
+  transition: background 150ms, border-color 150ms;
+}
+.post-season-pill::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.post-season-pill:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
