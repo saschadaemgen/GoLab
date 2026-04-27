@@ -9,63 +9,68 @@
 {{ $startedFmt := .StartedLabel }}
 {{ $seedHTML := .SeedHTML }}
 
-<div class="page-container">
-  <main class="project-form-main project-doc-edit-main">
-    <nav class="project-doc-view-back" aria-label="Close form navigation">
-      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}"
-         class="project-doc-view-back-link"
+<div class="brut-page">
+  <header class="brut-hero brut-hero-compact"
+          style="{{ if $project.Color }}--brut-accent: {{ $project.Color }};{{ end }}">
+    <div class="brut-hero-inner brut-stagger">
+      <div class="brut-hero-id">
+        PROJECT · #{{ $project.ID }} · {{ upper $project.Name }}
+        <span class="brut-hero-meta-sep">·</span>
+        SEASON · #{{ $season.SeasonNumber }}
+        <span class="brut-hero-meta-sep">·</span>
+        ACTION · CLOSE
+      </div>
+      <h1 class="brut-hero-title">Closing Season {{ $season.SeasonNumber }}: {{ $season.Title }}</h1>
+      <p class="brut-hero-subtitle">
+        Once closed, no new posts can be assigned to this season. The closing document below becomes part of the project record - members will see it on the season detail page.
+      </p>
+    </div>
+    <div class="brut-hero-actions">
+      <a class="brut-btn brut-btn-ghost brut-btn-sm"
+         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}"
          hx-boost="true">&larr; Back to season</a>
-    </nav>
+    </div>
+  </header>
 
-    <div class="project-doc-edit-card">
-      <header class="project-doc-edit-head">
-        <span class="season-status-badge season-status-active">Closing</span>
-        <h1 class="project-doc-edit-title">
-          Closing Season {{ $season.SeasonNumber }}: {{ $season.Title }}
-        </h1>
-        <p class="project-form-sub">
-          Once closed, no new posts can be assigned to this season. The closing
-          document below becomes part of the project record - members will see it
-          on the season detail page.
-        </p>
-      </header>
-
-      <section class="season-close-summary">
-        <h3 class="season-close-summary-title">Season summary</h3>
-        <ul class="season-close-summary-list">
-          <li><strong>{{ $postCount }}</strong> {{ pluralize $postCount "post" "posts" }} during this season</li>
-          <li><strong>{{ $contributors }}</strong> {{ pluralize $contributors "contributor" "contributors" }}</li>
+  <section class="brut-section">
+    <div class="brut-section-inner">
+      <!-- Season summary -->
+      <div class="brut-aside-card brut-stagger" style="margin-bottom: 24px;">
+        <div class="brut-aside-title">Season Summary</div>
+        <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 14px 28px; font: 400 13px/1.5 var(--brut-sans); color: var(--brut-text);">
+          <li><strong style="color: var(--brut-text);">{{ $postCount }}</strong> {{ pluralize $postCount "post" "posts" }}</li>
+          <li><strong style="color: var(--brut-text);">{{ $contributors }}</strong> {{ pluralize $contributors "contributor" "contributors" }}</li>
           {{ if $startedFmt }}<li>Started {{ $startedFmt }}</li>{{ end }}
         </ul>
-      </section>
+      </div>
 
       {{ if $err }}
-      <div class="flash flash-error" role="alert">{{ $err }}</div>
+      <div class="brut-flash brut-flash-error" role="alert">{{ $err }}</div>
       {{ end }}
 
-      <form method="POST"
+      <form class="brut-form brut-stagger"
+            method="POST"
             action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}/close"
-            class="project-doc-form"
             hx-boost="false"
             x-data="docEditor()"
             @submit.prevent="onSubmit($event)">
 
-        <div class="form-group">
-          <label class="form-label">Closing document</label>
-          <div class="doc-editor-wrap">
-            <div x-ref="editor" class="doc-editor"
+        <div class="brut-field">
+          <label class="brut-label">Closing document</label>
+          <div class="brut-doc-editor-wrap">
+            <div x-ref="editor" class="brut-doc-editor"
                  data-initial-html="{{ $seedHTML }}"></div>
           </div>
           <input type="hidden" name="content_html" x-ref="contentField" value="">
-          <div class="form-hint">
+          <div class="brut-help">
             Markdown-style headings, lists, and code blocks all work. Required.
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="brut-form-actions">
           <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}"
-             class="btn btn-ghost btn-sm" hx-boost="true">Cancel</a>
-          <button type="submit" class="btn btn-danger press-effect"
+             class="brut-btn brut-btn-secondary" hx-boost="true">Cancel</a>
+          <button type="submit" class="brut-btn brut-btn-danger"
                   :disabled="submitting"
                   onclick="return confirm('Close Season {{ $season.SeasonNumber }}? This is final - posts can no longer be assigned to it.')">
             <span x-show="!submitting">Close Season {{ $season.SeasonNumber }}</span>
@@ -74,7 +79,7 @@
         </div>
       </form>
     </div>
-  </main>
+  </section>
 </div>
 {{ end }}
 {{ end }}

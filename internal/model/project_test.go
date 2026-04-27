@@ -64,6 +64,14 @@ func TestProjectStore_HasMethods(t *testing.T) {
 		"CanUserAccess":  4,
 		"AttachTags":     4, // recv + ctx + projectID + tagIDs
 		"ListTags":       3,
+		// Sprint 16d hierarchy methods.
+		"ListChildProjects":    4, // recv + ctx + parentID + viewerID
+		"CountChildProjects":   4,
+		"HasOwnChildren":       3, // recv + ctx + projectID
+		"ValidateParent":       6, // recv + ctx + parent + space + self + viewer
+		"ListPotentialParents": 5, // recv + ctx + space + viewer + exclude
+		"GetWithParent":        3, // recv + ctx + projectID
+		"GetParentProjectStats": 4, // recv + ctx + parentID + viewerID
 	}
 	tt := reflect.TypeOf(&ProjectStore{})
 	for name, wantIn := range required {
@@ -74,6 +82,28 @@ func TestProjectStore_HasMethods(t *testing.T) {
 		}
 		if m.Type.NumIn() != wantIn {
 			t.Errorf("%s NumIn = %d, want %d", name, m.Type.NumIn(), wantIn)
+		}
+	}
+}
+
+// Sprint 16d: Project gains ParentProjectID + joined ParentSlug /
+// ParentName. Guard against an accidental rename or removal so the
+// breadcrumb / parent-card render paths stay wired.
+func TestProject_HasHierarchyFields(t *testing.T) {
+	tt := reflect.TypeOf(Project{})
+	if f, ok := tt.FieldByName("ParentProjectID"); !ok {
+		t.Error("Project is missing ParentProjectID")
+	} else if f.Type.Kind() != reflect.Ptr {
+		t.Errorf("Project.ParentProjectID kind = %s, want Ptr", f.Type.Kind())
+	}
+	for _, name := range []string{"ParentSlug", "ParentName"} {
+		f, ok := tt.FieldByName(name)
+		if !ok {
+			t.Errorf("Project is missing %s", name)
+			continue
+		}
+		if f.Type.Kind() != reflect.String {
+			t.Errorf("Project.%s kind = %s, want String", name, f.Type.Kind())
 		}
 	}
 }

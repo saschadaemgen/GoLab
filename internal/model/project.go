@@ -38,24 +38,27 @@ const (
 // ProjectStore.Create keeps both in sync, ownership transfer (16c) must
 // update both in one transaction.
 type Project struct {
-	ID          int64      `json:"id"`
-	SpaceID     int64      `json:"space_id"`
-	Slug        string     `json:"slug"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Status      string     `json:"status"`
-	Visibility  string     `json:"visibility"`
-	OwnerID     int64      `json:"owner_id"`
-	Icon        string     `json:"icon"`
-	Color       string     `json:"color"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID              int64      `json:"id"`
+	SpaceID         int64      `json:"space_id"`
+	Slug            string     `json:"slug"`
+	Name            string     `json:"name"`
+	Description     string     `json:"description"`
+	Status          string     `json:"status"`
+	Visibility      string     `json:"visibility"`
+	OwnerID         int64      `json:"owner_id"`
+	Icon            string     `json:"icon"`
+	Color           string     `json:"color"`
+	ParentProjectID *int64     `json:"parent_project_id,omitempty"` // Sprint 16d: optional parent for sub-projects
+	DeletedAt       *time.Time `json:"deleted_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 
 	// Joined / on-demand fields, not populated by the default SELECT.
-	SpaceSlug string `json:"space_slug,omitempty"`
-	SpaceName string `json:"space_name,omitempty"`
-	Tags      []Tag  `json:"tags,omitempty"`
+	SpaceSlug   string `json:"space_slug,omitempty"`
+	SpaceName   string `json:"space_name,omitempty"`
+	ParentSlug  string `json:"parent_slug,omitempty"` // Sprint 16d: joined parent.slug, empty for top-level
+	ParentName  string `json:"parent_name,omitempty"` // Sprint 16d: joined parent.name
+	Tags        []Tag  `json:"tags,omitempty"`
 }
 
 type ProjectStore struct {
@@ -74,14 +77,22 @@ var (
 // projectSelectCols / projectJoins keep the column list in sync between
 // FindByID, FindBySlug, ListBySpace, and the scan helpers below. Adding
 // a column to the table means touching exactly these constants.
+//
+// Sprint 16d: parent_project_id plus joined parent.slug / parent.name
+// land on every Project read so card / breadcrumb / list templates
+// render the "in {Parent}" link without an N+1 lookup. The self-join
+// uses LEFT so top-level projects keep ParentSlug / ParentName empty.
 const projectSelectCols = `
 	p.id, p.space_id, p.slug, p.name, p.description, p.status, p.visibility,
-	p.owner_id, p.icon, p.color, p.deleted_at, p.created_at, p.updated_at,
-	COALESCE(s.slug, ''), COALESCE(s.name, '')`
+	p.owner_id, p.icon, p.color, p.parent_project_id,
+	p.deleted_at, p.created_at, p.updated_at,
+	COALESCE(s.slug, ''), COALESCE(s.name, ''),
+	COALESCE(parent.slug, ''), COALESCE(parent.name, '')`
 
 const projectJoins = `
 	FROM projects p
-	LEFT JOIN spaces s ON p.space_id = s.id`
+	LEFT JOIN spaces s ON p.space_id = s.id
+	LEFT JOIN projects parent ON parent.id = p.parent_project_id`
 
 var projectSlugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
@@ -121,15 +132,16 @@ var (
 // CreateParams bundles the required + optional fields for a new
 // project. Status defaults to draft; visibility defaults to public.
 type ProjectCreateParams struct {
-	SpaceID     int64
-	Slug        string
-	Name        string
-	Description string
-	Status      string
-	Visibility  string
-	OwnerID     int64
-	Icon        string
-	Color       string
+	SpaceID         int64
+	Slug            string
+	Name            string
+	Description     string
+	Status          string
+	Visibility      string
+	OwnerID         int64
+	Icon            string
+	Color           string
+	ParentProjectID *int64 // Sprint 16d: optional parent for sub-projects
 }
 
 // Create inserts a project row and the matching owner project_members
@@ -162,12 +174,12 @@ func (s *ProjectStore) Create(ctx context.Context, p ProjectCreateParams) (*Proj
 	err = tx.QueryRow(ctx, `
 		INSERT INTO projects
 			(space_id, slug, name, description, status, visibility,
-			 owner_id, icon, color)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			 owner_id, icon, color, parent_project_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (space_id, slug) WHERE deleted_at IS NULL DO NOTHING
 		RETURNING id`,
 		p.SpaceID, p.Slug, p.Name, p.Description, p.Status, p.Visibility,
-		p.OwnerID, p.Icon, p.Color,
+		p.OwnerID, p.Icon, p.Color, p.ParentProjectID,
 	).Scan(&id)
 	if err == pgx.ErrNoRows {
 		return nil, ErrProjectSlugTaken
@@ -200,8 +212,9 @@ func (s *ProjectStore) FindByID(ctx context.Context, id int64) (*Project, error)
 			` WHERE p.id = $1 AND p.deleted_at IS NULL`, id,
 	).Scan(
 		&p.ID, &p.SpaceID, &p.Slug, &p.Name, &p.Description, &p.Status,
-		&p.Visibility, &p.OwnerID, &p.Icon, &p.Color, &p.DeletedAt,
-		&p.CreatedAt, &p.UpdatedAt, &p.SpaceSlug, &p.SpaceName,
+		&p.Visibility, &p.OwnerID, &p.Icon, &p.Color, &p.ParentProjectID,
+		&p.DeletedAt, &p.CreatedAt, &p.UpdatedAt,
+		&p.SpaceSlug, &p.SpaceName, &p.ParentSlug, &p.ParentName,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -224,8 +237,9 @@ func (s *ProjectStore) FindBySlug(ctx context.Context, spaceID int64, slug strin
 		spaceID, slug,
 	).Scan(
 		&p.ID, &p.SpaceID, &p.Slug, &p.Name, &p.Description, &p.Status,
-		&p.Visibility, &p.OwnerID, &p.Icon, &p.Color, &p.DeletedAt,
-		&p.CreatedAt, &p.UpdatedAt, &p.SpaceSlug, &p.SpaceName,
+		&p.Visibility, &p.OwnerID, &p.Icon, &p.Color, &p.ParentProjectID,
+		&p.DeletedAt, &p.CreatedAt, &p.UpdatedAt,
+		&p.SpaceSlug, &p.SpaceName, &p.ParentSlug, &p.ParentName,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -284,25 +298,28 @@ func (s *ProjectStore) ListByOwner(ctx context.Context, ownerID int64) ([]Projec
 // space_id is immutable (a project belongs to one space for life), and
 // owner_id changes go through a separate transfer flow.
 type ProjectUpdateParams struct {
-	ID          int64
-	Name        string
-	Description string
-	Status      string
-	Visibility  string
-	Icon        string
-	Color       string
+	ID              int64
+	Name            string
+	Description     string
+	Status          string
+	Visibility      string
+	Icon            string
+	Color           string
+	ParentProjectID *int64 // Sprint 16d: nil clears, non-nil sets the parent
 }
 
 // Update writes the mutable columns. Returns ErrProjectNotFound when
 // no live row matches the id. Caller verifies the actor's permission
-// to mutate before calling.
+// to mutate before calling. The parent_project_id column is always
+// written so callers can clear an existing parent by passing nil.
 func (s *ProjectStore) Update(ctx context.Context, p ProjectUpdateParams) error {
 	res, err := s.DB.Exec(ctx, `
 		UPDATE projects
 		   SET name = $2, description = $3, status = $4, visibility = $5,
-		       icon = $6, color = $7, updated_at = NOW()
+		       icon = $6, color = $7, parent_project_id = $8, updated_at = NOW()
 		 WHERE id = $1 AND deleted_at IS NULL`,
-		p.ID, p.Name, p.Description, p.Status, p.Visibility, p.Icon, p.Color,
+		p.ID, p.Name, p.Description, p.Status, p.Visibility,
+		p.Icon, p.Color, p.ParentProjectID,
 	)
 	if err != nil {
 		return fmt.Errorf("update project: %w", err)
@@ -416,8 +433,9 @@ func scanProjects(rows pgx.Rows) ([]Project, error) {
 		var p Project
 		if err := rows.Scan(
 			&p.ID, &p.SpaceID, &p.Slug, &p.Name, &p.Description, &p.Status,
-			&p.Visibility, &p.OwnerID, &p.Icon, &p.Color, &p.DeletedAt,
-			&p.CreatedAt, &p.UpdatedAt, &p.SpaceSlug, &p.SpaceName,
+			&p.Visibility, &p.OwnerID, &p.Icon, &p.Color, &p.ParentProjectID,
+			&p.DeletedAt, &p.CreatedAt, &p.UpdatedAt,
+			&p.SpaceSlug, &p.SpaceName, &p.ParentSlug, &p.ParentName,
 		); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}

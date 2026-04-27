@@ -38,10 +38,11 @@
              see the post in the context of its iteration. */}}
         {{ if gt $post.SeasonNumber 0 }}
         <a href="/spaces/{{ $post.SpaceSlug }}/projects/{{ $post.ProjectSlug }}/seasons/{{ $post.SeasonNumber }}"
-           class="post-season-badge"
+           class="brut-pill brut-pill-season"
            hx-boost="true"
            title="Posted in Season {{ $post.SeasonNumber }} of {{ $post.ProjectName }}">
-          Season {{ $post.SeasonNumber }} of {{ $post.ProjectName }}
+          <span class="brut-pill-dot" aria-hidden="true"></span>
+          S{{ $post.SeasonNumber }} · {{ $post.ProjectName }}
         </a>
         {{ end }}
       </div>

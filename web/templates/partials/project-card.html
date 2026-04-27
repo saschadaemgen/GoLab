@@ -16,6 +16,11 @@
         {{ if $project.Icon }}{{ $project.Icon }}{{ else }}+{{ end }}
       </span>
       <div class="project-card-title-block">
+        {{ if $project.ParentSlug }}
+        <span class="project-card-parent" title="Sub-project of {{ $project.ParentName }}">
+          in {{ $project.ParentName }}
+        </span>
+        {{ end }}
         <h3 class="project-card-title">{{ $project.Name }}</h3>
         <div class="project-card-badges">
           <span class="project-status-badge project-status-{{ $project.Status }}">{{ $project.Status }}</span>

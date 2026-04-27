@@ -5,68 +5,99 @@
 {{ $form := .Form }}
 {{ $err := .Error }}
 
-<div class="page-container">
-  <main class="project-form-main">
-    <nav class="project-doc-view-back" aria-label="Form navigation">
-      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}"
-         class="project-doc-view-back-link"
-         hx-boost="true">&larr; Back to project</a>
-    </nav>
+<div class="brut-page">
+  <header class="brut-hero brut-hero-compact"
+          style="{{ if $project.Color }}--brut-accent: {{ $project.Color }};{{ end }}">
+    <div class="brut-hero-inner brut-stagger">
+      <div class="brut-hero-id">
+        PROJECT · #{{ $project.ID }}
+        <span class="brut-hero-meta-sep">·</span>
+        ACTION · EDIT
+      </div>
+      <h1 class="brut-hero-title">Edit {{ $project.Name }}</h1>
+      <p class="brut-hero-subtitle">
+        Slug stays fixed once a project is created so existing links keep working.
+      </p>
+    </div>
+    <div class="brut-hero-actions">
+      <a class="brut-btn brut-btn-ghost brut-btn-sm"
+         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}" hx-boost="true">&larr; Cancel</a>
+    </div>
+  </header>
 
-    <div class="project-form-card">
-      <header class="project-form-head">
-        <h1 class="project-form-title">Edit {{ $project.Name }}</h1>
-        <p class="project-form-sub">Slug stays fixed once a project is created so existing links keep working.</p>
-      </header>
-
+  <section class="brut-section">
+    <div class="brut-section-inner">
       {{ if $err }}
-      <div class="flash flash-error" role="alert">{{ $err }}</div>
+      <div class="brut-flash brut-flash-error" role="alert">{{ $err }}</div>
       {{ end }}
 
-      <form method="POST"
+      <form class="brut-form brut-stagger"
+            method="POST"
             action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/edit"
-            class="project-form"
             hx-boost="false"
             autocomplete="off">
-        <div class="form-group">
-          <label class="form-label" for="pf-name">Name</label>
-          <input class="form-input input-glow" type="text" id="pf-name"
+
+        <div class="brut-field">
+          <label class="brut-label" for="pf-parent">Parent project</label>
+          {{ if .HasChildren }}
+          <select class="brut-select" id="pf-parent" disabled>
+            <option>-- None (this project has its own sub-projects) --</option>
+          </select>
+          <input type="hidden" name="parent_project_id" value="">
+          <div class="brut-help">
+            This project has its own sub-projects, so it cannot itself become a sub-project (max nesting depth is 1).
+          </div>
+          {{ else }}
+          <select class="brut-select" id="pf-parent" name="parent_project_id">
+            <option value=""{{ if eq $form.ParentID 0 }} selected{{ end }}>-- None (make top-level) --</option>
+            {{ range .PotentialParents }}
+            <option value="{{ .ID }}"{{ if eq .ID $form.ParentID }} selected{{ end }}>{{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}</option>
+            {{ end }}
+          </select>
+          <div class="brut-help">
+            Changing the parent moves this project. Existing children stay where they are.
+          </div>
+          {{ end }}
+        </div>
+
+        <div class="brut-field">
+          <label class="brut-label" for="pf-name">Name</label>
+          <input class="brut-input" type="text" id="pf-name"
                  name="name" required minlength="3" maxlength="80"
                  value="{{ $form.Name }}">
         </div>
 
-        <div class="form-group">
-          <label class="form-label">URL slug</label>
-          <input class="form-input form-input-readonly" type="text"
+        <div class="brut-field">
+          <label class="brut-label">URL slug</label>
+          <input class="brut-input" type="text"
                  value="{{ $project.Slug }}" readonly disabled>
-          <div class="form-hint">Slug cannot be changed. Lives at <code>/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}</code>.</div>
+          <div class="brut-help">Slug cannot be changed. Lives at <code>/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}</code>.</div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="pf-desc">Description</label>
-          <textarea class="form-input form-textarea input-glow" id="pf-desc"
+        <div class="brut-field">
+          <label class="brut-label" for="pf-desc">Description</label>
+          <textarea class="brut-textarea" id="pf-desc"
                     name="description" maxlength="500" rows="4"
                     x-data="{ len: {{ len $form.Description }} }"
                     @input="len = $el.value.length">{{ $form.Description }}</textarea>
-          <div class="form-hint">
+          <div class="brut-help">
             <span x-text="len">0</span> / 500
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="pf-status">Status</label>
-            <select class="form-input" id="pf-status" name="status">
+        <div class="brut-field-row">
+          <div>
+            <label class="brut-label" for="pf-status">Status</label>
+            <select class="brut-select" id="pf-status" name="status">
               <option value="draft"{{ if eq $form.Status "draft" }} selected{{ end }}>Draft</option>
               <option value="active"{{ if eq $form.Status "active" }} selected{{ end }}>Active</option>
               <option value="archived"{{ if eq $form.Status "archived" }} selected{{ end }}>Archived</option>
               <option value="closed"{{ if eq $form.Status "closed" }} selected{{ end }}>Closed</option>
             </select>
           </div>
-
-          <div class="form-group">
-            <label class="form-label" for="pf-vis">Visibility</label>
-            <select class="form-input" id="pf-vis" name="visibility">
+          <div>
+            <label class="brut-label" for="pf-vis">Visibility</label>
+            <select class="brut-select" id="pf-vis" name="visibility">
               <option value="public"{{ if eq $form.Visibility "public" }} selected{{ end }}>Public</option>
               <option value="members_only"{{ if eq $form.Visibility "members_only" }} selected{{ end }}>Members only</option>
               <option value="hidden"{{ if eq $form.Visibility "hidden" }} selected{{ end }}>Hidden</option>
@@ -74,31 +105,29 @@
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="pf-icon">Icon</label>
-            <input class="form-input" type="text" id="pf-icon" name="icon"
+        <div class="brut-field-row">
+          <div>
+            <label class="brut-label" for="pf-icon">Icon</label>
+            <input class="brut-input" type="text" id="pf-icon" name="icon"
                    value="{{ $form.Icon }}" maxlength="16">
           </div>
-          <div class="form-group">
-            <label class="form-label" for="pf-color">Accent color</label>
-            <input class="form-input" type="text" id="pf-color" name="color"
+          <div>
+            <label class="brut-label" for="pf-color">Accent color</label>
+            <input class="brut-input" type="text" id="pf-color" name="color"
                    value="{{ $form.Color }}" maxlength="16">
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="brut-form-actions">
           <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}"
-             class="btn btn-ghost btn-sm" hx-boost="true">Cancel</a>
-          <button type="submit" class="btn btn-primary press-effect">Save changes</button>
+             class="brut-btn brut-btn-secondary" hx-boost="true">Cancel</a>
+          <button type="submit" class="brut-btn brut-btn-primary">Save changes</button>
         </div>
       </form>
 
-      <hr class="project-form-divider">
-
-      <section class="project-form-danger">
-        <h2 class="project-form-danger-title">Danger zone</h2>
-        <p class="project-form-danger-text">
+      <div class="brut-form-danger">
+        <h2 class="brut-form-danger-title">Danger zone</h2>
+        <p class="brut-form-danger-desc">
           Soft-deleting hides the project from lists and from non-admin members.
           Existing posts assigned to this project's seasons keep their season_id;
           an admin can recover the project later.
@@ -107,11 +136,11 @@
               action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/delete"
               hx-boost="false"
               onsubmit="return confirm('Soft-delete {{ $project.Name }}? It will disappear from project lists.');">
-          <button type="submit" class="btn btn-danger btn-sm press-effect">Soft-delete project</button>
+          <button type="submit" class="brut-btn brut-btn-danger brut-btn-sm">Soft-delete project</button>
         </form>
-      </section>
+      </div>
     </div>
-  </main>
+  </section>
 </div>
 {{ end }}
 {{ end }}

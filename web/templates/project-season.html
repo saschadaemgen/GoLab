@@ -4,134 +4,115 @@
 {{ $project := .Project }}
 {{ $season := .Season }}
 
-{{ template "project-header.html" . }}
+<div class="brut-page">
+  {{ template "project-header.html" . }}
 
-<div class="page-container">
-  <main>
-    <article class="season-detail">
-      <header class="season-detail-head">
-        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
-           class="project-doc-view-back-link"
+  <section class="brut-section">
+    <div class="brut-section-inner">
+      <nav style="margin-bottom: 16px;">
+        <a class="brut-btn brut-btn-ghost brut-btn-sm"
+           href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
            hx-boost="true">&larr; All seasons</a>
-        <h1 class="season-detail-title">
-          Season {{ $season.SeasonNumber }}: {{ $season.Title }}
+      </nav>
+
+      <header class="brut-stagger" style="margin-bottom: 24px;">
+        <div class="brut-section-label">SEASON · #{{ $season.SeasonNumber }}</div>
+        <h1 style="font: 700 36px/1.1 var(--brut-sans); letter-spacing: -0.02em; color: var(--brut-text); margin: 0 0 14px;">
+          {{ $season.Title }}
         </h1>
-        <div class="season-detail-meta">
-          <span class="season-status-badge season-status-{{ $season.Status }}">
-            {{ if eq $season.Status "planned" }}Planned
-            {{ else if eq $season.Status "active" }}Active
-            {{ else }}Closed{{ end }}
+        <div class="brut-hero-meta">
+          <span class="brut-pill brut-pill-{{ if eq $season.Status "active" }}active{{ else if eq $season.Status "closed" }}closed{{ else }}draft{{ end }}">
+            <span class="brut-pill-dot" aria-hidden="true"></span>
+            {{ if eq $season.Status "planned" }}planned{{ else if eq $season.Status "active" }}active{{ else }}closed{{ end }}
           </span>
           {{ if $season.StartedAt }}
-          <span>Started {{ timeAgo $season.StartedAt.UTC }}</span>
+          <span class="brut-hero-meta-item">Started {{ timeAgo $season.StartedAt.UTC }}</span>
           {{ end }}
           {{ if $season.ClosedAt }}
-          <span>Closed {{ timeAgo $season.ClosedAt.UTC }}</span>
+          <span class="brut-hero-meta-item">Closed {{ timeAgo $season.ClosedAt.UTC }}</span>
           {{ end }}
-          <span>{{ len .Posts }} {{ pluralize (len .Posts) "post" "posts" }}</span>
+          <span class="brut-hero-meta-sep">·</span>
+          <span class="brut-hero-meta-item">{{ len .Posts }} {{ pluralize (len .Posts) "Post" "Posts" }}</span>
+          <span class="brut-hero-meta-item">{{ .ContributorCount }} {{ pluralize .ContributorCount "Contributor" "Contributors" }}</span>
         </div>
         {{ if $season.Description }}
-        <p class="season-detail-desc">{{ $season.Description }}</p>
-        {{ end }}
-
-        {{ if .CanManage }}
-        <div class="season-detail-actions">
-          {{ if eq $season.Status "planned" }}
-          <form method="post"
-                action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}/activate"
-                onsubmit="return confirm('Activate this season? Posts can be assigned to it once active.')">
-            <button type="submit" class="btn btn-primary btn-sm press-effect">Activate season</button>
-          </form>
-          {{ else if eq $season.Status "active" }}
-          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}/close"
-             class="btn btn-danger btn-sm press-effect"
-             hx-boost="true">Close season</a>
-          {{ end }}
-        </div>
+        <p class="brut-prose" style="margin-top: 16px;">{{ $season.Description }}</p>
         {{ end }}
       </header>
 
+      {{ if .CanManage }}
+      <div style="display: flex; gap: 10px; margin-bottom: 24px;">
+        {{ if eq $season.Status "planned" }}
+        <form method="post"
+              action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}/activate"
+              onsubmit="return confirm('Activate this season? Posts can be assigned to it once active.')">
+          <button type="submit" class="brut-btn brut-btn-primary brut-btn-sm">Activate season</button>
+        </form>
+        {{ else if eq $season.Status "active" }}
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}/close"
+           class="brut-btn brut-btn-danger brut-btn-sm" hx-boost="true">Close season</a>
+        {{ end }}
+      </div>
+      {{ end }}
+
+      <!-- KPI strip -->
+      <div class="brut-kpi-grid brut-kpi-grid-4 brut-stagger" style="margin-bottom: 32px;">
+        <div class="brut-kpi">
+          <div class="brut-kpi-label">Posts</div>
+          <div class="brut-kpi-value"
+               x-data="brutKpi({{ .PostCount }}, 1100)"
+               x-text="current">{{ .PostCount }}</div>
+          <div class="brut-kpi-delta">in this season</div>
+        </div>
+        <div class="brut-kpi">
+          <div class="brut-kpi-label">Contributors</div>
+          <div class="brut-kpi-value"
+               x-data="brutKpi({{ .ContributorCount }}, 900)"
+               x-text="current">{{ .ContributorCount }}</div>
+          <div class="brut-kpi-delta">distinct authors</div>
+        </div>
+        <div class="brut-kpi">
+          <div class="brut-kpi-label">Days Running</div>
+          <div class="brut-kpi-value"
+               x-data="brutKpi({{ .DaysRunning }}, 1000)"
+               x-text="current">{{ .DaysRunning }}</div>
+          <div class="brut-kpi-delta">{{ if eq $season.Status "active" }}so far{{ else if eq $season.Status "closed" }}total{{ else }}planned{{ end }}</div>
+        </div>
+        <div class="brut-kpi">
+          <div class="brut-kpi-label">Linked Docs</div>
+          <div class="brut-kpi-value"
+               x-data="brutKpi({{ .LinkedDocs }}, 700)"
+               x-text="current">{{ .LinkedDocs }}</div>
+          <div class="brut-kpi-delta">on the parent project</div>
+        </div>
+      </div>
+
       {{ if and (eq $season.Status "closed") $season.ClosingDocHTML }}
-      <details class="season-closing-doc" open>
-        <summary class="season-closing-doc-summary">Closing document</summary>
-        <div class="post-content season-closing-doc-body">
+      <details class="brut-aside-card" open style="margin-bottom: 24px;">
+        <summary style="cursor: pointer; font: 500 11px/1 var(--brut-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--brut-text-muted);">Closing Document</summary>
+        <div class="post-content" style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--brut-border-faint);">
           {{ safeHTML $season.ClosingDocHTML }}
         </div>
       </details>
       {{ end }}
 
-      <!-- Sprint 16b polish: season dashboard. KPI strip + posts-
-           over-time line chart + posts-by-type donut. The two charts
-           sit side by side on desktop, stack on mobile. -->
-      <section class="season-dashboard" aria-label="Season dashboard">
-        <ul class="kpi-grid kpi-grid-1x4 stagger-in">
-          <li class="kpi-card">
-            <span class="kpi-num">{{ .PostCount }}</span>
-            <span class="kpi-label">Posts</span>
-          </li>
-          <li class="kpi-card">
-            <span class="kpi-num">{{ .ContributorCount }}</span>
-            <span class="kpi-label">{{ pluralize .ContributorCount "Contributor" "Contributors" }}</span>
-          </li>
-          <li class="kpi-card">
-            <span class="kpi-num">{{ .DaysRunning }}</span>
-            <span class="kpi-label">{{ pluralize .DaysRunning "Day running" "Days running" }}</span>
-          </li>
-          <li class="kpi-card">
-            <span class="kpi-num">{{ .LinkedDocs }}</span>
-            <span class="kpi-label">Linked docs</span>
-          </li>
-        </ul>
-
-        <div class="season-dashboard-row">
-          <div class="project-dashboard-card project-dashboard-card-wide"
-               x-data="seasonDailyChart()"
-               data-chart='{{ jsonData .DailyChart }}'>
-            <header class="project-dashboard-card-head">
-              <h3 class="chart-card-title">Posts over time (last 30 days)</h3>
-            </header>
-            {{ if .DailyChart.HasData }}
-            <div class="chart-container">
-              <canvas x-ref="canvas" aria-label="Posts per day, last 30 days"></canvas>
-            </div>
-            {{ else }}
-            <div class="project-dashboard-empty project-dashboard-empty-tight">
-              <p>No posts in the last 30 days yet.</p>
-            </div>
-            {{ end }}
-          </div>
-
-          <div class="project-dashboard-card project-dashboard-card-narrow"
-               x-data="seasonTypeChart()"
-               data-chart='{{ jsonData .TypeChart }}'>
-            <header class="project-dashboard-card-head">
-              <h3 class="chart-card-title">By type</h3>
-            </header>
-            {{ if .TypeChart.HasData }}
-            <div class="chart-container chart-container-sm">
-              <canvas x-ref="canvas" aria-label="Posts grouped by post type"></canvas>
-            </div>
-            {{ else }}
-            <div class="project-dashboard-empty project-dashboard-empty-tight">
-              <p>No posts to break down yet.</p>
-            </div>
-            {{ end }}
-          </div>
-        </div>
-      </section>
-
-      <section class="season-posts">
-        <h2 class="project-section-title">Posts in this season</h2>
-        {{ if .Posts }}
-        <div class="stagger-in">
-          {{ range .Posts }}
-          {{ template "post-card.html" (dict "Post" . "User" $.User) }}
-          {{ end }}
-        </div>
-        {{ else }}
-        <div class="empty-state">
-          <h3>No posts assigned to this season yet</h3>
-          <p>
+      <h2 class="brut-section-title" style="margin: 32px 0 16px;">Posts in this season</h2>
+      {{ if .Posts }}
+      <div class="stagger-in">
+        {{ range .Posts }}
+        {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+        {{ end }}
+      </div>
+      {{ else }}
+      <div class="brut-empty">
+        <span class="brut-empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </span>
+        <div class="brut-empty-body">
+          <h3 class="brut-empty-title">No posts assigned to this season yet</h3>
+          <p class="brut-empty-desc">
             {{ if eq $season.Status "active" }}
               Posts assigned via the compose box will appear here.
             {{ else if eq $season.Status "planned" }}
@@ -141,10 +122,10 @@
             {{ end }}
           </p>
         </div>
-        {{ end }}
-      </section>
-    </article>
-  </main>
+      </div>
+      {{ end }}
+    </div>
+  </section>
 </div>
 {{ end }}
 {{ end }}
