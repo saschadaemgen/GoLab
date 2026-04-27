@@ -16,6 +16,22 @@
         </a>
         <span class="project-breadcrumb-sep" aria-hidden="true">/</span>
         <a href="/spaces/{{ $space.Slug }}/projects" class="project-breadcrumb-link" hx-boost="true">Projects</a>
+        {{/* Sprint 16d: parent breadcrumb segment for sub-projects.
+             ParentSlug is non-empty when the LEFT JOIN found the
+             parent. If the parent is invisible / soft-deleted (rare),
+             ParentSlug ends up empty even when ParentProjectID is set;
+             show the parent ID as a fallback so the chain stays
+             readable. */}}
+        {{ if $project.ParentSlug }}
+        <span class="project-breadcrumb-sep" aria-hidden="true">/</span>
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.ParentSlug }}"
+           class="project-breadcrumb-link project-breadcrumb-parent"
+           hx-boost="true">{{ $project.ParentName }}</a>
+        {{ else if $project.ParentProjectID }}
+        <span class="project-breadcrumb-sep" aria-hidden="true">/</span>
+        <span class="project-breadcrumb-orphan"
+              title="You don't have access to this project's parent">parent project</span>
+        {{ end }}
       </nav>
 
       <div class="project-header-title-row">
