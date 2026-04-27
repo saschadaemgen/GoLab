@@ -1395,10 +1395,70 @@
         submitting: false,
         powerLevel: cfg.powerLevel || 0,
 
-        // onSpaceChange is retained as a hook for the future in case
-        // we ever gate spaces client-side again. For now it's a no-op
-        // so the template's @change still works without errors.
-        onSpaceChange: function () {},
+        // Sprint 16b Phase 4: cascading Project + Season selects.
+        // The lists live in reactive state so the <template x-for>
+        // rebuilds the option DOM when the user picks a Space.
+        projects: [],
+        seasons: [],
+        selectedProjectID: null,
+
+        // Sprint 16b Phase 4: when the user picks a Space, fetch the
+        // visible projects for that space. Reset the downstream
+        // selects so a stale Project / Season pick doesn't survive.
+        onSpaceChange: function (ev) {
+          var self = this;
+          self.projects = [];
+          self.seasons = [];
+          self.selectedProjectID = null;
+          if (self.$refs.projectSelect) self.$refs.projectSelect.value = '';
+          if (self.$refs.seasonSelect) self.$refs.seasonSelect.value = '';
+          var spaceID = parseInt(ev.target.value, 10) || 0;
+          if (!spaceID) return;
+          var opt = ev.target.options[ev.target.selectedIndex];
+          var slug = opt && opt.dataset && opt.dataset.slug ? opt.dataset.slug : '';
+          if (!slug) return;
+          fetch('/api/spaces/' + encodeURIComponent(slug) + '/projects', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+          }).then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+              self.projects = (d && d.projects) || [];
+            })
+            .catch(function () { self.projects = []; });
+        },
+
+        // Sprint 16b Phase 4: when the user picks a Project, fetch
+        // its seasons. We hide closed seasons because the server
+        // rejects assignments to them anyway; not showing them keeps
+        // the picker focused on the actionable choices.
+        onProjectChange: function (ev) {
+          var self = this;
+          self.seasons = [];
+          if (self.$refs.seasonSelect) self.$refs.seasonSelect.value = '';
+          var projectID = parseInt(ev.target.value, 10) || 0;
+          self.selectedProjectID = projectID || null;
+          if (!projectID) return;
+          fetch('/api/projects/' + projectID + '/seasons', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+          }).then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+              var all = (d && d.seasons) || [];
+              self.seasons = all.filter(function (s) {
+                return s.status !== 'closed';
+              });
+            })
+            .catch(function () { self.seasons = []; });
+        },
+
+        // Format the option label - includes Planned/Active state so
+        // the user sees which season is the live one.
+        seasonOptionLabel: function (s) {
+          var label = 'Season ' + s.season_number + ': ' + s.title;
+          if (s.status === 'planned') label += ' (Planned)';
+          else if (s.status === 'active') label += ' (Active)';
+          return label;
+        },
 
         canSubmit: function () {
           if (this.submitting) return false;
@@ -1697,6 +1757,14 @@
           // Sprint 10: space, post type, tags.
           var spaceEl = form.querySelector('[name=space_id]');
           if (spaceEl && spaceEl.value) body.space_id = parseInt(spaceEl.value, 10);
+
+          // Sprint 16b Phase 4: optional season_id from the cascading
+          // Project / Season selects. Only sent when the user picked a
+          // season; otherwise the post stays at the Space level.
+          var seasonEl = form.querySelector('[name=season_id]');
+          if (seasonEl && seasonEl.value) {
+            body.season_id = parseInt(seasonEl.value, 10);
+          }
 
           var typeEl = form.querySelector('[name=post_type]:checked') ||
                        form.querySelector('[name=post_type]');

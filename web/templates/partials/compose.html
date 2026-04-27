@@ -132,6 +132,35 @@
     <input type="hidden" name="space_id" value="{{ $selectedSpace }}">
     {{ end }}
 
+    <!-- Sprint 16b Phase 4: optional Project + Season cascading selects.
+         Hidden until a Space is picked; populated by composeEditor() via
+         /api/spaces/{slug}/projects and /api/projects/{id}/seasons.
+         Both default to "no project" / "no season" - leaving them blank
+         keeps the existing free-Space post behaviour. -->
+    <select class="compose-select compose-project-select"
+            x-ref="projectSelect"
+            @change="onProjectChange($event)"
+            x-show="projects.length > 0"
+            x-cloak>
+      <option value="">No project</option>
+      <template x-for="p in projects" :key="p.id">
+        <option :value="p.id" x-text="p.name"></option>
+      </template>
+    </select>
+
+    <select class="compose-select compose-season-select"
+            name="season_id"
+            x-ref="seasonSelect"
+            x-show="seasons.length > 0"
+            x-cloak>
+      <option value="">No season</option>
+      <template x-for="se in seasons" :key="se.id">
+        <option :value="se.id"
+                :disabled="se.status === 'closed'"
+                x-text="seasonOptionLabel(se)"></option>
+      </template>
+    </select>
+
     <button type="submit" class="btn btn-primary btn-sm press-effect"
             :disabled="!canSubmit()">
       <span x-show="!submitting">Post</span>
