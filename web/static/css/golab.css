@@ -8015,3 +8015,229 @@ img.avatar {
 .wiz-doc-editor-wrap .ql-snow.ql-toolbar button.ql-active .ql-fill {
   fill: var(--accent);
 }
+
+/* =============================================================
+   Sprint 16g.6 - Compose box
+   =============================================================
+   The Sprint 16f compose hid the editor when the surrounding
+   surface and the editor surface used the same color. Here the
+   editor sits on var(--bg-deep) inside a card on var(--bg-card)
+   so the user can see exactly where to type. The Quill toolbar
+   keeps its own background; meta rows have monospace eyebrows
+   and the post button right-aligns in a thin footer. */
+
+.compose-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.compose-editor-wrap {
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border);
+}
+.compose-editor {
+  min-height: 8rem;
+  background: var(--bg-deep);
+  color: var(--text);
+}
+
+.compose-editor .ql-toolbar.ql-snow {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 0.4rem 0.65rem;
+}
+.compose-editor .ql-container.ql-snow {
+  border: 0;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.compose-editor .ql-editor {
+  min-height: 6rem;
+  padding: 0.85rem 1rem;
+}
+.compose-editor .ql-editor.ql-blank::before {
+  color: var(--text-muted);
+  font-style: normal;
+  left: 1rem;
+}
+.compose-editor .ql-snow .ql-stroke { stroke: var(--text-dim); }
+.compose-editor .ql-snow .ql-fill { fill: var(--text-dim); }
+.compose-editor .ql-snow.ql-toolbar button:hover .ql-stroke,
+.compose-editor .ql-snow.ql-toolbar button.ql-active .ql-stroke {
+  stroke: var(--accent);
+}
+.compose-editor .ql-snow.ql-toolbar button:hover .ql-fill,
+.compose-editor .ql-snow.ql-toolbar button.ql-active .ql-fill {
+  fill: var(--accent);
+}
+
+.compose-meta {
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.compose-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.compose-meta-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  width: 4.5rem;
+  flex-shrink: 0;
+}
+
+.compose-type-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.compose-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.7rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 150ms, color 150ms, background 150ms;
+}
+.compose-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.compose-pill input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.compose-pill:has(input[type="radio"]:checked) {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.compose-select {
+  flex: 1;
+  max-width: 24rem;
+  height: 30px;
+  padding: 0 0.65rem;
+  font-size: 0.85rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+}
+.compose-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.compose-tag-input-wrap {
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 140px;
+}
+.compose-tag-input {
+  width: 100%;
+  height: 28px;
+  padding: 0 0.75rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  transition: border-color 160ms;
+}
+.compose-tag-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.compose-tag-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 30;
+}
+.compose-tag-suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.compose-tag-suggestion-item:hover {
+  background: var(--bg-deep);
+  color: var(--accent);
+}
+.compose-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.35rem 0.2rem 0.65rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: var(--bg-deep);
+  color: var(--text);
+}
+.compose-tag-chip-x {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  border-radius: 100px;
+  transition: color 160ms;
+}
+.compose-tag-chip-x:hover { color: var(--accent); }
+
+.compose-footer {
+  padding: 0.85rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.compose-counter {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.compose-counter.is-over { color: var(--danger); }
