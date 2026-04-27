@@ -1835,69 +1835,6 @@
     });
 
     // ============================================================
-    // Sprint 16f brutalist counter: identical mechanics to the
-    // 16e kpiCounter but lives under the brut* namespace and is
-    // referenced from .brut-kpi tiles. Keeps both names registered
-    // during the visual migration; 16f.6 removes kpiCounter.
-    // Usage:
-    //   <span class="brut-kpi-value"
-    //         x-data="brutKpi(128, 1200)"
-    //         x-text="current">128</span>
-    // ============================================================
-    window.Alpine.data('brutKpi', function (target, duration) {
-      target = parseInt(target, 10) || 0;
-      duration = parseInt(duration, 10) || 1200;
-      var prefersReduced = window.matchMedia &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      return {
-        current: prefersReduced ? target : 0,
-        init: function () {
-          if (prefersReduced) return;
-          var self = this;
-          if (!('IntersectionObserver' in window)) {
-            self._animate(target, duration);
-            return;
-          }
-          // Sprint 16f bug fix: tiles in the cockpit are above the
-          // fold on first paint, so they're already intersecting
-          // when the observer attaches. Some browsers / timing paths
-          // skip the initial "now intersecting" callback in that
-          // case and the count never starts. Check geometry up
-          // front and animate immediately when the element is
-          // already on screen; otherwise fall back to the observer.
-          var rect = this.$el.getBoundingClientRect();
-          var alreadyVisible = rect.top < window.innerHeight && rect.bottom > 0;
-          if (alreadyVisible) {
-            self._animate(target, duration);
-            return;
-          }
-          var observer = new IntersectionObserver(function (entries) {
-            if (entries[0] && entries[0].isIntersecting) {
-              self._animate(target, duration);
-              observer.disconnect();
-            }
-          }, { threshold: 0.3 });
-          observer.observe(this.$el);
-        },
-        _animate: function (target, duration) {
-          var self = this;
-          var start = performance.now();
-          var step = function (now) {
-            var t = Math.min((now - start) / duration, 1);
-            var eased = 1 - Math.pow(1 - t, 3);
-            self.current = Math.floor(target * eased);
-            if (t < 1) {
-              requestAnimationFrame(step);
-            } else {
-              self.current = target;
-            }
-          };
-          requestAnimationFrame(step);
-        }
-      };
-    });
-
-    // ============================================================
     // Sprint 16e visual polish: animated KPI counter.
     // Counts the displayed value from 0 to `target` once the host
     // element scrolls into view. Pure ease-out cubic, ~1200ms by

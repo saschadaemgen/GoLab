@@ -1,447 +1,255 @@
 {{ define "content" }}
 {{ with .Content }}
-{{ $space := .Space }}
-{{ $project := .Project }}
-{{ $docs := .DocPresence }}
-{{ $current := .CurrentSeason }}
-{{ $heatmap := .Heatmap }}
-{{ $sparklines := .Sparklines }}
 
-<div class="brut-page">
-  <!-- ============================================================
-       Brutalist hero. Mesh gradient drifts behind. The "PROJECT"
-       label + project ID anchor the user, the title is huge sans,
-       the subtitle is the description, and the meta strip is all
-       monospace pills + plain items separated by · separators.
-       Edit button sits absolute right (or stacks on mobile).
-       ============================================================ -->
-  <header class="brut-hero{{ if eq $project.Status "active" }} is-active{{ end }}"
-          style="{{ if $project.Color }}--brut-accent: {{ $project.Color }};{{ end }}">
-    <div class="brut-hero-inner brut-stagger">
-      <div class="brut-hero-id">
-        PROJECT · #{{ $project.ID }}
-        {{ if $project.ParentSlug }}
-        <span class="brut-hero-meta-sep">·</span>
-        IN <strong>{{ upper $project.ParentName }}</strong>
-        {{ end }}
-        <span class="brut-hero-meta-sep">·</span>
-        SPACE · <strong>{{ upper $space.Name }}</strong>
-      </div>
-      <h1 class="brut-hero-title">{{ $project.Name }}</h1>
-      {{ if $project.Description }}
-      <p class="brut-hero-subtitle">{{ $project.Description }}</p>
-      {{ end }}
-      <div class="brut-hero-meta">
-        <span class="brut-pill brut-pill-{{ $project.Status }}">
-          <span class="brut-pill-dot" aria-hidden="true"></span>{{ $project.Status }}
-        </span>
-        <span class="brut-pill">
-          <span class="brut-pill-dot" aria-hidden="true"></span>{{ $project.Visibility }}
-        </span>
-        {{ if .Owner }}
-        <span class="brut-hero-meta-sep">·</span>
-        <span class="brut-hero-meta-item">@{{ .Owner.Username }}</span>
-        {{ end }}
-        <span class="brut-hero-meta-sep">·</span>
-        <span class="brut-hero-meta-item">{{ len .Seasons }} {{ pluralize (len .Seasons) "Season" "Seasons" }}</span>
-        <span class="brut-hero-meta-sep">·</span>
-        <span class="brut-hero-meta-item">{{ .TotalPosts }} {{ pluralize .TotalPosts "Post" "Posts" }}</span>
-      </div>
-    </div>
-    {{ if .CanManage }}
-    <div class="brut-hero-actions">
-      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/edit"
-         class="brut-btn brut-btn-secondary brut-btn-sm" hx-boost="true">Edit</a>
-    </div>
-    {{ end }}
-  </header>
+{{/* ============================================================
+     Project detail page (Overview tab)
+     ============================================================
+     Sprint 16g.2 visual reset. Uses the .page-shell layout
+     primitives wired into golab.css (Phase 16g.1) and reuses
+     the existing .wiz-* tokens from the registration wizard.
+     No mesh gradient, no cascade animations, no hover lifts -
+     pages render INSTANTLY on click. The hero is a flat eyebrow
+     + headline + helper line, identical to the wizard's prompt
+     intros. The sidebar carries project ID, parent link, tab
+     navigation, manage actions, and the description quote -
+     same structure as the wizard's left rail. ============= */}}
 
-  <!-- Brutalist tabs -->
-  <nav class="brut-tabs" aria-label="Project sections">
-    <div class="brut-tabs-inner">
-      <a class="brut-tab is-active"
-         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}"
-         hx-boost="true">Overview</a>
-      <a class="brut-tab"
-         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs"
-         hx-boost="true">Docs<span class="brut-tab-count">{{ len .Docs }}</span></a>
-      <a class="brut-tab"
-         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
-         hx-boost="true">Seasons<span class="brut-tab-count">{{ len .Seasons }}</span></a>
-      <a class="brut-tab"
-         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/members"
-         hx-boost="true">Members<span class="brut-tab-count">{{ len .Members }}</span></a>
-    </div>
-  </nav>
+<div class="page-shell">
+  <div class="page-shell-layout">
 
-  <!-- ============================================================
-       Sub-projects section. Renders only when there's at least one
-       child or the user could create one. Cards are the rich brut-
-       pcard variant with accent strip, progress dots, sparkline.
-       ============================================================ -->
-  {{ if or .Children .CanCreateProject }}
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <header class="brut-section-head">
-        <div class="brut-section-title-block">
-          <div class="brut-section-label">Section · 01 · Sub-Projects</div>
-          <h2 class="brut-section-title">
-            {{ if .Children }}{{ len .Children }} {{ pluralize (len .Children) "Sub-Project" "Sub-Projects" }}{{ else }}Sub-Projects{{ end }}
-          </h2>
-          {{ if .ParentStats }}
-          <p class="brut-section-sub">
-            {{ .ParentStats.ChildPostsCount }} posts ·
-            {{ .ParentStats.ChildContributors }} contributors ·
-            {{ .ParentStats.ActiveChildSeasons }} active seasons
-          </p>
-          {{ end }}
+    {{ template "project-shell-sidebar" (dict
+      "Space"        .Space
+      "Project"      .Project
+      "ActiveTab"    .ActiveTab
+      "CanManage"    .CanManage
+      "DocsCount"    .DocsCompleted
+      "SeasonsCount" (len .Seasons)
+      "MembersCount" (len .Members)
+    ) }}
+
+    {{/* ============================================================
+         Main column
+         ============================================================ */}}
+    <main class="page-shell-main">
+
+      {{/* ----- Header: back link + slug indicator ----- */}}
+      <header class="wiz-header">
+        <a href="/spaces/{{ .Space.Slug }}" class="wiz-back-btn" hx-boost="true">&larr; BACK TO {{ upper .Space.Name }}</a>
+        <div class="wiz-progress-text">
+          <span>{{ .Project.Slug }}</span>
         </div>
-        {{ if .CanCreateProject }}
-        <div class="brut-section-actions">
-          <a class="brut-btn brut-btn-primary brut-btn-sm"
-             href="/spaces/{{ $space.Slug }}/projects/new?parent_id={{ $project.ID }}"
-             hx-boost="true">+ New Sub</a>
-        </div>
-        {{ end }}
       </header>
 
-      {{ if .Children }}
-      <div class="brut-pcard-grid brut-stagger">
-        {{ range .Children }}
-        {{ $sl := index $sparklines .ID }}
-        <a class="brut-pcard"
-           href="/spaces/{{ $space.Slug }}/projects/{{ .Slug }}"
-           {{ if .Color }}style="--card-accent: {{ .Color }};"{{ end }}
-           hx-boost="true">
-          <div class="brut-pcard-id">PROJECT · #{{ .ID }}</div>
-          <h3 class="brut-pcard-name">{{ .Name }}</h3>
-          {{ if .Description }}
-          <p class="brut-pcard-desc">{{ .Description }}</p>
+      {{/* ----- Hero (compact, no mesh, no animation) ----- */}}
+      <div class="wiz-content" style="margin-bottom: 3rem;">
+        <div class="wiz-prompt-eyebrow">PROJECT &middot; #{{ .Project.ID }} &middot; {{ upper .Space.Name }}</div>
+        <h1 class="wiz-prompt-headline">{{ .Project.Name }}</h1>
+        {{ if .Project.Description }}
+        <p class="wiz-prompt-helper">{{ .Project.Description }}</p>
+        {{ end }}
+      </div>
+
+      {{/* ----- Section 01: Sub-projects ----- */}}
+      {{ if or .Children .CanCreateProject }}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 01</div>
+            <h2 class="page-section-title">Sub-projects</h2>
+          </div>
+          {{ if .CanCreateProject }}
+          <div class="page-section-actions">
+            <a href="/spaces/{{ .Space.Slug }}/projects/new?parent_id={{ .Project.ID }}"
+               class="wiz-action-secondary"
+               hx-boost="true">+ NEW SUB-PROJECT</a>
+          </div>
           {{ end }}
-          <div class="brut-pcard-progress" aria-label="Season progress">
-            {{ $progress := .SimpleProgress }}
-            {{ range $j := iter 5 }}
-            <span class="brut-pcard-dot{{ if lt $j $progress }} is-on{{ end }}"></span>
+        </div>
+
+        {{ if .Children }}
+        {{ $space := .Space }}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; align-items: stretch;">
+          {{ range .Children }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ .Slug }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.6rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">PROJECT &middot; #{{ .ID }}</div>
+            <h3 style="font-size: 1.15rem; font-weight: 600; margin: 0; color: var(--text-bright);">{{ .Name }}</h3>
+            {{ if .Description }}
+            <p style="font-size: 0.9rem; color: var(--text-dim); margin: 0; line-height: 1.5;">{{ .Description }}</p>
             {{ end }}
+            <div style="display: flex; gap: 0.6rem; align-items: center; margin-top: auto; padding-top: 0.4rem;">
+              <span class="status-pill status-{{ .Status }}">{{ upper .Status }}</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">{{ timeAgo .UpdatedAt }}</span>
+            </div>
+          </a>
+          {{ end }}
+        </div>
+        {{ else }}
+        <p style="color: var(--text-muted); margin: 0;">
+          No sub-projects yet.
+          {{ if .CanCreateProject }}
+          <a href="/spaces/{{ .Space.Slug }}/projects/new?parent_id={{ .Project.ID }}"
+             style="color: var(--accent); text-decoration: none;"
+             hx-boost="true">+ Create the first one</a>.
+          {{ end }}
+        </p>
+        {{ end }}
+      </section>
+      {{ end }}
+
+      {{/* ----- Section 02: Stats ----- */}}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 02</div>
+            <h2 class="page-section-title">Stats</h2>
           </div>
-          <div class="brut-pcard-spark">
-            {{ if $sl.Max }}
-            <svg viewBox="0 0 60 20" preserveAspectRatio="none" aria-hidden="true">
-              <polyline points="{{ $sl.Points }}"
-                        fill="none"
-                        stroke="{{ $sl.Color }}"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"/>
-            </svg>
+        </div>
+
+        <div class="wiz-welcome-stats">
+          <div class="wiz-stat-cell">
+            <div class="wiz-stat-num">{{ .TotalPosts }}</div>
+            <div class="wiz-stat-label">POSTS</div>
+            {{ if .ActiveDays }}<div class="wiz-stat-detail">{{ .ActiveDays }} active days</div>{{ end }}
+          </div>
+          <div class="wiz-stat-cell">
+            <div class="wiz-stat-num">{{ len .Seasons }}</div>
+            <div class="wiz-stat-label">SEASONS</div>
+            {{ if .CurrentSeason }}<div class="wiz-stat-detail">{{ .CurrentSeason.Title }} active</div>{{ end }}
+          </div>
+          <div class="wiz-stat-cell">
+            <div class="wiz-stat-num">{{ len .Members }}</div>
+            <div class="wiz-stat-label">MEMBERS</div>
+            {{ if .TotalContributors }}<div class="wiz-stat-detail">{{ .TotalContributors }} contributors</div>{{ end }}
+          </div>
+        </div>
+      </section>
+
+      {{/* ----- Section 03: Documentation
+           DocPresence is a map keyed by doc-type. Missing key means
+           the doc has not been written yet; we still render the card
+           so the user can click "+ Create" through to the editor. All
+           four cards use .page-card identically - no orange/cyan mix
+           and no dashed border, per the 16g design rules. ----- */}}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 03</div>
+            <h2 class="page-section-title">Documentation</h2>
+          </div>
+        </div>
+
+        {{ $space := .Space }}
+        {{ $project := .Project }}
+        {{ $docs := .DocPresence }}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; align-items: stretch;">
+
+          {{/* ----- Concept ----- */}}
+          {{ $d := index $docs "concept" }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/concept{{ if not $d }}/edit{{ end }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; CONCEPT</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ if $d }}var(--text-bright){{ else }}var(--text-muted){{ end }};">Concept</h3>
+            {{ if $d }}
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount $d.ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo $d.UpdatedAt }}</div>
             {{ else }}
-            <span class="brut-pcard-spark-empty">No activity yet</span>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Not written yet</div>
+            <div style="font-size: 0.85rem; color: var(--accent); margin-top: auto;">+ Create</div>
             {{ end }}
+          </a>
+
+          {{/* ----- Architecture ----- */}}
+          {{ $d := index $docs "architecture" }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/architecture{{ if not $d }}/edit{{ end }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; ARCHITECTURE</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ if $d }}var(--text-bright){{ else }}var(--text-muted){{ end }};">Architecture</h3>
+            {{ if $d }}
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount $d.ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo $d.UpdatedAt }}</div>
+            {{ else }}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Not written yet</div>
+            <div style="font-size: 0.85rem; color: var(--accent); margin-top: auto;">+ Create</div>
+            {{ end }}
+          </a>
+
+          {{/* ----- Workflow ----- */}}
+          {{ $d := index $docs "workflow" }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/workflow{{ if not $d }}/edit{{ end }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; WORKFLOW</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ if $d }}var(--text-bright){{ else }}var(--text-muted){{ end }};">Workflow</h3>
+            {{ if $d }}
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount $d.ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo $d.UpdatedAt }}</div>
+            {{ else }}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Not written yet</div>
+            <div style="font-size: 0.85rem; color: var(--accent); margin-top: auto;">+ Create</div>
+            {{ end }}
+          </a>
+
+          {{/* ----- Roadmap ----- */}}
+          {{ $d := index $docs "roadmap" }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/roadmap{{ if not $d }}/edit{{ end }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; ROADMAP</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ if $d }}var(--text-bright){{ else }}var(--text-muted){{ end }};">Roadmap</h3>
+            {{ if $d }}
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount $d.ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo $d.UpdatedAt }}</div>
+            {{ else }}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Not written yet</div>
+            <div style="font-size: 0.85rem; color: var(--accent); margin-top: auto;">+ Create</div>
+            {{ end }}
+          </a>
+
+        </div>
+      </section>
+
+      {{/* ----- Section 04: Current season ----- */}}
+      {{ if .CurrentSeason }}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 04</div>
+            <h2 class="page-section-title">Current season</h2>
           </div>
-          <div class="brut-pcard-meta">
-            <span class="brut-pill brut-pill-{{ .Status }}">
-              <span class="brut-pill-dot" aria-hidden="true"></span>{{ .Status }}
-            </span>
-            <span class="brut-pcard-time">{{ timeAgo .UpdatedAt }}</span>
+        </div>
+
+        <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons/{{ .CurrentSeason.SeasonNumber }}"
+           class="page-card"
+           style="text-decoration: none; color: inherit; display: block;"
+           hx-boost="true">
+          <div class="page-shell-sidebar-block-label" style="margin-bottom: 0.6rem;">SEASON &middot; #{{ .CurrentSeason.SeasonNumber }}</div>
+          <h3 style="font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-bright);">{{ .CurrentSeason.Title }}</h3>
+          {{ if .CurrentSeason.Description }}
+          <p style="font-size: 0.95rem; color: var(--text-dim); margin: 0 0 1rem; line-height: 1.5;">{{ .CurrentSeason.Description }}</p>
+          {{ end }}
+          <div style="display: flex; gap: 1rem; align-items: center;">
+            <span class="status-pill status-active">ACTIVE</span>
+            {{ if .CurrentSeason.StartedAt }}
+            <span style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">SINCE {{ timeAgo .CurrentSeason.StartedAt.UTC }}</span>
+            {{ end }}
           </div>
         </a>
-        {{ end }}
-      </div>
-      {{ else }}
-      <div class="brut-empty">
-        <span class="brut-empty-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"/>
-            <rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7" stroke-dasharray="2 2"/>
-          </svg>
-        </span>
-        <div class="brut-empty-body">
-          <h3 class="brut-empty-title">No sub-projects yet</h3>
-          <p class="brut-empty-desc">
-            Sub-projects let you split a project into focused workstreams.
-            Each one has its own seasons, docs, and members.
-          </p>
-          <div class="brut-empty-actions">
-            <a class="brut-btn brut-btn-primary brut-btn-sm"
-               href="/spaces/{{ $space.Slug }}/projects/new?parent_id={{ $project.ID }}"
-               hx-boost="true">Create the first sub-project</a>
-          </div>
-        </div>
-      </div>
+      </section>
       {{ end }}
-    </div>
-  </section>
-  {{ end }}
 
-  <!-- ============================================================
-       At-a-glance KPI strip. Counts up on view via brutKpi Alpine.
-       ============================================================ -->
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <header class="brut-section-head">
-        <div class="brut-section-title-block">
-          <div class="brut-section-label">Section · 02 · At a glance</div>
-          <h2 class="brut-section-title">Numbers</h2>
-        </div>
-      </header>
-      <div class="brut-kpi-grid brut-kpi-grid-4 brut-stagger">
-        <div class="brut-kpi">
-          <div class="brut-kpi-label">Posts</div>
-          <div class="brut-kpi-value"
-               x-data="brutKpi({{ .TotalPosts }}, 1100)"
-               x-text="current">{{ .TotalPosts }}</div>
-          <div class="brut-kpi-delta">across {{ len .Seasons }} {{ pluralize (len .Seasons) "season" "seasons" }}</div>
-        </div>
-        <div class="brut-kpi">
-          <div class="brut-kpi-label">Contributors</div>
-          <div class="brut-kpi-value"
-               x-data="brutKpi({{ .TotalContributors }}, 900)"
-               x-text="current">{{ .TotalContributors }}</div>
-          <div class="brut-kpi-delta">distinct authors</div>
-        </div>
-        <div class="brut-kpi">
-          <div class="brut-kpi-label">Days Active</div>
-          <div class="brut-kpi-value"
-               x-data="brutKpi({{ .ActiveDays }}, 1000)"
-               x-text="current">{{ .ActiveDays }}</div>
-          <div class="brut-kpi-delta">with at least one post</div>
-        </div>
-        <div class="brut-kpi">
-          <div class="brut-kpi-label">Docs Filled</div>
-          <div class="brut-kpi-value">{{ .DocsCompleted }}<span style="opacity:.5"> / 4</span></div>
-          <div class="brut-kpi-delta">of the canonical four</div>
-        </div>
-      </div>
-    </div>
-  </section>
+    </main>
 
-  <!-- ============================================================
-       Documentation status. Four canonical doc types as compact
-       brut cards. Filled / empty variants.
-       ============================================================ -->
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <header class="brut-section-head">
-        <div class="brut-section-title-block">
-          <div class="brut-section-label">Section · 03 · Documentation</div>
-          <h2 class="brut-section-title">Knowledge Base</h2>
-          <p class="brut-section-sub">Concept, architecture, workflow, roadmap. The canonical four.</p>
-        </div>
-        <div class="brut-section-actions">
-          <a class="brut-btn brut-btn-secondary brut-btn-sm"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs"
-             hx-boost="true">All docs</a>
-        </div>
-      </header>
-      <div class="brut-pcard-grid brut-stagger" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
-        {{ template "brut-doc-card.html" (dict "Space" $space "Project" $project "Type" "concept" "Label" "Concept" "Doc" (index $docs "concept") "CanEdit" .CanEdit) }}
-        {{ template "brut-doc-card.html" (dict "Space" $space "Project" $project "Type" "architecture" "Label" "Architecture" "Doc" (index $docs "architecture") "CanEdit" .CanEdit) }}
-        {{ template "brut-doc-card.html" (dict "Space" $space "Project" $project "Type" "workflow" "Label" "Workflow" "Doc" (index $docs "workflow") "CanEdit" .CanEdit) }}
-        {{ template "brut-doc-card.html" (dict "Space" $space "Project" $project "Type" "roadmap" "Label" "Roadmap" "Doc" (index $docs "roadmap") "CanEdit" .CanEdit) }}
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================
-       Activity: season timeline (wide) + 84-day heatmap (narrow).
-       Two-column on desktop, stacks on mobile via the brut-section
-       inner padding behaviour.
-       ============================================================ -->
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <header class="brut-section-head">
-        <div class="brut-section-title-block">
-          <div class="brut-section-label">Section · 04 · Activity</div>
-          <h2 class="brut-section-title">Timeline & Heatmap</h2>
-        </div>
-        {{ if .CanManage }}
-        <div class="brut-section-actions">
-          <a class="brut-btn brut-btn-primary brut-btn-sm"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
-             hx-boost="true">+ New Season</a>
-        </div>
-        {{ end }}
-      </header>
-
-      <div class="brut-activity-row brut-stagger">
-        <article class="brut-aside-card brut-activity-timeline">
-          <div class="brut-aside-title">Season Timeline</div>
-          {{ if .Seasons }}
-          <ol class="brut-timeline-list">
-            {{ range .Seasons }}
-            <li class="brut-timeline-item brut-timeline-{{ .Status }}">
-              <a class="brut-timeline-link"
-                 href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ .SeasonNumber }}"
-                 hx-boost="true">
-                <span class="brut-timeline-num">S{{ .SeasonNumber }}</span>
-                <span class="brut-timeline-body">
-                  <span class="brut-timeline-title">{{ .Title }}</span>
-                  <span class="brut-timeline-meta">
-                    <span class="brut-pill brut-pill-{{ if eq .Status "active" }}active{{ else if eq .Status "closed" }}closed{{ else }}draft{{ end }}">
-                      <span class="brut-pill-dot" aria-hidden="true"></span>
-                      {{ if eq .Status "planned" }}planned{{ else if eq .Status "active" }}active{{ else }}closed{{ end }}
-                    </span>
-                    {{ if .StartedAt }}
-                    <span class="brut-timeline-date">{{ .StartedAt.UTC.Format "Jan 2" }}</span>
-                    {{ end }}
-                  </span>
-                </span>
-              </a>
-            </li>
-            {{ end }}
-          </ol>
-          {{ else }}
-          <p class="brut-aside-text muted">No seasons yet. {{ if .CanManage }}Plan the first one to start posting under this project.{{ end }}</p>
-          {{ end }}
-        </article>
-
-        <article class="brut-aside-card brut-activity-heatmap-card">
-          <div class="brut-aside-title">Last 84 Days · {{ .ActiveDays }} active</div>
-          {{ if $heatmap.HasData }}
-          <div class="brut-heatmap">
-            {{ template "activity-heatmap.html" $heatmap }}
-          </div>
-          {{ else }}
-          <p class="brut-aside-text muted">Once members start posting, daily activity shows up here.</p>
-          {{ end }}
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================
-       Description + manage aside. Description gets the long-form
-       copy; aside has the "Members · X people" / "Edit project"
-       quick links.
-       ============================================================ -->
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <div class="brut-two-col-light brut-stagger">
-        <div>
-          <div class="brut-section-label" style="margin-bottom: 12px;">Section · 05 · About</div>
-          {{ if $project.Description }}
-          <p class="brut-prose">{{ $project.Description }}</p>
-          {{ else }}
-          <p class="brut-prose muted">No description set yet.{{ if .CanManage }} Edit the project to add one.{{ end }}</p>
-          {{ end }}
-
-          {{ if $current }}
-          <div class="brut-current-season" style="margin-top: 24px;">
-            <div class="brut-section-label" style="margin-bottom: 10px;">Current Season</div>
-            <a class="brut-pcard" style="display: flex; padding: 18px 22px;"
-               href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $current.SeasonNumber }}"
-               hx-boost="true">
-              <div style="flex: 1; min-width: 0;">
-                <div class="brut-pcard-id">SEASON · #{{ $current.SeasonNumber }}</div>
-                <h3 class="brut-pcard-name">{{ $current.Title }}</h3>
-                {{ if $current.Description }}
-                <p class="brut-pcard-desc">{{ truncate $current.Description 160 }}</p>
-                {{ end }}
-                <div class="brut-pcard-meta" style="border-top: none; padding-top: 0; margin-top: 6px;">
-                  <span class="brut-pill brut-pill-active">
-                    <span class="brut-pill-dot" aria-hidden="true"></span>active
-                  </span>
-                  {{ if $current.StartedAt }}
-                  <span class="brut-pcard-time">since {{ timeAgo $current.StartedAt.UTC }}</span>
-                  {{ end }}
-                </div>
-              </div>
-            </a>
-          </div>
-          {{ end }}
-        </div>
-
-        <aside>
-          <div class="brut-aside-card">
-            <div class="brut-aside-title">Members</div>
-            <p class="brut-aside-text">
-              {{ len .Members }} {{ pluralize (len .Members) "person" "people" }} on this project.
-            </p>
-            <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/members"
-               class="brut-btn brut-btn-secondary brut-btn-sm" hx-boost="true">View members</a>
-          </div>
-          {{ if .CanManage }}
-          <div class="brut-aside-card">
-            <div class="brut-aside-title">Manage</div>
-            <p class="brut-aside-text">Edit project metadata, manage docs, and run seasons.</p>
-            <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/edit"
-               class="brut-btn brut-btn-secondary brut-btn-sm" hx-boost="true">Edit project</a>
-          </div>
-          {{ end }}
-        </aside>
-      </div>
-    </div>
-  </section>
-</div>
-{{ end }}
-{{ end }}
-
-{{ define "brut-doc-card.html" }}
-{{ $space := .Space }}
-{{ $project := .Project }}
-{{ $type := .Type }}
-{{ $label := .Label }}
-{{ $doc := .Doc }}
-{{ $canEdit := .CanEdit }}
-{{ if $doc }}
-<a class="brut-pcard brut-doc-card brut-doc-card-filled"
-   href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $type }}"
-   hx-boost="true">
-  <div class="brut-doc-card-icon brut-doc-card-icon-filled" aria-hidden="true">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  </div>
-  <div class="brut-pcard-id">DOC · {{ upper $type }}</div>
-  <h3 class="brut-pcard-name">{{ $label }}</h3>
-  <div class="brut-doc-card-stat">{{ wordCount $doc.ContentHTML }}<span style="opacity:.5"> wd</span></div>
-  <div class="brut-pcard-meta" style="border-top: none; padding-top: 0; margin-top: auto;">
-    <span class="brut-pcard-time">Updated {{ timeAgo $doc.UpdatedAt }}</span>
-  </div>
-</a>
-{{ else }}
-<div class="brut-pcard brut-doc-card brut-doc-card-empty">
-  <div class="brut-doc-card-icon brut-doc-card-icon-empty" aria-hidden="true">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19"/>
-      <line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-  </div>
-  <div class="brut-pcard-id">DOC · {{ upper $type }}</div>
-  <h3 class="brut-pcard-name">{{ $label }}</h3>
-  <div class="brut-doc-card-stat brut-doc-card-stat-empty">Empty</div>
-  <div class="brut-pcard-meta" style="border-top: none; padding-top: 0; margin-top: auto;">
-    {{ if $canEdit }}
-    <a class="brut-btn brut-btn-secondary brut-btn-sm"
-       href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $type }}/edit"
-       hx-boost="true">Create</a>
-    {{ else }}
-    <span class="brut-pcard-time">Not written yet</span>
-    {{ end }}
   </div>
 </div>
-{{ end }}
-{{ end }}
 
-{{ define "activity-heatmap.html" }}
-<svg class="brut-heatmap-svg" viewBox="0 0 168 100" role="img" aria-label="Activity heatmap, last 12 weeks">
-  {{ range .Cells }}
-  <rect class="brut-heatmap-cell brut-heatmap-level-{{ .Level }}"
-        x="{{ .X }}" y="{{ .Y }}"
-        width="12" height="12" rx="2" ry="2">
-    <title>{{ .Date }}: {{ .Count }} {{ pluralize .Count "post" "posts" }}</title>
-  </rect>
-  {{ end }}
-</svg>
-<div class="brut-heatmap-legend" aria-hidden="true">
-  <span>LESS</span>
-  <span class="brut-heatmap-cell-static brut-heatmap-level-0"></span>
-  <span class="brut-heatmap-cell-static brut-heatmap-level-1"></span>
-  <span class="brut-heatmap-cell-static brut-heatmap-level-2"></span>
-  <span class="brut-heatmap-cell-static brut-heatmap-level-3"></span>
-  <span class="brut-heatmap-cell-static brut-heatmap-level-4"></span>
-  <span>MORE</span>
-</div>
+{{ end }}
 {{ end }}

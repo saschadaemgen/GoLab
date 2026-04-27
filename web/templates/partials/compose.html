@@ -4,73 +4,69 @@
 {{ $currentUser := .User }}
 {{ $powerLevel := 0 }}
 {{ if $currentUser }}{{ $powerLevel = $currentUser.PowerLevel }}{{ end }}
-{{/*
-  Sprint 16f: brutalist compose. Wrapped in .brut-compose so the
-  whole form sits inside the section padding instead of clattering
-  the section edges. Quill mounts on x-ref="editor"; composeEditor
-  in golab.js keeps the same x-refs (editor, spaceSelect,
-  projectSelect, seasonSelect) that 16b wired up.
 
-  Sprint 15a B4 reminder: the form is JS-driven, no native action,
-  and hx-boost="false" stops htmx from intercepting submit.
-*/}}
+{{/* ============================================================
+     Compose box (Sprint 16g.6 visual reset).
+     The Quill editor sits on var(--bg-deep) inside a card so the
+     user can see exactly where to type. composeEditor() and
+     tagInput() Alpine components plus all x-refs (editor,
+     spaceSelect, projectSelect, seasonSelect) are preserved 1:1
+     so the JS keeps working. Only CSS class names changed. =============== */}}
+
 <form id="compose-form"
-      class="brut-compose"
+      class="compose-form"
       hx-boost="false"
       x-data="composeEditor({ powerLevel: {{ $powerLevel }} })"
       @submit.prevent="submit()">
 
-  <!-- Quill mounts here. The editor host keeps the x-ref so
-       composeEditor.init() finds it; the brut wrapper styles
-       the surrounding container, the editor itself stays
-       Quill's responsibility. -->
-  <div class="brut-compose-editor">
-    <div x-ref="editor"></div>
+  <div class="compose-editor-wrap">
+    <div x-ref="editor" class="compose-editor"></div>
   </div>
 
-  <!-- Meta rows: post type, tags. Each row has a monospace label
-       prefix so the field shape reads like a terminal form. -->
-  <div class="brut-compose-meta">
-    <div class="brut-compose-row" role="radiogroup" aria-label="Post type">
-      <span class="brut-compose-rowlabel">Type ·</span>
-      <label class="brut-pill brut-pill-pickable">
-        <input type="radio" name="post_type" value="discussion" checked>Discussion
-      </label>
-      <label class="brut-pill brut-pill-pickable">
-        <input type="radio" name="post_type" value="question">Question
-      </label>
-      <label class="brut-pill brut-pill-pickable">
-        <input type="radio" name="post_type" value="tutorial">Tutorial
-      </label>
-      <label class="brut-pill brut-pill-pickable">
-        <input type="radio" name="post_type" value="code">Code
-      </label>
-      <label class="brut-pill brut-pill-pickable">
-        <input type="radio" name="post_type" value="showcase">Showcase
-      </label>
-      <label class="brut-pill brut-pill-pickable">
-        <input type="radio" name="post_type" value="link">Link
-      </label>
-      {{ if ge $powerLevel 75 }}
-      <label class="brut-pill brut-pill-pickable" style="border-color: hsl(0, 30%, 30%); color: hsl(0, 65%, 70%);">
-        <input type="radio" name="post_type" value="announcement">Announcement
-      </label>
-      {{ end }}
+  <div class="compose-meta">
+
+    <div class="compose-meta-row" role="radiogroup" aria-label="Post type">
+      <span class="compose-meta-label">TYPE</span>
+      <div class="compose-type-pills">
+        <label class="compose-pill">
+          <input type="radio" name="post_type" value="discussion" checked>Discussion
+        </label>
+        <label class="compose-pill">
+          <input type="radio" name="post_type" value="question">Question
+        </label>
+        <label class="compose-pill">
+          <input type="radio" name="post_type" value="tutorial">Tutorial
+        </label>
+        <label class="compose-pill">
+          <input type="radio" name="post_type" value="code">Code
+        </label>
+        <label class="compose-pill">
+          <input type="radio" name="post_type" value="showcase">Showcase
+        </label>
+        <label class="compose-pill">
+          <input type="radio" name="post_type" value="link">Link
+        </label>
+        {{ if ge $powerLevel 75 }}
+        <label class="compose-pill">
+          <input type="radio" name="post_type" value="announcement">Announcement
+        </label>
+        {{ end }}
+      </div>
     </div>
 
-    <div class="brut-compose-row" x-data="tagInput()">
-      <span class="brut-compose-rowlabel">Tags ·</span>
+    <div class="compose-meta-row" x-data="tagInput()">
+      <span class="compose-meta-label">TAGS</span>
       <template x-for="slug in selectedTags" :key="slug">
-        <span class="brut-pill brut-tag-chip">
+        <span class="compose-tag-chip">
           #<span x-text="slug"></span>
-          <button type="button" class="brut-tag-chip-x"
+          <button type="button" class="compose-tag-chip-x"
                   @click="removeTag(slug)" aria-label="Remove tag">&times;</button>
         </span>
       </template>
 
-      <div class="brut-tag-input-wrap" x-show="selectedTags.length < maxTags">
+      <div class="compose-tag-input-wrap" x-show="selectedTags.length < maxTags">
         <input type="text"
-               class="brut-tag-input"
+               class="compose-tag-input"
                x-model="query"
                @input.debounce.200ms="searchTags()"
                @keydown="handleKey($event)"
@@ -78,18 +74,18 @@
                placeholder="Add tag (Enter)"
                maxlength="32"
                autocomplete="off">
-        <div class="brut-tag-suggestions"
+        <div class="compose-tag-suggestions"
              x-show="suggestions.length > 0 || loading"
              @click.outside="suggestions = []"
              x-cloak>
           <template x-if="loading">
-            <div class="brut-tag-suggestion-item">Searching...</div>
+            <div class="compose-tag-suggestion-item">Searching...</div>
           </template>
           <template x-for="s in suggestions" :key="s.slug">
-            <button type="button" class="brut-tag-suggestion-item"
+            <button type="button" class="compose-tag-suggestion-item"
                     @click="addTag(s.slug)">
               <span>#<span x-text="s.name"></span></span>
-              <span style="color: var(--brut-text-faint); font: 500 10px/1 var(--brut-mono);"
+              <span style="color: var(--text-muted); font-family: ui-monospace, monospace; font-size: 0.7rem;"
                     x-text="s.use_count + ' posts'"></span>
             </button>
           </template>
@@ -98,11 +94,10 @@
       <input type="hidden" name="tags" :value="selectedTags.join(',')">
     </div>
 
-    <!-- Where it goes: Space (required) + cascading Project + Season. -->
-    <div class="brut-compose-row">
-      <span class="brut-compose-rowlabel">Space ·</span>
+    <div class="compose-meta-row">
+      <span class="compose-meta-label">SPACE</span>
       {{ if $spaces }}
-      <select class="brut-select brut-compose-select"
+      <select class="compose-select"
               name="space_id"
               x-ref="spaceSelect"
               @change="onSpaceChange($event)"
@@ -121,9 +116,9 @@
       {{ end }}
     </div>
 
-    <div class="brut-compose-row" x-show="projects.length > 0" x-cloak>
-      <span class="brut-compose-rowlabel">Project ·</span>
-      <select class="brut-select brut-compose-select"
+    <div class="compose-meta-row" x-show="projects.length > 0" x-cloak>
+      <span class="compose-meta-label">PROJECT</span>
+      <select class="compose-select"
               x-ref="projectSelect"
               @change="onProjectChange($event)">
         <option value="">No project</option>
@@ -133,9 +128,9 @@
       </select>
     </div>
 
-    <div class="brut-compose-row" x-show="seasons.length > 0" x-cloak>
-      <span class="brut-compose-rowlabel">Season ·</span>
-      <select class="brut-select brut-compose-select"
+    <div class="compose-meta-row" x-show="seasons.length > 0" x-cloak>
+      <span class="compose-meta-label">SEASON</span>
+      <select class="compose-select"
               name="season_id"
               x-ref="seasonSelect">
         <option value="">No season</option>
@@ -148,15 +143,14 @@
     </div>
   </div>
 
-  <!-- Submit row: counter on the left, Post button on the right. -->
-  <div class="brut-compose-actions">
-    <span class="brut-compose-counter" :class="{ 'is-over': charCount > max }">
+  <div class="compose-footer">
+    <span class="compose-counter" :class="{ 'is-over': charCount > max }">
       <span x-text="charCount">0</span> / 5000
     </span>
-    <button type="submit" class="brut-btn brut-btn-primary"
+    <button type="submit" class="wiz-begin-btn"
             :disabled="!canSubmit()">
-      <span x-show="!submitting">Post</span>
-      <span x-show="submitting" x-cloak>Posting...</span>
+      <span x-show="!submitting">POST</span>
+      <span x-show="submitting" x-cloak>POSTING&hellip;</span>
     </button>
   </div>
 </form>

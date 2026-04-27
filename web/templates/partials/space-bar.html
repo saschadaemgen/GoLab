@@ -3,21 +3,23 @@
 {{ $currentPath := .CurrentPath }}
 {{ $currentSpace := .CurrentSpace }}
 
-<!-- Desktop: horizontal pill bar (>= 768px) -->
+{{/* ============================================================
+     Sprint 16g.8 redesign: tab strip without icon prefixes.
+     Each space-pill is a flat tab with an accent underline on
+     active state - matches the .page-tabs visual language used
+     across project / space pages. Mobile (< 768px) collapses
+     to a native <select> so users don't horizontally scroll. =============== */}}
+
 <nav class="space-bar" aria-label="Spaces">
   <a href="/feed" class="space-pill{{ if eq $currentPath "/feed" }} active{{ end }}"
-     style="--space-color: var(--accent);"
      hx-boost="true">
-    <span class="space-icon" aria-hidden="true">*</span>
     <span class="space-name">Feed</span>
   </a>
 
   {{ range .Spaces }}
   <a href="/s/{{ .Slug }}"
      class="space-pill{{ if eq $currentSpace .Slug }} active{{ end }}"
-     style="--space-color: {{ .Color }};"
      hx-boost="true">
-    <span class="space-icon" aria-hidden="true">{{ if .Icon }}{{ .Icon }}{{ else }}#{{ end }}</span>
     <span class="space-name">{{ .Name }}</span>
     {{ if gt .PostCount 0 }}
     <span class="space-count">{{ .PostCount }}</span>
@@ -26,25 +28,20 @@
   {{ end }}
 
   <a href="/explore" class="space-pill{{ if eq $currentPath "/explore" }} active{{ end }}"
-     style="--space-color: var(--text-dim);"
      hx-boost="true">
-    <span class="space-icon" aria-hidden="true">~</span>
     <span class="space-name">Explore</span>
   </a>
 </nav>
 
-<!-- Mobile: native <select> dropdown (< 768px). No horizontal scrolling.
-     `onchange` navigates directly so the element stays accessible and
-     keyboard-friendly even if JS is stripped. -->
 <div class="space-dropdown-mobile" aria-label="Spaces">
   <select onchange="if(this.value) window.location.href=this.value">
-    <option value="/feed"{{ if eq $currentPath "/feed" }} selected{{ end }}>* Feed</option>
+    <option value="/feed"{{ if eq $currentPath "/feed" }} selected{{ end }}>Feed</option>
     {{ range .Spaces }}
     <option value="/s/{{ .Slug }}"{{ if eq $currentSpace .Slug }} selected{{ end }}>
-      {{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}{{ if gt .PostCount 0 }} ({{ .PostCount }}){{ end }}
+      {{ .Name }}{{ if gt .PostCount 0 }} ({{ .PostCount }}){{ end }}
     </option>
     {{ end }}
-    <option value="/explore"{{ if eq $currentPath "/explore" }} selected{{ end }}>~ Explore</option>
+    <option value="/explore"{{ if eq $currentPath "/explore" }} selected{{ end }}>Explore</option>
   </select>
 </div>
 

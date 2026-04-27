@@ -1,93 +1,177 @@
 {{ define "content" }}
 {{ with .Content }}
+
+{{/* ============================================================
+     Documentation tab (Sprint 16g.5 visual reset).
+     Same page-shell layout as project-show; sidebar comes from
+     the shared partial. The handler hands us the full doc list
+     (canonical + custom mixed); we group them in two sections so
+     the canonical four always render even when empty, and only
+     show the custom block when there is at least one custom
+     doc. ============= */}}
+
 {{ $space := .Space }}
 {{ $project := .Project }}
 
-<div class="brut-page">
-  {{ template "project-header.html" . }}
+<div class="page-shell">
+  <div class="page-shell-layout">
 
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <header class="brut-section-head">
-        <div class="brut-section-title-block">
-          <div class="brut-section-label">Section · Documentation</div>
-          <h2 class="brut-section-title">
-            {{ if .Docs }}{{ len .Docs }} {{ pluralize (len .Docs) "Document" "Documents" }}{{ else }}Documents{{ end }}
-          </h2>
-          <p class="brut-section-sub">
-            Concept, architecture, workflow, roadmap. Plus any custom docs.
-          </p>
-        </div>
-        {{ if .CanEdit }}
-        <div class="brut-section-actions">
-          <a class="brut-btn brut-btn-secondary brut-btn-sm"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/concept/edit"
-             hx-boost="true">Edit Concept</a>
-          <a class="brut-btn brut-btn-secondary brut-btn-sm"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/architecture/edit"
-             hx-boost="true">Edit Architecture</a>
-          <a class="brut-btn brut-btn-secondary brut-btn-sm"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/workflow/edit"
-             hx-boost="true">Edit Workflow</a>
-          <a class="brut-btn brut-btn-secondary brut-btn-sm"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/roadmap/edit"
-             hx-boost="true">Edit Roadmap</a>
-        </div>
-        {{ end }}
+    {{ template "project-shell-sidebar" (dict
+      "Space"        .Space
+      "Project"      .Project
+      "ActiveTab"    .ActiveTab
+      "CanManage"    .CanManage
+      "DocsCount"    (len .Docs)
+      "SeasonsCount" 0
+      "MembersCount" 0
+    ) }}
+
+    <main class="page-shell-main">
+
+      <header class="wiz-header">
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}" class="wiz-back-btn" hx-boost="true">&larr; BACK TO OVERVIEW</a>
       </header>
 
-      {{ if .Docs }}
-      <div class="brut-pcard-grid brut-stagger" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
-        {{ range .Docs }}
-        <a class="brut-pcard"
-           href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ .DocType }}"
-           hx-boost="true">
-          <div class="brut-pcard-id">DOC · {{ upper .DocType }}</div>
-          <h3 class="brut-pcard-name">
-            {{ if .Title }}{{ .Title }}{{ else }}{{ if eq .DocType "concept" }}Concept{{ else if eq .DocType "architecture" }}Architecture{{ else if eq .DocType "workflow" }}Workflow{{ else if eq .DocType "roadmap" }}Roadmap{{ else }}Untitled{{ end }}{{ end }}
-          </h3>
-          {{ if .ContentMD }}
-          <p class="brut-pcard-desc">{{ truncate .ContentMD 220 }}</p>
-          {{ else }}
-          <p class="brut-pcard-desc" style="color: var(--brut-text-faint); font-style: italic;">Empty document.</p>
-          {{ end }}
-          <div class="brut-pcard-meta">
-            <span class="brut-pcard-time">{{ wordCount .ContentHTML }} wd</span>
-            <span class="brut-pcard-time">Updated {{ timeAgo .UpdatedAt }}</span>
-          </div>
-        </a>
-        {{ end }}
+      <div class="wiz-content" style="margin-bottom: 3rem;">
+        <div class="wiz-prompt-eyebrow">PROJECT &middot; {{ upper $project.Name }} &middot; DOCS</div>
+        <h1 class="wiz-prompt-headline">Documentation</h1>
+        <p class="wiz-prompt-helper">Concept, architecture, workflow, roadmap. Plus any custom docs you add.</p>
       </div>
-      {{ else }}
-      <div class="brut-empty">
-        <span class="brut-empty-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2 H6 a2 2 0 0 0-2 2 v16 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2-2 V8 z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="9" y1="14" x2="15" y2="14"/>
-          </svg>
-        </span>
-        <div class="brut-empty-body">
-          <h3 class="brut-empty-title">No documentation yet</h3>
-          <p class="brut-empty-desc">
-            {{ if .CanEdit }}
-              Start with the Concept doc - a short statement of what this project is and why it exists.
-            {{ else }}
-              The maintainers haven't published any documentation yet.
-            {{ end }}
-          </p>
-          {{ if .CanEdit }}
-          <div class="brut-empty-actions">
-            <a class="brut-btn brut-btn-primary brut-btn-sm"
-               href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/concept/edit"
-               hx-boost="true">Write Concept</a>
+
+      {{/* ----- Section 01: Canonical docs (4 cards, always rendered) ----- */}}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 01</div>
+            <h2 class="page-section-title">Canonical docs</h2>
           </div>
+        </div>
+
+        {{/* Resolve each canonical doc by type via single-pass scan.
+             The flat .Docs list comes back in DocType order so we
+             cannot rely on positional access; each variable starts
+             out false and gets reassigned to the matching ProjectDoc
+             when one is found. Variables stay false when the doc has
+             not been written yet, which the per-card template below
+             treats as the empty state. */}}
+        {{ $concept := false }}
+        {{ $architecture := false }}
+        {{ $workflow := false }}
+        {{ $roadmap := false }}
+        {{ range .Docs }}
+        {{ if eq .DocType "concept" }}{{ $concept = . }}{{ end }}
+        {{ if eq .DocType "architecture" }}{{ $architecture = . }}{{ end }}
+        {{ if eq .DocType "workflow" }}{{ $workflow = . }}{{ end }}
+        {{ if eq .DocType "roadmap" }}{{ $roadmap = . }}{{ end }}
+        {{ end }}
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; align-items: stretch;">
+
+          {{/* Concept */}}
+          {{ $d := $concept }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/concept{{ if not $d }}/edit{{ end }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; CONCEPT</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ if $d }}var(--text-bright){{ else }}var(--text-muted){{ end }};">Concept</h3>
+            {{ if $d }}
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount $d.ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo $d.UpdatedAt }}</div>
+            {{ else }}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Not written yet</div>
+            {{ if .CanEdit }}<div style="font-size: 0.85rem; color: var(--accent); margin-top: auto;">+ Create</div>{{ end }}
+            {{ end }}
+          </a>
+
+          {{/* Architecture */}}
+          {{ $d := $architecture }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/architecture{{ if not $d }}/edit{{ end }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; ARCHITECTURE</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ if $d }}var(--text-bright){{ else }}var(--text-muted){{ end }};">Architecture</h3>
+            {{ if $d }}
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount $d.ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo $d.UpdatedAt }}</div>
+            {{ else }}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Not written yet</div>
+            {{ if .CanEdit }}<div style="font-size: 0.85rem; color: var(--accent); margin-top: auto;">+ Create</div>{{ end }}
+            {{ end }}
+          </a>
+
+          {{/* Workflow */}}
+          {{ $d := $workflow }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/workflow{{ if not $d }}/edit{{ end }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; WORKFLOW</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ if $d }}var(--text-bright){{ else }}var(--text-muted){{ end }};">Workflow</h3>
+            {{ if $d }}
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount $d.ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo $d.UpdatedAt }}</div>
+            {{ else }}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Not written yet</div>
+            {{ if .CanEdit }}<div style="font-size: 0.85rem; color: var(--accent); margin-top: auto;">+ Create</div>{{ end }}
+            {{ end }}
+          </a>
+
+          {{/* Roadmap */}}
+          {{ $d := $roadmap }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/roadmap{{ if not $d }}/edit{{ end }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; ROADMAP</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ if $d }}var(--text-bright){{ else }}var(--text-muted){{ end }};">Roadmap</h3>
+            {{ if $d }}
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount $d.ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo $d.UpdatedAt }}</div>
+            {{ else }}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Not written yet</div>
+            {{ if .CanEdit }}<div style="font-size: 0.85rem; color: var(--accent); margin-top: auto;">+ Create</div>{{ end }}
+            {{ end }}
+          </a>
+
+        </div>
+      </section>
+
+      {{/* ----- Section 02: Custom docs (only when present) ----- */}}
+      {{ $hasCustom := false }}
+      {{ range .Docs }}{{ if eq .DocType "custom" }}{{ $hasCustom = true }}{{ end }}{{ end }}
+      {{ if $hasCustom }}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 02</div>
+            <h2 class="page-section-title">Custom docs</h2>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; align-items: stretch;">
+          {{ range .Docs }}
+          {{ if eq .DocType "custom" }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ .DocType }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.5rem;"
+             hx-boost="true">
+            <div class="page-shell-sidebar-block-label">DOC &middot; CUSTOM</div>
+            <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: var(--text-bright);">{{ .Title }}</h3>
+            <div style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.05em;">{{ wordCount .ContentHTML }} WORDS</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: auto;">edited {{ timeAgo .UpdatedAt }}</div>
+          </a>
+          {{ end }}
           {{ end }}
         </div>
-      </div>
+      </section>
       {{ end }}
-    </div>
-  </section>
+
+    </main>
+
+  </div>
 </div>
+
 {{ end }}
 {{ end }}

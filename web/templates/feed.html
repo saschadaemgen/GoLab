@@ -1,36 +1,73 @@
 {{ define "content" }}
 {{ with .Content }}
-<div class="page-container">
-  <div class="two-col fade-in">
-    <main>
-      {{ if and $.User (ne $.User.Status "active") }}
-      <div class="compose-pending">
-        Your account is pending approval. You can browse but not post yet.
+
+{{/* ============================================================
+     Feed page (Sprint 16g.8 visual reset).
+     Single-column wiz-form-shell at 720px max - no sidebar
+     since the feed aggregates across all spaces. The compose
+     box and the post stream stack inside the same shell so the
+     layout reads identically to the new space and project
+     pages but without a left rail. ============= */}}
+
+<div class="page-shell">
+  <div class="wiz-form-shell" style="max-width: 720px;">
+
+    <header class="wiz-header" style="margin-bottom: 2rem;">
+      <div></div>
+      <div class="wiz-progress-text">
+        <span>FEED</span>
       </div>
-      {{ else }}
+    </header>
+
+    <div class="wiz-content" style="margin-bottom: 2.5rem;">
+      <div class="wiz-prompt-eyebrow">YOUR FEED</div>
+      <h1 class="wiz-prompt-headline">Recent activity</h1>
+      <p class="wiz-prompt-helper">Posts from spaces you follow and projects you contribute to.</p>
+    </div>
+
+    {{ if and $.User (ne $.User.Status "active") }}
+    <div class="page-card" style="margin-bottom: 2rem; padding: 1.5rem; text-align: center; color: var(--text-muted);">
+      Your account is pending approval. You can browse but not post yet.
+    </div>
+    {{ else if $.User }}
+    <section class="page-section">
+      <div class="page-section-head">
+        <div>
+          <div class="page-section-eyebrow">COMPOSE</div>
+          <h2 class="page-section-title">New post</h2>
+        </div>
+      </div>
+
       {{ template "compose.html" (dict
         "Spaces" $.Spaces
         "SelectedSpaceID" 0
         "User" $.User) }}
-      {{ end }}
+    </section>
+    {{ end }}
 
-      <div id="feed-posts" class="stagger-in">
-        {{ if .Posts }}
-          {{ range .Posts }}
-            {{ template "post-card.html" (dict "Post" . "User" $.User) }}
-          {{ end }}
-        {{ else }}
-          <div class="empty-state">
-            <h3>Your feed is quiet</h3>
-            <p>Follow people or dip into a space to see activity here.</p>
-            <a href="/explore" class="btn btn-primary" hx-boost="true">Explore spaces</a>
-          </div>
+    <section class="page-section">
+      <div class="page-section-head">
+        <div>
+          <div class="page-section-eyebrow">SECTION 01</div>
+          <h2 class="page-section-title">Posts</h2>
+        </div>
+      </div>
+
+      {{ if .Posts }}
+      <div id="feed-posts" style="display: flex; flex-direction: column; gap: 1rem;">
+        {{ range .Posts }}
+        {{ template "post-card.html" (dict "Post" . "User" $.User) }}
         {{ end }}
       </div>
-    </main>
+      {{ else }}
+      <p style="color: var(--text-muted); margin: 0;">
+        Your feed is quiet. <a href="/explore" style="color: var(--accent); text-decoration: none;" hx-boost="true">Explore spaces &rarr;</a>
+      </p>
+      {{ end }}
+    </section>
 
-    {{ template "sidebar.html" . }}
   </div>
 </div>
+
 {{ end }}
 {{ end }}

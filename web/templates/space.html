@@ -1,178 +1,162 @@
 {{ define "content" }}
 {{ with .Content }}
+
+{{/* ============================================================
+     Space landing page (Sprint 16g.6 visual reset).
+     Page-shell layout: a left sidebar with space info, a stats
+     strip, the project list (with "view all" anchored INSIDE the
+     same block instead of duplicated in the hero), popular tags,
+     and the "+ NEW PROJECT" action pinned to the bottom for
+     owners. The main column has the wizard hero, the compose
+     box, the post-type filter as page-tabs, and the post feed. =============== */}}
+
 {{ $sp := .Space }}
 
-<div class="brut-page">
-  <header class="brut-hero brut-hero-compact"
-          style="{{ if $sp.Color }}--brut-accent: {{ $sp.Color }};{{ end }}">
-    <div class="brut-hero-inner brut-stagger">
-      <div class="brut-hero-id">
-        SPACE · #{{ $sp.ID }}
-        {{ if $sp.Icon }}<span class="brut-hero-meta-sep">·</span> {{ $sp.Icon }}{{ end }}
+<div class="page-shell">
+  <div class="page-shell-layout">
+
+    {{/* ============================================================
+         Sidebar
+         ============================================================ */}}
+    <aside class="page-shell-sidebar">
+
+      {{/* ----- Block 1: Space info ----- */}}
+      <div class="page-shell-sidebar-block">
+        <div class="page-shell-sidebar-block-label">SPACE &middot; {{ upper $sp.Slug }}</div>
+        <h2 style="font-size: 1.5rem; font-weight: 700; letter-spacing: -0.015em; color: var(--text-bright); margin: 0 0 0.5rem;">{{ $sp.Name }}</h2>
+        {{ if $sp.Description }}
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin: 0; line-height: 1.5;">{{ $sp.Description }}</p>
+        {{ end }}
       </div>
-      <h1 class="brut-hero-title">{{ $sp.Name }}</h1>
-      {{ if $sp.Description }}
-      <p class="brut-hero-subtitle">{{ $sp.Description }}</p>
+
+      {{/* ----- Block 2: Stats ----- */}}
+      <div class="page-shell-sidebar-block">
+        <div class="page-shell-sidebar-block-label">STATS</div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 0.4rem 0; border-bottom: 1px solid var(--border);">
+            <span style="font-family: ui-monospace, monospace; font-size: 0.72rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase;">POSTS</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 1.1rem; font-weight: 700; color: var(--accent);">{{ $sp.PostCount }}</span>
+          </div>
+          {{ if .Projects }}
+          <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 0.4rem 0; border-bottom: 1px solid var(--border);">
+            <span style="font-family: ui-monospace, monospace; font-size: 0.72rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase;">PROJECTS</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 1.1rem; font-weight: 700; color: var(--accent);">{{ len .Projects }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 0.4rem 0;">
+            <span style="font-family: ui-monospace, monospace; font-size: 0.72rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase;">SEASONS</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 1.1rem; font-weight: 700; color: var(--accent);">{{ .TotalProjectSeasons }}</span>
+          </div>
+          {{ end }}
+        </div>
+      </div>
+
+      {{/* ----- Block 3: Projects (max 5) + view all ----- */}}
+      {{ if .Projects }}
+      <div class="page-shell-sidebar-block">
+        <div class="page-shell-sidebar-block-label">PROJECTS</div>
+        <div class="sidebar-nav">
+          {{ range $i, $p := .Projects }}
+          {{ if lt $i 5 }}
+          <a href="/spaces/{{ $sp.Slug }}/projects/{{ $p.Slug }}"
+             class="sidebar-nav-row"
+             hx-boost="true">
+            <span class="sidebar-nav-num">&middot;</span>
+            <span class="sidebar-nav-label">{{ $p.Name }}</span>
+            <span class="sidebar-nav-count"></span>
+          </a>
+          {{ end }}
+          {{ end }}
+        </div>
+        <a href="/spaces/{{ $sp.Slug }}/projects"
+           style="font-size: 0.8rem; color: var(--accent); text-decoration: none; margin-top: 0.6rem; display: inline-block;"
+           hx-boost="true">View all projects &rarr;</a>
+      </div>
       {{ end }}
-      <div class="brut-hero-meta">
-        <span class="brut-hero-meta-item">{{ $sp.PostCount }} {{ pluralize $sp.PostCount "Post" "Posts" }}</span>
-        {{ if .Projects }}
-        <span class="brut-hero-meta-sep">·</span>
-        <span class="brut-hero-meta-item">{{ len .Projects }} {{ pluralize (len .Projects) "Project" "Projects" }}</span>
-        <span class="brut-hero-meta-sep">·</span>
-        <span class="brut-hero-meta-item">{{ .TotalProjectSeasons }} {{ pluralize .TotalProjectSeasons "Season" "Seasons" }}</span>
-        {{ end }}
-      </div>
-    </div>
-    <div class="brut-hero-actions">
-      <a class="brut-btn brut-btn-secondary brut-btn-sm"
-         href="/spaces/{{ $sp.Slug }}/projects" hx-boost="true">Projects &rarr;</a>
-    </div>
-  </header>
 
-  {{ if .Projects }}
-  <!-- Projects overview - rich cards on the space page so users see
-       the structured workstreams at a glance. -->
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <header class="brut-section-head">
-        <div class="brut-section-title-block">
-          <div class="brut-section-label">Section · Projects</div>
-          <h2 class="brut-section-title">{{ len .Projects }} {{ pluralize (len .Projects) "Project" "Projects" }}</h2>
-          <p class="brut-section-sub">
-            {{ .TotalProjectPosts }} {{ pluralize .TotalProjectPosts "post" "posts" }} ·
-            {{ .TotalProjectSeasons }} {{ pluralize .TotalProjectSeasons "season" "seasons" }}
-          </p>
-        </div>
-        <div class="brut-section-actions">
-          <a href="/spaces/{{ $sp.Slug }}/projects" class="brut-btn brut-btn-secondary brut-btn-sm" hx-boost="true">View all</a>
-          {{ if and $.User (ge $.User.PowerLevel 100) }}
-          <a href="/spaces/{{ $sp.Slug }}/projects/new" class="brut-btn brut-btn-primary brut-btn-sm" hx-boost="true">+ New Project</a>
+      {{/* ----- Block 4: Popular tags ----- */}}
+      {{ if .PopularTags }}
+      <div class="page-shell-sidebar-block">
+        <div class="page-shell-sidebar-block-label">POPULAR TAGS</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+          {{ range .PopularTags }}
+          <a href="/s/{{ $sp.Slug }}?tag={{ .Slug }}"
+             class="compose-pill{{ if eq $.Content.ActiveTag .Slug }} is-active{{ end }}"
+             style="text-decoration: none;"
+             hx-boost="true">#{{ .Name }} <span style="opacity: 0.6; margin-left: 0.25rem;">{{ .UseCount }}</span></a>
           {{ end }}
         </div>
-      </header>
+      </div>
+      {{ end }}
 
-      <div class="brut-pcard-grid brut-stagger" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
-        {{ range .Projects }}
-        <a class="brut-pcard"
-           href="/spaces/{{ $sp.Slug }}/projects/{{ .Slug }}"
-           {{ if .Color }}style="--card-accent: {{ .Color }};"{{ end }}
-           hx-boost="true">
-          {{ if .ParentName }}
-          <div class="brut-pcard-parent">IN · {{ upper .ParentName }}</div>
-          {{ end }}
-          <div class="brut-pcard-id">PROJECT · #{{ .ID }}</div>
-          <h3 class="brut-pcard-name">{{ .Name }}</h3>
-          {{ if .Description }}
-          <p class="brut-pcard-desc">{{ .Description }}</p>
-          {{ end }}
-          <div class="brut-pcard-progress" aria-label="Season progress">
-            {{ $progress := .SeasonProgress }}
-            {{ range $i := iter 5 }}
-            <span class="brut-pcard-dot{{ if lt $i $progress }} is-on{{ end }}"></span>
-            {{ end }}
-          </div>
-          <div class="brut-pcard-meta">
-            <span class="brut-pill brut-pill-{{ .Status }}">
-              <span class="brut-pill-dot" aria-hidden="true"></span>{{ .Status }}
-            </span>
-            <span class="brut-pcard-time">{{ .PostCount }} {{ pluralize .PostCount "post" "posts" }}</span>
-            {{ if .LastActivityAt }}
-            <span class="brut-pcard-time">{{ timeAgo .LastActivityAt.UTC }}</span>
-            {{ end }}
-          </div>
-        </a>
+      {{/* ----- Block 5: New project action (pinned) ----- */}}
+      {{ if and $.User (ge $.User.PowerLevel 100) }}
+      <div class="page-shell-sidebar-block" style="margin-top: auto;">
+        <a href="/spaces/{{ $sp.Slug }}/projects/new"
+           class="wiz-action-secondary"
+           style="text-align: center; display: block;"
+           hx-boost="true">+ NEW PROJECT</a>
+      </div>
+      {{ end }}
+
+    </aside>
+
+    {{/* ============================================================
+         Main column
+         ============================================================ */}}
+    <main class="page-shell-main">
+
+      <div class="wiz-content" style="margin-bottom: 2rem;">
+        <div class="wiz-prompt-eyebrow">SPACE &middot; {{ upper $sp.Name }}</div>
+        <h1 class="wiz-prompt-headline">{{ $sp.Name }}</h1>
+        {{ if $sp.Description }}
+        <p class="wiz-prompt-helper">{{ $sp.Description }}</p>
         {{ end }}
       </div>
-    </div>
-  </section>
-  {{ end }}
 
-  <!-- Post-type filter tabs -->
-  <nav class="brut-tabs" aria-label="Filter by post type">
-    <div class="brut-tabs-inner">
-      <a class="brut-tab{{ if eq .ActiveType "" }} is-active{{ end }}"
-         href="/s/{{ $sp.Slug }}" hx-boost="true">All</a>
-      <a class="brut-tab{{ if eq .ActiveType "discussion" }} is-active{{ end }}"
-         href="/s/{{ $sp.Slug }}?type=discussion" hx-boost="true">Discussions</a>
-      <a class="brut-tab{{ if eq .ActiveType "question" }} is-active{{ end }}"
-         href="/s/{{ $sp.Slug }}?type=question" hx-boost="true">Questions</a>
-      <a class="brut-tab{{ if eq .ActiveType "tutorial" }} is-active{{ end }}"
-         href="/s/{{ $sp.Slug }}?type=tutorial" hx-boost="true">Tutorials</a>
-      <a class="brut-tab{{ if eq .ActiveType "code" }} is-active{{ end }}"
-         href="/s/{{ $sp.Slug }}?type=code" hx-boost="true">Code</a>
-      <a class="brut-tab{{ if eq .ActiveType "showcase" }} is-active{{ end }}"
-         href="/s/{{ $sp.Slug }}?type=showcase" hx-boost="true">Showcases</a>
-      <a class="brut-tab{{ if eq .ActiveType "link" }} is-active{{ end }}"
-         href="/s/{{ $sp.Slug }}?type=link" hx-boost="true">Links</a>
-    </div>
-  </nav>
-
-  <!-- Compose + post feed in a two-column layout -->
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <div class="brut-two-col-light">
-        <main>
-          {{ if $.User }}
-            {{ if ne $.User.Status "active" }}
-            <div class="brut-flash brut-flash-info" role="status">
-              Your account is pending approval. You can browse but not post yet.
-            </div>
-            {{ else }}
-            {{ template "compose.html" (dict
-              "Spaces" $.Spaces
-              "SelectedSpaceID" $sp.ID
-              "User" $.User) }}
-            {{ end }}
-          {{ end }}
-
-          {{ if .Posts }}
-          <div class="stagger-in" style="margin-top: 24px; display: flex; flex-direction: column; gap: 16px;">
-            {{ range .Posts }}
-              {{ template "post-card.html" (dict "Post" . "User" $.User) }}
-            {{ end }}
-          </div>
-          {{ else }}
-          <div class="brut-empty" style="margin-top: 24px;">
-            <span class="brut-empty-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            </span>
-            <div class="brut-empty-body">
-              <h3 class="brut-empty-title">
-                No {{ if .ActiveType }}{{ .ActiveType }}s{{ else }}posts{{ end }} yet{{ if .ActiveTag }} tagged #{{ .ActiveTag }}{{ end }}
-              </h3>
-              <p class="brut-empty-desc">Be the first to post in {{ $sp.Name }}.</p>
-            </div>
-          </div>
-          {{ end }}
-        </main>
-
-        <aside>
-          {{ if .PopularTags }}
-          <div class="brut-aside-card">
-            <div class="brut-aside-title">Popular Tags</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-              {{ range .PopularTags }}
-              <a href="/s/{{ $sp.Slug }}?tag={{ .Slug }}"
-                 class="brut-pill brut-pill-pickable{{ if eq $.Content.ActiveTag .Slug }} is-checked{{ end }}"
-                 hx-boost="true">#{{ .Name }} <span style="opacity: 0.6;">{{ .UseCount }}</span></a>
-              {{ end }}
-            </div>
-          </div>
-          {{ end }}
-
-          <div class="brut-aside-card">
-            <div class="brut-aside-title">About</div>
-            <p class="brut-aside-text">
-              {{ if $sp.Description }}{{ $sp.Description }}{{ else }}A space for discussion.{{ end }}
-            </p>
-          </div>
-        </aside>
+      {{/* ----- Compose ----- */}}
+      {{ if $.User }}
+      {{ if ne $.User.Status "active" }}
+      <div class="wiz-flash" style="background: var(--accent-subtle); border: 1px solid var(--accent); color: var(--accent); margin-bottom: 1.5rem;" role="status">
+        Your account is pending approval. You can browse but not post yet.
       </div>
-    </div>
-  </section>
+      {{ else }}
+      <div style="margin-bottom: 2rem;">
+        {{ template "compose.html" (dict
+          "Spaces" $.Spaces
+          "SelectedSpaceID" $sp.ID
+          "User" $.User) }}
+      </div>
+      {{ end }}
+      {{ end }}
+
+      {{/* ----- Filter tabs ----- */}}
+      <div class="page-tabs">
+        <a href="/s/{{ $sp.Slug }}" class="page-tab{{ if eq .ActiveType "" }} is-active{{ end }}" hx-boost="true">All</a>
+        <a href="/s/{{ $sp.Slug }}?type=discussion" class="page-tab{{ if eq .ActiveType "discussion" }} is-active{{ end }}" hx-boost="true">Discussions</a>
+        <a href="/s/{{ $sp.Slug }}?type=question" class="page-tab{{ if eq .ActiveType "question" }} is-active{{ end }}" hx-boost="true">Questions</a>
+        <a href="/s/{{ $sp.Slug }}?type=tutorial" class="page-tab{{ if eq .ActiveType "tutorial" }} is-active{{ end }}" hx-boost="true">Tutorials</a>
+        <a href="/s/{{ $sp.Slug }}?type=code" class="page-tab{{ if eq .ActiveType "code" }} is-active{{ end }}" hx-boost="true">Code</a>
+        <a href="/s/{{ $sp.Slug }}?type=showcase" class="page-tab{{ if eq .ActiveType "showcase" }} is-active{{ end }}" hx-boost="true">Showcases</a>
+        <a href="/s/{{ $sp.Slug }}?type=link" class="page-tab{{ if eq .ActiveType "link" }} is-active{{ end }}" hx-boost="true">Links</a>
+      </div>
+
+      {{/* ----- Post feed ----- */}}
+      {{ if .Posts }}
+      <div style="display: flex; flex-direction: column; gap: 1rem;">
+        {{ range .Posts }}
+        {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+        {{ end }}
+      </div>
+      {{ else }}
+      <p style="color: var(--text-muted); margin: 1rem 0;">
+        No {{ if .ActiveType }}{{ .ActiveType }}s{{ else }}posts{{ end }} yet{{ if .ActiveTag }} tagged #{{ .ActiveTag }}{{ end }}.
+      </p>
+      {{ end }}
+
+    </main>
+
+  </div>
 </div>
+
 {{ end }}
 {{ end }}

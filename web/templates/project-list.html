@@ -1,129 +1,147 @@
 {{ define "content" }}
 {{ with .Content }}
-{{ $space := .Space }}
-{{ $statusFilter := .StatusFilter }}
 
-<div class="brut-page">
-  <header class="brut-hero brut-hero-compact"
-          style="{{ if $space.Color }}--brut-accent: {{ $space.Color }};{{ end }}">
-    <div class="brut-hero-inner brut-stagger">
-      <div class="brut-hero-id">
-        SPACE · <strong>{{ upper $space.Name }}</strong>
-        <span class="brut-hero-meta-sep">·</span>
-        SECTION · PROJECTS
-      </div>
-      <h1 class="brut-hero-title">
-        {{ if .Projects }}{{ len .Projects }} {{ pluralize (len .Projects) "Project" "Projects" }}{{ else }}Projects{{ end }}
-      </h1>
-      <p class="brut-hero-subtitle">
-        Structured workstreams collaborating inside {{ $space.Name }}. Each project owns its docs, seasons, and members.
-      </p>
-      <div class="brut-hero-meta">
-        <span class="brut-hero-meta-item">{{ $space.PostCount }} {{ pluralize $space.PostCount "Post" "Posts" }} in space</span>
-      </div>
-    </div>
-    {{ if .CanCreate }}
-    <div class="brut-hero-actions">
-      <a class="brut-btn brut-btn-primary brut-btn-sm"
-         href="/spaces/{{ $space.Slug }}/projects/new"
-         hx-boost="true">+ New Project</a>
-    </div>
-    {{ end }}
-  </header>
+{{/* ============================================================
+     Project list per space (Sprint 16g.3 visual reset).
+     Two-column page-shell layout: sidebar carries space-info,
+     filter pills, and the create-action; main has the wizard-
+     style hero followed by a card grid. ============= */}}
 
-  <!-- Filter pills -->
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <div class="brut-filter-row">
-        <span class="brut-filter-label">Filter ·</span>
-        <a class="brut-pill brut-pill-pickable{{ if eq $statusFilter "" }} is-checked{{ end }}"
-           href="/spaces/{{ $space.Slug }}/projects" hx-boost="true">All</a>
-        <a class="brut-pill brut-pill-pickable{{ if eq $statusFilter "draft" }} is-checked{{ end }}"
-           href="/spaces/{{ $space.Slug }}/projects?status=draft" hx-boost="true">Drafts</a>
-        <a class="brut-pill brut-pill-pickable{{ if eq $statusFilter "active" }} is-checked{{ end }}"
-           href="/spaces/{{ $space.Slug }}/projects?status=active" hx-boost="true">Active</a>
-        <a class="brut-pill brut-pill-pickable{{ if eq $statusFilter "archived" }} is-checked{{ end }}"
-           href="/spaces/{{ $space.Slug }}/projects?status=archived" hx-boost="true">Archived</a>
-        <a class="brut-pill brut-pill-pickable{{ if eq $statusFilter "closed" }} is-checked{{ end }}"
-           href="/spaces/{{ $space.Slug }}/projects?status=closed" hx-boost="true">Closed</a>
-      </div>
-    </div>
-  </section>
+<div class="page-shell">
+  <div class="page-shell-layout">
 
-  <!-- Project grid -->
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      {{ if .Projects }}
-      <div class="brut-pcard-grid brut-stagger">
-        {{ $owners := .Owners }}
-        {{ $tagsByProject := .TagsByProject }}
-        {{ $memberCount := .MemberCount }}
-        {{ range .Projects }}
-        {{ $owner := index $owners .OwnerID }}
-        {{ $tags := index $tagsByProject .ID }}
-        {{ $members := index $memberCount .ID }}
-        <a class="brut-pcard"
-           href="/spaces/{{ $space.Slug }}/projects/{{ .Slug }}"
-           {{ if .Color }}style="--card-accent: {{ .Color }};"{{ end }}
-           hx-boost="true">
-          {{ if .ParentName }}
-          <div class="brut-pcard-parent">IN · {{ upper .ParentName }}</div>
-          {{ end }}
-          <div class="brut-pcard-id">PROJECT · #{{ .ID }}</div>
-          <h3 class="brut-pcard-name">{{ .Name }}</h3>
-          {{ if .Description }}
-          <p class="brut-pcard-desc">{{ .Description }}</p>
-          {{ end }}
-          <div class="brut-pcard-meta">
-            <span class="brut-pill brut-pill-{{ .Status }}">
-              <span class="brut-pill-dot" aria-hidden="true"></span>{{ .Status }}
-            </span>
-            {{ if eq .Visibility "members_only" }}
-            <span class="brut-pill" title="Members only">MEMBERS</span>
-            {{ else if eq .Visibility "hidden" }}
-            <span class="brut-pill" title="Hidden">HIDDEN</span>
-            {{ end }}
-            {{ if $owner }}
-            <span class="brut-pcard-time">@{{ $owner.Username }}</span>
-            {{ end }}
-            <span class="brut-pcard-time">{{ $members }} {{ pluralize $members "member" "members" }}</span>
-          </div>
-        </a>
+    {{/* ============================================================
+         Sidebar
+         ============================================================ */}}
+    <aside class="page-shell-sidebar">
+
+      {{/* ----- Block 1: Space info ----- */}}
+      <div class="page-shell-sidebar-block">
+        <div class="page-shell-sidebar-block-label">SPACE &middot; {{ upper .Space.Slug }}</div>
+        <h2 style="font-size: 1.5rem; font-weight: 700; letter-spacing: -0.015em; color: var(--text-bright); margin: 0 0 0.5rem;">{{ .Space.Name }}</h2>
+        {{ if .Space.Description }}
+        <p style="font-size: 0.9rem; color: var(--text-dim); margin: 0; line-height: 1.5;">{{ .Space.Description }}</p>
         {{ end }}
       </div>
-      {{ else }}
-      <div class="brut-empty">
-        <span class="brut-empty-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"/>
-            <rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7" stroke-dasharray="2 2"/>
-          </svg>
-        </span>
-        <div class="brut-empty-body">
-          <h3 class="brut-empty-title">
-            No {{ if $statusFilter }}{{ $statusFilter }}{{ end }} projects yet
-          </h3>
-          <p class="brut-empty-desc">
-            {{ if .CanCreate }}
-              Start the first project for {{ $space.Name }} - it can be a single workstream or a long-running collaboration.
-            {{ else }}
-              {{ $space.Name }} hasn't started any projects yet. Check back soon.
-            {{ end }}
-          </p>
-          {{ if .CanCreate }}
-          <div class="brut-empty-actions">
-            <a class="brut-btn brut-btn-primary brut-btn-sm"
-               href="/spaces/{{ $space.Slug }}/projects/new"
-               hx-boost="true">Create the first project</a>
-          </div>
-          {{ end }}
+
+      {{/* ----- Block 2: Filter ----- */}}
+      <div class="page-shell-sidebar-block">
+        <div class="page-shell-sidebar-block-label">FILTER</div>
+        <div class="sidebar-nav">
+          <a href="/spaces/{{ .Space.Slug }}/projects"
+             class="sidebar-nav-row{{ if eq .StatusFilter "" }} is-active{{ end }}"
+             hx-boost="true">
+            <span class="sidebar-nav-num">&middot;</span>
+            <span class="sidebar-nav-label">ALL</span>
+            <span class="sidebar-nav-count">{{ len .Projects }}</span>
+          </a>
+          <a href="/spaces/{{ .Space.Slug }}/projects?status=active"
+             class="sidebar-nav-row{{ if eq .StatusFilter "active" }} is-active{{ end }}"
+             hx-boost="true">
+            <span class="sidebar-nav-num">&middot;</span>
+            <span class="sidebar-nav-label">ACTIVE</span>
+            <span class="sidebar-nav-count"></span>
+          </a>
+          <a href="/spaces/{{ .Space.Slug }}/projects?status=draft"
+             class="sidebar-nav-row{{ if eq .StatusFilter "draft" }} is-active{{ end }}"
+             hx-boost="true">
+            <span class="sidebar-nav-num">&middot;</span>
+            <span class="sidebar-nav-label">DRAFTS</span>
+            <span class="sidebar-nav-count"></span>
+          </a>
+          <a href="/spaces/{{ .Space.Slug }}/projects?status=archived"
+             class="sidebar-nav-row{{ if eq .StatusFilter "archived" }} is-active{{ end }}"
+             hx-boost="true">
+            <span class="sidebar-nav-num">&middot;</span>
+            <span class="sidebar-nav-label">ARCHIVED</span>
+            <span class="sidebar-nav-count"></span>
+          </a>
+          <a href="/spaces/{{ .Space.Slug }}/projects?status=closed"
+             class="sidebar-nav-row{{ if eq .StatusFilter "closed" }} is-active{{ end }}"
+             hx-boost="true">
+            <span class="sidebar-nav-num">&middot;</span>
+            <span class="sidebar-nav-label">CLOSED</span>
+            <span class="sidebar-nav-count"></span>
+          </a>
         </div>
       </div>
+
+      {{/* ----- Block 3: Create action (pinned to bottom) ----- */}}
+      {{ if .CanCreate }}
+      <div class="page-shell-sidebar-block" style="margin-top: auto;">
+        <a href="/spaces/{{ .Space.Slug }}/projects/new"
+           class="wiz-action-secondary"
+           style="text-align: center; display: block;"
+           hx-boost="true">+ NEW PROJECT</a>
+      </div>
       {{ end }}
-    </div>
-  </section>
+
+    </aside>
+
+    {{/* ============================================================
+         Main column
+         ============================================================ */}}
+    <main class="page-shell-main">
+
+      <header class="wiz-header">
+        <a href="/spaces/{{ .Space.Slug }}" class="wiz-back-btn" hx-boost="true">&larr; BACK TO {{ upper .Space.Name }}</a>
+      </header>
+
+      <div class="wiz-content" style="margin-bottom: 3rem;">
+        <div class="wiz-prompt-eyebrow">SPACE &middot; {{ upper .Space.Name }} &middot; PROJECTS</div>
+        <h1 class="wiz-prompt-headline">Projects</h1>
+        <p class="wiz-prompt-helper">Structured workstreams collaborating inside this space. Each project owns its docs, seasons, and members.</p>
+      </div>
+
+      <section class="page-section">
+        {{ if .Projects }}
+        {{ $space := .Space }}
+        {{ $owners := .Owners }}
+        {{ $memberCount := .MemberCount }}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; align-items: stretch;">
+          {{ range .Projects }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ .Slug }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 0.6rem;"
+             hx-boost="true">
+            {{ if .ParentName }}
+            <div class="page-shell-sidebar-block-label">IN &middot; {{ upper .ParentName }}</div>
+            {{ end }}
+            <div class="page-shell-sidebar-block-label">PROJECT &middot; #{{ .ID }}</div>
+            <h3 style="font-size: 1.15rem; font-weight: 600; margin: 0; color: var(--text-bright);">{{ .Name }}</h3>
+            {{ if .Description }}
+            <p style="font-size: 0.9rem; color: var(--text-dim); margin: 0; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ .Description }}</p>
+            {{ end }}
+            <div style="display: flex; gap: 0.6rem; align-items: center; margin-top: auto; padding-top: 0.5rem; flex-wrap: wrap;">
+              <span class="status-pill status-{{ .Status }}">{{ upper .Status }}</span>
+              {{ $owner := index $owners .OwnerID }}
+              {{ if $owner }}
+              <span style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">@{{ $owner.Username }}</span>
+              {{ end }}
+              {{ $mc := index $memberCount .ID }}
+              {{ if $mc }}
+              <span style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">{{ $mc }} {{ pluralize $mc "MEMBER" "MEMBERS" }}</span>
+              {{ end }}
+            </div>
+          </a>
+          {{ end }}
+        </div>
+        {{ else }}
+        <p style="color: var(--text-muted); margin: 0;">
+          No {{ if .StatusFilter }}{{ .StatusFilter }} {{ end }}projects in this space yet.
+          {{ if .CanCreate }}
+          <a href="/spaces/{{ .Space.Slug }}/projects/new"
+             style="color: var(--accent); text-decoration: none;"
+             hx-boost="true">+ Create the first one</a>.
+          {{ end }}
+        </p>
+        {{ end }}
+      </section>
+
+    </main>
+
+  </div>
 </div>
+
 {{ end }}
 {{ end }}

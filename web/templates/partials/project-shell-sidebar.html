@@ -1,0 +1,104 @@
+{{ define "project-shell-sidebar" }}
+{{/* ============================================================
+     Shared sidebar for all project pages (Sprint 16g visual reset).
+
+     Inputs (via dict):
+       Space        *model.Space  required
+       Project      *model.Project required
+       ActiveTab    string         required ("overview" / "docs" /
+                                              "seasons" / "members")
+       CanManage    bool           required
+       DocsCount    int            optional (0 omits the count)
+       SeasonsCount int            optional
+       MembersCount int            optional
+
+     Counts are passed pre-computed because not every tab page has
+     the underlying lists in scope (e.g. project-doc has only one
+     doc, project-season has only one season). Pages that have the
+     data pass `len .Foo`; pages without it pass 0 and the count
+     simply does not render. ============= */}}
+
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $activeTab := .ActiveTab }}
+{{ $canManage := .CanManage }}
+{{ $docsCount := .DocsCount }}
+{{ $seasonsCount := .SeasonsCount }}
+{{ $membersCount := .MembersCount }}
+
+<aside class="page-shell-sidebar">
+
+  <div class="page-shell-sidebar-block">
+    <div class="page-shell-sidebar-block-label">PROJECT &middot; #{{ $project.ID }} &middot; {{ upper $space.Name }}</div>
+    <h2 style="font-size: 1.5rem; font-weight: 700; letter-spacing: -0.015em; color: var(--text-bright); margin: 0 0 0.5rem;">{{ $project.Name }}</h2>
+    <span class="status-pill status-{{ $project.Status }}">{{ upper $project.Status }}</span>
+  </div>
+
+  {{ if $project.ParentSlug }}
+  <div class="page-shell-sidebar-block">
+    <div class="page-shell-sidebar-block-label">PART OF</div>
+    <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.ParentSlug }}" class="parent-link" hx-boost="true">&larr; {{ $project.ParentName }}</a>
+  </div>
+  {{ end }}
+
+  <div class="page-shell-sidebar-block">
+    <div class="page-shell-sidebar-block-label">PROJECT NAV</div>
+    <div class="sidebar-nav">
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}"
+         class="sidebar-nav-row{{ if eq $activeTab "overview" }} is-active{{ end }}"
+         hx-boost="true">
+        <span class="sidebar-nav-num">01</span>
+        <span class="sidebar-nav-label">OVERVIEW</span>
+        <span class="sidebar-nav-count"></span>
+      </a>
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs"
+         class="sidebar-nav-row{{ if eq $activeTab "docs" }} is-active{{ end }}"
+         hx-boost="true">
+        <span class="sidebar-nav-num">02</span>
+        <span class="sidebar-nav-label">DOCS</span>
+        <span class="sidebar-nav-count">{{ if $docsCount }}{{ $docsCount }}{{ end }}</span>
+      </a>
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
+         class="sidebar-nav-row{{ if eq $activeTab "seasons" }} is-active{{ end }}"
+         hx-boost="true">
+        <span class="sidebar-nav-num">03</span>
+        <span class="sidebar-nav-label">SEASONS</span>
+        <span class="sidebar-nav-count">{{ if $seasonsCount }}{{ $seasonsCount }}{{ end }}</span>
+      </a>
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/members"
+         class="sidebar-nav-row{{ if eq $activeTab "members" }} is-active{{ end }}"
+         hx-boost="true">
+        <span class="sidebar-nav-num">04</span>
+        <span class="sidebar-nav-label">MEMBERS</span>
+        <span class="sidebar-nav-count">{{ if $membersCount }}{{ $membersCount }}{{ end }}</span>
+      </a>
+    </div>
+  </div>
+
+  {{ if $canManage }}
+  <div class="page-shell-sidebar-block">
+    <div class="page-shell-sidebar-block-label">MANAGE</div>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/edit"
+         class="wiz-action-secondary"
+         style="text-align: center;"
+         hx-boost="true">EDIT PROJECT</a>
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
+         class="wiz-action-secondary"
+         style="text-align: center;"
+         hx-boost="true">+ NEW SEASON</a>
+    </div>
+  </div>
+  {{ end }}
+
+  {{ if $project.Description }}
+  <div class="page-shell-sidebar-quote"
+       style="margin-top: auto; padding: 1rem; background: var(--accent-subtle); border-left: 2px solid var(--accent); font-size: 0.82rem; line-height: 1.5; color: var(--text-dim);">
+    <p style="margin: 0 0 0.75rem; font-style: italic;">{{ $project.Description }}</p>
+    <div class="wiz-sidebar-divider"></div>
+    <div class="wiz-sidebar-quote-label">DESCRIPTION</div>
+  </div>
+  {{ end }}
+
+</aside>
+{{ end }}
