@@ -153,6 +153,11 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	// stars, admin-only). Persists past approval; admins can
 	// re-edit later as the user develops.
 	ratings := &model.ApplicationRatingStore{DB: pool}
+	// Sprint 16a: Project system stores.
+	projectStore := &model.ProjectStore{DB: pool}
+	projectDocs := &model.ProjectDocStore{DB: pool}
+	seasons := &model.SeasonStore{DB: pool}
+	projectMembers := &model.ProjectMemberStore{DB: pool}
 
 	// Notification dispatcher (used by post + profile handlers to fan events).
 	notifDispatch := &handler.NotifDispatch{Store: notifs, Hub: hub}
@@ -208,6 +213,19 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	// BackupCrypto is constructed in run() before the router is
 	// built so startup fails closed on a bad GOLAB_BACKUP_KEY.
 	dbH := &handler.DBHandler{Cfg: cfg, Crypto: backupCrypto}
+	// Sprint 16a: Project system handler. Reuses Markdown + Sanitizer
+	// for doc and closing-doc rendering; UserStore for member lookup.
+	projectH := &handler.ProjectHandler{
+		Projects:    projectStore,
+		ProjectDocs: projectDocs,
+		Seasons:     seasons,
+		Members:     projectMembers,
+		Spaces:      spaces,
+		Tags:        tags,
+		Users:       users,
+		Markdown:    md,
+		Sanitizer:   sanitizer,
+	}
 
 	// Page handlers
 	pageH := &handler.PageHandler{
@@ -467,6 +485,66 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Post("/admin/db/backup", dbH.Backup)
 			r.Get("/admin/db/export", dbH.Export)
 			r.Post("/admin/db/import", dbH.Import)
+		})
+
+		// Sprint 16a: Project system. Reads gate on RequireAuth so
+		// pending users can browse public projects in 16b; writes
+		// additionally require RequireActiveUser so pending /
+		// rejected accounts cannot mutate. Project create is owner-
+		// only (power_level >= 100) until Sprint 20 makes the gate
+		// configurable.
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Get("/spaces/{space_slug}/projects", projectH.ListInSpace)
+			r.Get("/projects/{project_id}", projectH.Get)
+			r.Get("/projects/{project_id}/docs", projectH.ListDocs)
+			r.Get("/projects/{project_id}/docs/{doc_type}", projectH.GetDoc)
+			r.Get("/projects/{project_id}/seasons", projectH.ListSeasons)
+			r.Get("/projects/{project_id}/seasons/{number}", projectH.GetSeason)
+			r.Get("/projects/{project_id}/members", projectH.ListMembers)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.Use(auth.RequireActiveUser)
+
+			// Owner-only project create. 5/hour/user keeps a runaway
+			// admin script from spamming the namespace.
+			r.With(handler.RequireOwner).
+				With(httprate.Limit(5, time.Hour,
+					httprate.WithKeyFuncs(perUserRate),
+					httprate.WithLimitHandler(handler.RateLimited),
+				)).
+				Post("/spaces/{space_slug}/projects", projectH.CreateInSpace)
+
+			// Project mutate (handler enforces owner-or-admin).
+			r.Patch("/projects/{project_id}", projectH.Update)
+			r.Delete("/projects/{project_id}", projectH.Delete)
+
+			// Doc upsert. Handler permits owner / contributor / admin.
+			// 30/hour/user mirrors the briefing rate limit.
+			r.With(httprate.Limit(30, time.Hour,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Put("/projects/{project_id}/docs/{doc_type}", projectH.UpsertDoc)
+			r.Delete("/projects/{project_id}/docs/{doc_id}", projectH.DeleteDoc)
+
+			// Seasons. Create / activate / close are owner-or-admin.
+			r.With(httprate.Limit(10, time.Hour,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Post("/projects/{project_id}/seasons", projectH.CreateSeason)
+			r.Patch("/projects/{project_id}/seasons/{number}", projectH.UpdateSeason)
+			r.Post("/projects/{project_id}/seasons/{number}/activate", projectH.ActivateSeason)
+			r.Post("/projects/{project_id}/seasons/{number}/close", projectH.CloseSeason)
+
+			// Members. Add/update/remove are owner-or-admin.
+			r.With(httprate.Limit(30, time.Hour,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Post("/projects/{project_id}/members", projectH.AddMember)
+			r.Patch("/projects/{project_id}/members/{user_id}", projectH.UpdateMemberRole)
+			r.Delete("/projects/{project_id}/members/{user_id}", projectH.RemoveMember)
 		})
 	})
 
