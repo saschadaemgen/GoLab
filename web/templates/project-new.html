@@ -28,6 +28,21 @@
             hx-boost="false"
             autocomplete="off"
             x-data="projectForm()">
+        {{ if .PotentialParents }}
+        <div class="form-group">
+          <label class="form-label" for="pf-parent">Parent project (optional)</label>
+          <select class="form-input" id="pf-parent" name="parent_project_id">
+            <option value=""{{ if eq $form.ParentID 0 }} selected{{ end }}>-- None (top-level project) --</option>
+            {{ range .PotentialParents }}
+            <option value="{{ .ID }}"{{ if eq .ID $form.ParentID }} selected{{ end }}>{{ if .Icon }}{{ .Icon }} {{ end }}{{ .Name }}</option>
+            {{ end }}
+          </select>
+          <div class="form-hint">
+            This project will appear nested under the selected parent. Only top-level projects can be parents (max nesting depth is 1).
+          </div>
+        </div>
+        {{ end }}
+
         <div class="form-group">
           <label class="form-label" for="pf-name">Name</label>
           <input class="form-input input-glow" type="text" id="pf-name"
