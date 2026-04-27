@@ -1766,6 +1766,144 @@
       };
     });
 
+    // Sprint 16b Phase 2: Project form helper. Auto-derives the slug
+    // from the name on type, stops auto-deriving once the user types
+    // into the slug field directly. Slug rules mirror the server-side
+    // ValidateProjectSlug regex: lowercase, digits, hyphens, no
+    // leading/trailing/consecutive hyphens, 3-64 chars.
+    window.Alpine.data('projectForm', function () {
+      return {
+        autoSlug: true,
+
+        init: function () {
+          var nameEl = this.$refs.nameInput;
+          var slugEl = this.$refs.slugInput;
+          if (slugEl && slugEl.value &&
+              slugEl.value !== this._slugify(nameEl ? nameEl.value : '')) {
+            // Server round-tripped a slug that doesn't match the
+            // auto-derived one - the user wrote it themselves.
+            // Stop overwriting it from name input.
+            this.autoSlug = false;
+          }
+        },
+
+        _slugify: function (s) {
+          return (s || '').toString().toLowerCase().trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 64)
+            .replace(/-+$/, '');
+        },
+
+        onNameInput: function (ev) {
+          if (!this.autoSlug) return;
+          var slugEl = this.$refs.slugInput;
+          if (!slugEl) return;
+          slugEl.value = this._slugify(ev.target.value);
+        },
+
+        onSlugInput: function () {
+          // User typed in the slug field. Stop auto-deriving.
+          this.autoSlug = false;
+        }
+      };
+    });
+
+    // Sprint 16b Phase 2: Quill-based doc editor. Used by the
+    // /docs/{type}/edit pages. Mirrors composeEditor's closure pattern
+    // for the Quill instance (Sprint 15a.5 P1/P2 fix - Alpine's
+    // Proxy breaks Quill's blot identity comparisons; keeping Quill
+    // off `this` bypasses the Proxy entirely).
+    //
+    // The form posts traditionally (form-encoded). Before submit we
+    // copy quill.root.innerHTML into a hidden <input name="content_html">
+    // so the page handler receives the rendered HTML. The handler
+    // sanitizes via bluemonday before storage.
+    window.Alpine.data('docEditor', function () {
+      var quill = null;
+
+      return {
+        submitting: false,
+
+        init: function () {
+          var container = this.$refs.editor;
+          if (!container) return;
+          // Guard against double-mount across HTMX page swaps.
+          if (container.__quillMounted ||
+              container.classList.contains('ql-container')) {
+            return;
+          }
+          if (quill) return;
+
+          var initialHTML = container.dataset.initialHtml || '';
+
+          // Fallback for browsers / environments where Quill failed
+          // to load. The hidden input still picks up the contenteditable
+          // div's innerHTML on submit.
+          if (!window.Quill) {
+            container.setAttribute('contenteditable', 'true');
+            container.style.minHeight = '320px';
+            container.innerHTML = initialHTML;
+            container.__quillMounted = true;
+            return;
+          }
+
+          quill = new window.Quill(container, {
+            theme: 'snow',
+            placeholder: 'Write the document here...',
+            modules: {
+              toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                ['blockquote', 'code-block'],
+                ['link', 'image'],
+                ['clean']
+              ]
+            }
+          });
+          container.__quillMounted = true;
+
+          if (initialHTML) {
+            if (/^\s*</.test(initialHTML)) {
+              quill.clipboard.dangerouslyPasteHTML(initialHTML);
+            } else {
+              quill.setText(initialHTML);
+            }
+          }
+        },
+
+        onSubmit: function (ev) {
+          if (this.submitting) return;
+          this.submitting = true;
+          var form = ev.target;
+          var contentField = this.$refs.contentField;
+          if (contentField) {
+            if (quill) {
+              contentField.value = quill.root.innerHTML;
+            } else {
+              // Fallback path: pull from contenteditable div.
+              var c = this.$refs.editor;
+              contentField.value = c ? c.innerHTML : '';
+            }
+          }
+          // form.submit() bypasses the @submit.prevent handler, so we
+          // don't re-enter onSubmit. The page handler does the PRG
+          // redirect on success.
+          form.submit();
+        },
+
+        destroy: function () {
+          var container = this.$refs && this.$refs.editor;
+          if (container) {
+            delete container.__quillMounted;
+          }
+          quill = null;
+        }
+      };
+    });
+
     // Tag autocomplete input. Users type a tag name, the component
     // queries /api/tags/search and shows up to 10 suggestions. Pressing
     // Enter or comma commits the typed text (slugified client-side) as
