@@ -298,7 +298,12 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		r.Post("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_type}", projectH.SaveDocFromForm)
 		r.Post("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_id}/delete", projectH.DeleteDocFromForm)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons", projectH.SeasonsPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons/new", projectH.NewSeasonPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/seasons", projectH.CreateSeasonFromForm)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}", projectH.SeasonPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}/activate", projectH.ActivateSeasonFromForm)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}/close", projectH.CloseSeasonPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}/close", projectH.CloseSeasonFromForm)
 		r.Get("/spaces/{space_slug}/projects/{project_slug}/members", projectH.MembersPage)
 	})
 
