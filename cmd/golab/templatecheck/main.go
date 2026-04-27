@@ -165,6 +165,7 @@ func main() {
 		Description: "SMP protocol, clients, relays",
 		Color: "#45BDD1", Icon: "*", SortOrder: 1, PostCount: 12,
 	}
+	dummyParentID := int64(5)
 	dummyProject := &model.Project{
 		ID: 7, SpaceID: 1,
 		Slug: "trust-engine", Name: "Trust Level Engine",
@@ -173,9 +174,28 @@ func main() {
 		Visibility: model.ProjectVisibilityPublic,
 		OwnerID:    1,
 		Icon:       "+", Color: "#3CDFCF",
-		CreatedAt: time.Now().Add(-12 * 24 * time.Hour),
-		UpdatedAt: time.Now().Add(-2 * time.Hour),
-		SpaceSlug: "simplex", SpaceName: "SimpleX Protocol",
+		// Sprint 16d: dummyProject is a sub-project of GoLab so the
+		// templatecheck exercises the breadcrumb + "in {parent}"
+		// rendering paths.
+		ParentProjectID: &dummyParentID,
+		CreatedAt:       time.Now().Add(-12 * 24 * time.Hour),
+		UpdatedAt:       time.Now().Add(-2 * time.Hour),
+		SpaceSlug:       "simplex", SpaceName: "SimpleX Protocol",
+		ParentSlug:      "golab", ParentName: "GoLab",
+	}
+	dummyChildProject := model.Project{
+		ID: 8, SpaceID: 1,
+		Slug: "reading-tracker", Name: "Reading Tracker",
+		Description: "Personal reading habits and book recommendations.",
+		Status:     model.ProjectStatusDraft,
+		Visibility: model.ProjectVisibilityPublic,
+		OwnerID:    1,
+		Color:      "#9B59B6",
+		ParentProjectID: &dummyParentID,
+		CreatedAt:       time.Now().Add(-3 * 24 * time.Hour),
+		UpdatedAt:       time.Now().Add(-1 * 24 * time.Hour),
+		SpaceSlug:       "simplex", SpaceName: "SimpleX Protocol",
+		ParentSlug:      "golab", ParentName: "GoLab",
 	}
 	dummyProjectTags := []model.Tag{
 		{ID: 1, Name: "trust", Slug: "trust", UseCount: 4},
@@ -254,6 +274,15 @@ func main() {
 				"ActiveTab":     "overview",
 				"CanEdit":       true,
 				"CanManage":     true,
+				// Sprint 16d sub-projects.
+				"Children": []model.Project{dummyChildProject},
+				"ParentStats": &model.ParentProjectStats{
+					ChildCount:         2,
+					ChildPostsCount:    14,
+					ChildContributors:  3,
+					ActiveChildSeasons: 1,
+				},
+				"CanCreateProject": true,
 				// Sprint 16b polish dashboard data.
 				"TotalPosts":        18,
 				"TotalContributors": 3,
@@ -411,6 +440,11 @@ func main() {
 				"Space": dummyProjectSpace,
 				"Form":  projectFormDefaults,
 				"Error": "",
+				// Sprint 16d parent dropdown options.
+				"PotentialParents": []model.Project{
+					{ID: 5, Slug: "golab", Name: "GoLab", Icon: "@"},
+					{ID: 6, Slug: "gochat", Name: "GoChat"},
+				},
 			},
 		},
 		"project-edit": {
@@ -423,6 +457,10 @@ func main() {
 				"Project": dummyProject,
 				"Form":    projectFormFilled,
 				"Error":   "",
+				"PotentialParents": []model.Project{
+					{ID: 5, Slug: "golab", Name: "GoLab", Icon: "@"},
+				},
+				"HasChildren": false,
 			},
 		},
 		"project-doc-edit": {
