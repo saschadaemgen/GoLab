@@ -1835,6 +1835,60 @@
     });
 
     // ============================================================
+    // Sprint 16e visual polish: animated KPI counter.
+    // Counts the displayed value from 0 to `target` once the host
+    // element scrolls into view. Pure ease-out cubic, ~1200ms by
+    // default. The component disconnects its observer after firing
+    // so HTMX page swaps can re-mount cleanly.
+    //
+    // Usage:
+    //   <span x-data="kpiCounter(73)" x-text="current">0</span>
+    //   <span x-data="kpiCounter(73, 800)" x-text="current">0</span>
+    // ============================================================
+    window.Alpine.data('kpiCounter', function (target, duration) {
+      target = parseInt(target, 10) || 0;
+      duration = parseInt(duration, 10) || 1200;
+      var prefersReduced = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      return {
+        current: prefersReduced ? target : 0,
+        init: function () {
+          if (prefersReduced) return; // user opted out of motion
+          var self = this;
+          // Fall back to a synchronous animate() if the browser is
+          // ancient enough to lack IntersectionObserver - the count-up
+          // still fires; it just doesn't wait for visibility.
+          if (!('IntersectionObserver' in window)) {
+            self._animate(target, duration);
+            return;
+          }
+          var observer = new IntersectionObserver(function (entries) {
+            if (entries[0] && entries[0].isIntersecting) {
+              self._animate(target, duration);
+              observer.disconnect();
+            }
+          });
+          observer.observe(this.$el);
+        },
+        _animate: function (target, duration) {
+          var self = this;
+          var start = performance.now();
+          var step = function (now) {
+            var t = Math.min((now - start) / duration, 1);
+            var eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+            self.current = Math.floor(target * eased);
+            if (t < 1) {
+              requestAnimationFrame(step);
+            } else {
+              self.current = target;
+            }
+          };
+          requestAnimationFrame(step);
+        }
+      };
+    });
+
+    // ============================================================
     // Sprint 16b visual polish: Chart.js panels.
     // Each component reads its dataset from a `data-chart` JSON
     // attribute on the host element, instantiates the matching

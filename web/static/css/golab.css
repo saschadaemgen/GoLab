@@ -6917,6 +6917,112 @@ img.avatar {
 }
 
 /* ============================================================
+   Sprint 16e: Visual polish foundation
+   ============================================================
+   New CSS variables, animation keyframes, and a reduced-motion
+   override. Foundation phase: nothing applies them yet, the
+   cockpit / showcase / dashboard layers in subsequent commits
+   pull from this base.
+
+   --accent already lives in main.css. Sprint 16e extends with
+   faint / mid / strong / glow shorthand variants so component
+   styles don't have to re-derive rgba alphas. Cockpit-specific
+   tokens drive the mesh gradient; glass-* drives the
+   glassmorphic KPI tiles. */
+:root {
+  --accent-faint:   rgba(69, 189, 209, 0.12);
+  --accent-mid:     rgba(69, 189, 209, 0.40);
+  --accent-strong:  rgba(69, 189, 209, 0.70);
+  --accent-shadow:  0 0 24px rgba(69, 189, 209, 0.30);
+
+  --cockpit-bg-1:   hsl(220, 40%, 8%);
+  --cockpit-bg-2:   hsl(190, 50%, 15%);
+  --cockpit-mesh-1: rgba(69, 189, 209, 0.18);
+  --cockpit-mesh-2: rgba(70, 120, 200, 0.22);
+  --cockpit-mesh-3: rgba(120, 80, 200, 0.12);
+
+  --glass-bg:     rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur:   blur(12px);
+}
+
+[data-theme="light"] {
+  --accent-faint:   rgba(26, 125, 90, 0.10);
+  --accent-mid:     rgba(26, 125, 90, 0.35);
+  --accent-strong:  rgba(26, 125, 90, 0.60);
+  --accent-shadow:  0 0 24px rgba(26, 125, 90, 0.20);
+
+  --cockpit-bg-1:   hsl(190, 30%, 96%);
+  --cockpit-bg-2:   hsl(210, 50%, 92%);
+  --cockpit-mesh-1: rgba(26, 125, 90, 0.10);
+  --cockpit-mesh-2: rgba(70, 120, 200, 0.10);
+  --cockpit-mesh-3: rgba(120, 80, 200, 0.06);
+
+  --glass-bg:     rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(0, 0, 0, 0.06);
+}
+
+/* Mesh-gradient drift for the cockpit hero. Background-positions
+   shift by tiny amounts over 24s so the gradient feels alive
+   without distracting from content. */
+@keyframes meshDrift {
+  0%   { background-position: 0% 0%, 100% 100%, 50% 100%; }
+  50%  { background-position: 4% 3%, 96% 97%, 53% 100%; }
+  100% { background-position: 0% 0%, 100% 100%, 50% 100%; }
+}
+
+/* Counter-finished glow: brief text-shadow flash when the kpiCounter
+   reaches its target. Triggered by toggling .is-finished from the
+   counter component (added later) or applied via CSS-only when the
+   tile uses the static value. */
+@keyframes counterFinished {
+  0%   { text-shadow: none; }
+  40%  { text-shadow: 0 0 16px var(--accent-strong); }
+  100% { text-shadow: 0 0 6px var(--accent-faint); }
+}
+
+/* Loading shimmer for chart containers / cards before data lands.
+   A diagonal gradient slides across the host element. Apply by
+   adding .is-loading to the chart-container; remove once Chart.js
+   draws. */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.is-loading {
+  background: linear-gradient(
+    100deg,
+    rgba(var(--bg-card-rgb), 0.4) 30%,
+    rgba(var(--bg-card-rgb), 0.7) 50%,
+    rgba(var(--bg-card-rgb), 0.4) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Glassmorphic surface helper used by KPI tiles in the cockpit. */
+.glass-surface {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+/* Reduced motion: kill the looping ambient animations. Hover and
+   click feedback transitions stay (they're explicit user input
+   responses, not ambient motion), but the mesh drift, status pulse
+   halo, and shimmer all freeze on their first frame. */
+@media (prefers-reduced-motion: reduce) {
+  .cockpit-hero,
+  .status-pill-active .status-pill-dot,
+  .is-loading,
+  .heatmap-cell {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
    Sprint 16d: Project hierarchy
    ============================================================
    Plain styles for the parent breadcrumb / parent label / sub-
