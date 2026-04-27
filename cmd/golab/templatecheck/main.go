@@ -142,6 +142,193 @@ func main() {
 		},
 	}
 
+	// Sprint 16b: project system pages. Build dummy data once so each
+	// page renders against realistic shape (project + owner + tags +
+	// docs + seasons + members + counts).
+	dummyProjectSpace := &model.Space{
+		ID: 1, Slug: "simplex", Name: "SimpleX Protocol",
+		Description: "SMP protocol, clients, relays",
+		Color: "#45BDD1", Icon: "*", SortOrder: 1, PostCount: 12,
+	}
+	dummyProject := &model.Project{
+		ID: 7, SpaceID: 1,
+		Slug: "trust-engine", Name: "Trust Level Engine",
+		Description: "Implements TL0 through TL4 with Discourse semantics for the GoLab community.",
+		Status:     model.ProjectStatusActive,
+		Visibility: model.ProjectVisibilityPublic,
+		OwnerID:    1,
+		Icon:       "+", Color: "#3CDFCF",
+		CreatedAt: time.Now().Add(-12 * 24 * time.Hour),
+		UpdatedAt: time.Now().Add(-2 * time.Hour),
+		SpaceSlug: "simplex", SpaceName: "SimpleX Protocol",
+	}
+	dummyProjectTags := []model.Tag{
+		{ID: 1, Name: "trust", Slug: "trust", UseCount: 4},
+		{ID: 2, Name: "engine", Slug: "engine", UseCount: 3},
+	}
+	dummyDocs := []model.ProjectDoc{
+		{ID: 11, ProjectID: 7, DocType: model.ProjectDocConcept, Title: "Concept",
+			ContentMD: "# Concept\n\nWe need TLs.", ContentHTML: "<h1>Concept</h1><p>We need TLs.</p>",
+			SortOrder: 1, CreatedAt: time.Now().Add(-10 * 24 * time.Hour), UpdatedAt: time.Now().Add(-2 * time.Hour)},
+		{ID: 12, ProjectID: 7, DocType: model.ProjectDocArchitecture, Title: "Architecture",
+			ContentMD: "Layered.", ContentHTML: "<p>Layered.</p>",
+			SortOrder: 2, CreatedAt: time.Now().Add(-9 * 24 * time.Hour), UpdatedAt: time.Now().Add(-3 * 24 * time.Hour)},
+	}
+	startedAt := time.Now().Add(-5 * 24 * time.Hour)
+	closedAt := time.Now().Add(-30 * 24 * time.Hour)
+	dummySeasons := []model.Season{
+		{ID: 21, ProjectID: 7, SeasonNumber: 1, Title: "Foundation",
+			Description: "Initial scaffolding and store layer.",
+			Status:      model.SeasonStatusClosed,
+			StartedAt:   &closedAt, ClosedAt: &closedAt,
+			ClosingDocMD: "# Closing\n\nDone.", ClosingDocHTML: "<h1>Closing</h1><p>Done.</p>",
+			CreatedAt:   time.Now().Add(-30 * 24 * time.Hour), UpdatedAt: time.Now().Add(-29 * 24 * time.Hour)},
+		{ID: 22, ProjectID: 7, SeasonNumber: 2, Title: "Polish",
+			Description: "UX polish and frontend.",
+			Status:      model.SeasonStatusActive,
+			StartedAt:   &startedAt,
+			CreatedAt:   time.Now().Add(-6 * 24 * time.Hour), UpdatedAt: time.Now().Add(-1 * 24 * time.Hour)},
+	}
+	dummyMembers := []model.ProjectMember{
+		{ID: 31, ProjectID: 7, UserID: 1, Role: model.ProjectRoleOwner,
+			JoinedAt: time.Now().Add(-12 * 24 * time.Hour),
+			Username: "prinz", DisplayName: "Der Prinz"},
+		{ID: 32, ProjectID: 7, UserID: 2, Role: model.ProjectRoleContributor,
+			JoinedAt: time.Now().Add(-6 * 24 * time.Hour),
+			Username: "wizard", DisplayName: "Der Zauberer"},
+	}
+	dummyDocPresence := map[string]*model.ProjectDoc{
+		"concept":      &dummyDocs[0],
+		"architecture": &dummyDocs[1],
+	}
+	dummyCurrentSeason := &dummySeasons[1]
+	dummyEditedBy := int64(1)
+	dummyDocs[0].LastEditedBy = &dummyEditedBy
+
+	projectPages := map[string]map[string]any{
+		"project-list": {
+			"Title":       "Projects in SimpleX Protocol",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects",
+			"Content": map[string]any{
+				"Space":         dummyProjectSpace,
+				"Projects":      []model.Project{*dummyProject},
+				"Owners":        map[int64]*model.User{1: dummyUser},
+				"TagsByProject": map[int64][]model.Tag{7: dummyProjectTags},
+				"MemberCount":   map[int64]int{7: len(dummyMembers)},
+				"StatusFilter":  "",
+				"CanCreate":     true,
+			},
+		},
+		"project-show": {
+			"Title":       "Trust Level Engine - GoLab",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine",
+			"Content": map[string]any{
+				"Space":         dummyProjectSpace,
+				"Project":       dummyProject,
+				"Owner":         dummyUser,
+				"Tags":          dummyProjectTags,
+				"Docs":          dummyDocs,
+				"Seasons":       dummySeasons,
+				"Members":       dummyMembers,
+				"DocPresence":   dummyDocPresence,
+				"CurrentSeason": dummyCurrentSeason,
+				"ActiveTab":     "overview",
+				"CanEdit":       true,
+				"CanManage":     true,
+			},
+		},
+		"project-docs": {
+			"Title":       "Trust Level Engine docs - GoLab",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/docs",
+			"Content": map[string]any{
+				"Space":     dummyProjectSpace,
+				"Project":   dummyProject,
+				"Owner":     dummyUser,
+				"Tags":      dummyProjectTags,
+				"Docs":      dummyDocs,
+				"ActiveTab": "docs",
+				"CanEdit":   true,
+				"CanManage": true,
+			},
+		},
+		"project-doc": {
+			"Title":       "Concept - Trust Level Engine",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/docs/concept",
+			"Content": map[string]any{
+				"Space":     dummyProjectSpace,
+				"Project":   dummyProject,
+				"Owner":     dummyUser,
+				"Tags":      dummyProjectTags,
+				"Doc":       &dummyDocs[0],
+				"Editor":    dummyUser,
+				"DocLabel":  "Concept",
+				"ActiveTab": "docs",
+				"CanEdit":   true,
+				"CanManage": true,
+			},
+		},
+		"project-seasons": {
+			"Title":       "Trust Level Engine seasons - GoLab",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/seasons",
+			"Content": map[string]any{
+				"Space":      dummyProjectSpace,
+				"Project":    dummyProject,
+				"Owner":      dummyUser,
+				"Tags":       dummyProjectTags,
+				"Seasons":    dummySeasons,
+				"PostCounts": map[int64]int{21: 23, 22: 12},
+				"ActiveTab":  "seasons",
+				"CanManage":  true,
+			},
+		},
+		"project-season": {
+			"Title":       "Season 2 - Trust Level Engine",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/seasons/2",
+			"Content": map[string]any{
+				"Space":     dummyProjectSpace,
+				"Project":   dummyProject,
+				"Owner":     dummyUser,
+				"Tags":      dummyProjectTags,
+				"Season":    &dummySeasons[1],
+				"Posts":     []model.Post{dummyPost},
+				"ActiveTab": "seasons",
+				"CanManage": true,
+			},
+		},
+		"project-members": {
+			"Title":       "Trust Level Engine members - GoLab",
+			"SiteName":    "GoLab",
+			"User":        dummyUser,
+			"CurrentPath": "/spaces/simplex/projects/trust-engine/members",
+			"Content": map[string]any{
+				"Space":        dummyProjectSpace,
+				"Project":      dummyProject,
+				"Owner":        dummyUser,
+				"Tags":         dummyProjectTags,
+				"Owners":       []model.ProjectMember{dummyMembers[0]},
+				"Contributors": []model.ProjectMember{dummyMembers[1]},
+				"Viewers":      []model.ProjectMember{},
+				"ActiveTab":    "members",
+				"CanManage":    true,
+			},
+		},
+	}
+	for name, page := range projectPages {
+		pages[name] = page
+	}
+
 	for name, data := range pages {
 		// Make sure every page has the space-bar data base.html reads.
 		if m, ok := data.(map[string]any); ok {
