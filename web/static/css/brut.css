@@ -1051,3 +1051,232 @@
   color: var(--brut-text-muted);
   margin: 0 0 14px;
 }
+
+.brut-aside-text.muted { color: var(--brut-text-faint); }
+
+/* =============================================================
+   Two-col layouts used inside sections - lighter than the page-
+   level brut-two-col, no extra padding (the section provides it).
+   ============================================================= */
+.brut-two-col-light {
+  display: grid;
+  gap: 28px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  .brut-two-col-light { grid-template-columns: minmax(0, 1fr) 280px; }
+}
+
+/* Activity row: timeline (wide) + heatmap (narrow). */
+.brut-activity-row {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .brut-activity-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+
+/* =============================================================
+   Long-form prose blocks (description, doc body, closing doc)
+   ============================================================= */
+.brut-prose {
+  font: 400 15px/1.65 var(--brut-sans);
+  color: var(--brut-text);
+  max-width: 70ch;
+  margin: 0;
+}
+
+.brut-prose.muted { color: var(--brut-text-muted); }
+.brut-prose + .brut-prose { margin-top: 16px; }
+
+/* =============================================================
+   Doc status cards (filled / empty variants)
+   ============================================================= */
+.brut-doc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.brut-doc-card-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  margin: 0 0 12px;
+}
+
+.brut-doc-card-icon svg { width: 16px; height: 16px; }
+
+.brut-doc-card-icon-filled {
+  background: var(--brut-accent-faint);
+  border: 1px solid var(--brut-accent-mid);
+  color: var(--brut-accent);
+}
+
+.brut-doc-card-icon-empty {
+  background: hsla(35, 40%, 50%, 0.10);
+  border: 1px solid hsla(35, 40%, 50%, 0.30);
+  color: hsl(35, 60%, 65%);
+}
+
+.brut-doc-card-stat {
+  font: 700 28px/1 var(--brut-sans);
+  letter-spacing: -0.02em;
+  color: var(--brut-text);
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 14px;
+}
+
+.brut-doc-card-stat-empty {
+  font: 500 14px/1 var(--brut-mono);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: hsl(35, 50%, 60%);
+}
+
+.brut-doc-card-empty { background: var(--brut-surface); border-style: dashed; }
+.brut-doc-card-empty::before { background: hsl(35, 50%, 50%); opacity: 0.4; }
+
+/* =============================================================
+   Season timeline list (vertical, brutalist)
+   ============================================================= */
+.brut-timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--brut-border-faint);
+  border: 1px solid var(--brut-border-faint);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.brut-timeline-item {
+  background: var(--brut-surface);
+  transition: background 200ms ease-out;
+}
+
+.brut-timeline-item:hover { background: var(--brut-surface-hi); }
+
+.brut-timeline-link {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.brut-timeline-num {
+  font: 600 12px/1 var(--brut-mono);
+  letter-spacing: 0.10em;
+  color: var(--brut-text-muted);
+  text-align: center;
+  padding: 6px 0;
+  border-right: 1px solid var(--brut-border-faint);
+}
+
+.brut-timeline-active .brut-timeline-num {
+  color: var(--brut-accent);
+  border-right-color: var(--brut-accent-mid);
+}
+
+.brut-timeline-closed .brut-timeline-num {
+  color: hsl(280, 35%, 70%);
+}
+
+.brut-timeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.brut-timeline-title {
+  font: 500 14px/1.3 var(--brut-sans);
+  color: var(--brut-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brut-timeline-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.brut-timeline-date {
+  font: 500 10px/1 var(--brut-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brut-text-faint);
+}
+
+/* =============================================================
+   Heatmap (12 cols x 7 rows)
+   ============================================================= */
+.brut-heatmap-svg {
+  width: 100%;
+  height: auto;
+  max-height: 130px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.brut-heatmap-cell,
+.brut-heatmap-cell-static {
+  transition: opacity 200ms;
+}
+
+.brut-heatmap-cell-static {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.brut-heatmap-level-0 { fill: hsl(220, 14%, 16%); background: hsl(220, 14%, 16%); }
+.brut-heatmap-level-1 { fill: rgba(69, 189, 209, 0.22); background: rgba(69, 189, 209, 0.22); }
+.brut-heatmap-level-2 { fill: rgba(69, 189, 209, 0.42); background: rgba(69, 189, 209, 0.42); }
+.brut-heatmap-level-3 { fill: rgba(69, 189, 209, 0.65); background: rgba(69, 189, 209, 0.65); }
+.brut-heatmap-level-4 { fill: var(--brut-accent); background: var(--brut-accent); }
+
+[data-theme="light"] .brut-heatmap-level-0 { fill: hsl(220, 14%, 88%); background: hsl(220, 14%, 88%); }
+[data-theme="light"] .brut-heatmap-level-1 { fill: rgba(26, 125, 90, 0.18); background: rgba(26, 125, 90, 0.18); }
+[data-theme="light"] .brut-heatmap-level-2 { fill: rgba(26, 125, 90, 0.38); background: rgba(26, 125, 90, 0.38); }
+[data-theme="light"] .brut-heatmap-level-3 { fill: rgba(26, 125, 90, 0.62); background: rgba(26, 125, 90, 0.62); }
+
+.brut-heatmap-cell:hover { opacity: 0.6; }
+
+.brut-heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  font: 500 9px/1 var(--brut-mono);
+  letter-spacing: 0.16em;
+  color: var(--brut-text-faint);
+}
+
+/* =============================================================
+   Hero is-active modifier - inset glow when project status=active
+   ============================================================= */
+.brut-hero.is-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 0 100px var(--brut-accent-faint);
+}
