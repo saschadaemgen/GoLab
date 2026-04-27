@@ -1,0 +1,117 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $form := .Form }}
+{{ $err := .Error }}
+
+<div class="page-container">
+  <main class="project-form-main">
+    <nav class="project-doc-view-back" aria-label="Form navigation">
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}"
+         class="project-doc-view-back-link"
+         hx-boost="true">&larr; Back to project</a>
+    </nav>
+
+    <div class="project-form-card">
+      <header class="project-form-head">
+        <h1 class="project-form-title">Edit {{ $project.Name }}</h1>
+        <p class="project-form-sub">Slug stays fixed once a project is created so existing links keep working.</p>
+      </header>
+
+      {{ if $err }}
+      <div class="flash flash-error" role="alert">{{ $err }}</div>
+      {{ end }}
+
+      <form method="POST"
+            action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/edit"
+            class="project-form"
+            hx-boost="false"
+            autocomplete="off">
+        <div class="form-group">
+          <label class="form-label" for="pf-name">Name</label>
+          <input class="form-input input-glow" type="text" id="pf-name"
+                 name="name" required minlength="3" maxlength="80"
+                 value="{{ $form.Name }}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">URL slug</label>
+          <input class="form-input form-input-readonly" type="text"
+                 value="{{ $project.Slug }}" readonly disabled>
+          <div class="form-hint">Slug cannot be changed. Lives at <code>/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}</code>.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pf-desc">Description</label>
+          <textarea class="form-input form-textarea input-glow" id="pf-desc"
+                    name="description" maxlength="500" rows="4"
+                    x-data="{ len: {{ len $form.Description }} }"
+                    @input="len = $el.value.length">{{ $form.Description }}</textarea>
+          <div class="form-hint">
+            <span x-text="len">0</span> / 500
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="pf-status">Status</label>
+            <select class="form-input" id="pf-status" name="status">
+              <option value="draft"{{ if eq $form.Status "draft" }} selected{{ end }}>Draft</option>
+              <option value="active"{{ if eq $form.Status "active" }} selected{{ end }}>Active</option>
+              <option value="archived"{{ if eq $form.Status "archived" }} selected{{ end }}>Archived</option>
+              <option value="closed"{{ if eq $form.Status "closed" }} selected{{ end }}>Closed</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="pf-vis">Visibility</label>
+            <select class="form-input" id="pf-vis" name="visibility">
+              <option value="public"{{ if eq $form.Visibility "public" }} selected{{ end }}>Public</option>
+              <option value="members_only"{{ if eq $form.Visibility "members_only" }} selected{{ end }}>Members only</option>
+              <option value="hidden"{{ if eq $form.Visibility "hidden" }} selected{{ end }}>Hidden</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="pf-icon">Icon</label>
+            <input class="form-input" type="text" id="pf-icon" name="icon"
+                   value="{{ $form.Icon }}" maxlength="16">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pf-color">Accent color</label>
+            <input class="form-input" type="text" id="pf-color" name="color"
+                   value="{{ $form.Color }}" maxlength="16">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}"
+             class="btn btn-ghost btn-sm" hx-boost="true">Cancel</a>
+          <button type="submit" class="btn btn-primary press-effect">Save changes</button>
+        </div>
+      </form>
+
+      <hr class="project-form-divider">
+
+      <section class="project-form-danger">
+        <h2 class="project-form-danger-title">Danger zone</h2>
+        <p class="project-form-danger-text">
+          Soft-deleting hides the project from lists and from non-admin members.
+          Existing posts assigned to this project's seasons keep their season_id;
+          an admin can recover the project later.
+        </p>
+        <form method="POST"
+              action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/delete"
+              hx-boost="false"
+              onsubmit="return confirm('Soft-delete {{ $project.Name }}? It will disappear from project lists.');">
+          <button type="submit" class="btn btn-danger btn-sm press-effect">Soft-delete project</button>
+        </form>
+      </section>
+    </div>
+  </main>
+</div>
+{{ end }}
+{{ end }}
