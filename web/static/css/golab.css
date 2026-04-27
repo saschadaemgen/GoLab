@@ -4992,3 +4992,2055 @@ img.avatar {
 .wiz-step-pane > *:nth-child(7) { animation-delay: 1020ms; animation-duration: 400ms; }
 .wiz-step-pane > *:nth-child(8) { animation-delay: 1180ms; animation-duration: 400ms; }
 .wiz-step-pane > *:nth-child(9) { animation-delay: 1340ms; animation-duration: 400ms; }
+
+/* ============================================================
+   Sprint 16b: Project system pages
+   ============================================================
+   Project list / detail / docs / seasons / members layouts.
+   Re-uses existing tokens (--accent, --bg-card, --text-bright,
+   --space-*, --radius). The --project-color custom property is
+   set inline by templates from project.color so each project
+   feels tonally distinct without forking the whole token set.
+*/
+
+/* Project list grid */
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.project-list-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+/* Project card (list grid) */
+.project-card {
+  --project-color: var(--accent);
+  position: relative;
+  display: block;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+
+.project-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--project-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.project-card-stripe {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: var(--project-color);
+}
+
+.project-card-inner {
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.project-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.project-card-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--project-color);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.project-card-title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.project-card-title {
+  font-size: var(--font-md, 1.05rem);
+  font-weight: 600;
+  color: var(--text-bright);
+  margin: 0 0 var(--space-2);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.project-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.project-card-description {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.project-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.project-card-tag-more {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  align-self: center;
+}
+
+.project-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.project-card-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.project-card-owner > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-card-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.project-card-stats svg {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  margin-right: 2px;
+}
+
+.project-card-time {
+  white-space: nowrap;
+}
+
+/* Project detail header */
+.project-header {
+  --project-color: var(--accent);
+  background: linear-gradient(135deg,
+    rgba(var(--bg-card-rgb), 0.4),
+    rgba(var(--bg-card-rgb), 0.2)),
+    linear-gradient(135deg, var(--project-color) 0%, transparent 75%);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-5) var(--content-padding, 1.25rem) 0;
+}
+
+.project-header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.project-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-bottom: var(--space-3);
+}
+
+.project-breadcrumb-link {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+
+.project-breadcrumb-link:hover {
+  color: var(--text-bright);
+}
+
+.project-breadcrumb-sep {
+  color: var(--text-muted);
+}
+
+.project-header-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.project-header-icon {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--project-color);
+  background: rgba(var(--bg-card-rgb), 0.85);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.project-header-title-block {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.project-title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1.2;
+}
+
+.project-header-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.project-header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.project-description {
+  margin: var(--space-4) 0 0;
+  color: var(--text-normal);
+  max-width: 70ch;
+  line-height: 1.55;
+}
+
+.project-header-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-bottom: var(--space-4);
+}
+
+.project-owner-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(var(--bg-card-rgb), 0.7);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--text-normal);
+  font-size: 0.85rem;
+  transition: border-color var(--transition);
+}
+
+.project-owner-chip:hover {
+  border-color: var(--project-color);
+}
+
+.project-owner-name {
+  font-weight: 500;
+  color: var(--text-bright);
+}
+
+.project-owner-role {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.project-header-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Status + visibility badges (used in card + header) */
+.project-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(var(--bg-card-rgb), 0.7);
+  color: var(--text-dim);
+}
+
+.project-status-draft {
+  background: rgba(149, 165, 166, 0.12);
+  border-color: rgba(149, 165, 166, 0.3);
+  color: #a8b2b3;
+}
+
+.project-status-active {
+  background: rgba(46, 204, 113, 0.12);
+  border-color: rgba(46, 204, 113, 0.35);
+  color: #4ad08f;
+}
+
+.project-status-archived {
+  background: rgba(243, 156, 18, 0.10);
+  border-color: rgba(243, 156, 18, 0.3);
+  color: #f1b25c;
+}
+
+.project-status-closed {
+  background: rgba(155, 89, 182, 0.10);
+  border-color: rgba(155, 89, 182, 0.3);
+  color: #c08fd6;
+}
+
+.project-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(var(--bg-card-rgb), 0.7);
+  color: var(--text-dim);
+}
+
+.project-visibility svg,
+.project-visibility-pill svg {
+  width: 12px;
+  height: 12px;
+}
+
+.project-visibility-pill {
+  display: inline-flex;
+  align-items: center;
+  width: 22px;
+  height: 22px;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(var(--bg-card-rgb), 0.7);
+  color: var(--text-dim);
+}
+
+/* Project tabs (Overview / Docs / Seasons / Members) */
+.project-tabs {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  overflow-x: auto;
+}
+
+.project-tabs-inner {
+  display: flex;
+  gap: var(--space-3);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 var(--content-padding, 1.25rem);
+}
+
+.project-tab {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-2);
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: color var(--transition), border-color var(--transition);
+  white-space: nowrap;
+}
+
+.project-tab:hover {
+  color: var(--text-bright);
+}
+
+.project-tab.active {
+  color: var(--text-bright);
+  border-bottom-color: var(--accent);
+}
+
+/* Project overview sections */
+.project-overview {
+  padding-top: var(--space-5);
+}
+
+.project-section {
+  margin-bottom: var(--space-6);
+}
+
+.project-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-3);
+  gap: var(--space-3);
+}
+
+.project-section-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.project-section-link {
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.project-section-link:hover {
+  text-decoration: underline;
+}
+
+.project-section-text {
+  margin: 0;
+  color: var(--text-normal);
+  line-height: 1.55;
+  max-width: 70ch;
+}
+
+/* Doc preview cards on overview */
+.project-doc-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.project-doc-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--transition);
+}
+
+.project-doc-preview-card:hover {
+  border-color: var(--accent);
+}
+
+.project-doc-preview-empty {
+  background: rgba(var(--bg-card-rgb), 0.4);
+  border-style: dashed;
+}
+
+.project-doc-preview-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.project-doc-preview-meta {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.project-doc-preview-cta {
+  align-self: flex-start;
+  font-size: 0.8rem;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Quick stats list (sidebar) */
+.project-stats-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.project-stats-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.project-stats-list li:last-child {
+  border-bottom: none;
+}
+
+.project-stat-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.project-stat-value {
+  color: var(--text-bright);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Doc list (Docs tab) */
+.project-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.project-doc-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: border-color var(--transition);
+}
+
+.project-doc-card:hover {
+  border-color: var(--accent);
+}
+
+.project-doc-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.project-doc-card-type {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.project-doc-type-concept      { background: rgba(69,189,209,0.10); color: #5ed0e0; }
+.project-doc-type-architecture { background: rgba(155,89,182,0.10); color: #c08fd6; }
+.project-doc-type-workflow     { background: rgba(46,204,113,0.10); color: #4ad08f; }
+.project-doc-type-roadmap      { background: rgba(243,156,18,0.10); color: #f1b25c; }
+.project-doc-type-custom       { background: rgba(149,165,166,0.12); color: #a8b2b3; }
+
+.project-doc-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  flex: 1 1 auto;
+}
+
+.project-doc-card-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.project-doc-card-excerpt {
+  margin: 0;
+  color: var(--text-normal);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 70ch;
+}
+
+.project-doc-card-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Single doc view */
+.project-doc-view-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-5) 0;
+}
+
+.project-doc-view-back {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.project-doc-view-back-link {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.project-doc-view-back-link:hover {
+  color: var(--text-bright);
+}
+
+.project-doc-view {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.project-doc-view-head {
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.project-doc-view-label {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  margin-bottom: var(--space-2);
+}
+
+.project-doc-view-title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.project-doc-view-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.project-doc-view-fallback {
+  background: rgba(var(--bg-card-rgb), 0.5);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+}
+
+/* Season timeline */
+.season-timeline {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  position: relative;
+}
+
+.season-timeline::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.season-timeline-item {
+  position: relative;
+  padding-left: 56px;
+  margin-bottom: var(--space-5);
+}
+
+.season-timeline-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.season-timeline-item.season-status-active .season-timeline-marker {
+  border-color: #4ad08f;
+  color: #4ad08f;
+}
+
+.season-timeline-item.season-status-closed .season-timeline-marker {
+  border-color: #c08fd6;
+  color: #c08fd6;
+}
+
+.season-timeline-num {
+  letter-spacing: 0.04em;
+}
+
+.season-timeline-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.season-timeline-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.season-timeline-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.season-timeline-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.season-timeline-title a:hover {
+  color: var(--accent);
+}
+
+.season-timeline-desc {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.season-timeline-meta {
+  display: flex;
+  gap: var(--space-4);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.season-timeline-doc-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.season-timeline-doc-link:hover {
+  text-decoration: underline;
+}
+
+/* Season status badge (planned / active / closed) */
+.season-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(var(--bg-card-rgb), 0.7);
+  color: var(--text-dim);
+}
+
+.season-status-planned {
+  background: rgba(149, 165, 166, 0.12);
+  border-color: rgba(149, 165, 166, 0.3);
+  color: #a8b2b3;
+}
+
+.season-status-active {
+  background: rgba(46, 204, 113, 0.12);
+  border-color: rgba(46, 204, 113, 0.35);
+  color: #4ad08f;
+}
+
+.season-status-closed {
+  background: rgba(155, 89, 182, 0.10);
+  border-color: rgba(155, 89, 182, 0.3);
+  color: #c08fd6;
+}
+
+/* Current-season highlight on overview */
+.season-current-card {
+  display: flex;
+  gap: var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 4px solid #4ad08f;
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--transition), transform var(--transition);
+}
+
+.season-current-card:hover {
+  transform: translateY(-1px);
+  border-color: #4ad08f;
+}
+
+.season-current-num {
+  flex: 0 0 auto;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #4ad08f;
+  letter-spacing: 0.04em;
+}
+
+.season-current-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.season-current-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.season-current-desc {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.season-current-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Single season detail */
+.season-detail {
+  padding-top: var(--space-4);
+}
+
+.season-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.season-detail-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.season-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  align-items: center;
+}
+
+.season-detail-desc {
+  margin: 0;
+  color: var(--text-normal);
+  max-width: 70ch;
+  line-height: 1.55;
+}
+
+.season-detail-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Closing-doc collapsible */
+.season-closing-doc {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.season-closing-doc-summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-bright);
+  user-select: none;
+  list-style: none;
+}
+
+.season-closing-doc-summary::-webkit-details-marker {
+  display: none;
+}
+
+.season-closing-doc-summary::before {
+  content: "▸ ";
+  color: var(--text-muted);
+  transition: transform var(--transition);
+  display: inline-block;
+}
+
+.season-closing-doc[open] .season-closing-doc-summary::before {
+  content: "▾ ";
+}
+
+.season-closing-doc-body {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.season-posts {
+  margin-top: var(--space-5);
+}
+
+/* Member sections (read-only in 16b) */
+.member-section {
+  margin-bottom: var(--space-5);
+}
+
+.member-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.member-section-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.member-section-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: rgba(var(--bg-card-rgb), 0.6);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.member-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+
+.member-row-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: inherit;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.member-row-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.member-row-name {
+  font-weight: 500;
+  color: var(--text-bright);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-row-handle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.member-row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.member-row-since {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.member-role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.member-role-owner {
+  background: rgba(243, 156, 18, 0.12);
+  border-color: rgba(243, 156, 18, 0.3);
+  color: #f1b25c;
+}
+
+.member-role-contributor {
+  background: rgba(69, 189, 209, 0.12);
+  border-color: rgba(69, 189, 209, 0.3);
+  color: #5ed0e0;
+}
+
+.member-role-viewer {
+  background: rgba(149, 165, 166, 0.12);
+  border-color: rgba(149, 165, 166, 0.3);
+  color: #a8b2b3;
+}
+
+/* Static (non-link) tag pill variant */
+.tag-pill-static {
+  cursor: default;
+}
+
+/* Flash variants for project pages */
+.flash-info {
+  background: rgba(69, 189, 209, 0.08);
+  border: 1px solid rgba(69, 189, 209, 0.25);
+  color: #5ed0e0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-4);
+  font-size: 0.9rem;
+}
+
+/* ============================================================
+   Sprint 16b Phase 2: Project + Doc authoring forms
+   ============================================================ */
+
+.project-form-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-5) 0;
+}
+
+.project-form-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.project-form-head {
+  margin-bottom: var(--space-2);
+}
+
+.project-form-title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1.2;
+}
+
+.project-form-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.project-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.form-input-readonly {
+  background: rgba(var(--bg-card-rgb), 0.4);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.project-form-divider {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: var(--space-3) 0;
+}
+
+.project-form-danger {
+  background: rgba(231, 76, 60, 0.06);
+  border: 1px solid rgba(231, 76, 60, 0.25);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.project-form-danger-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e57373;
+}
+
+.project-form-danger-text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* Season close summary block (Phase 3) */
+.season-close-summary {
+  background: rgba(var(--bg-card-rgb), 0.5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+.season-close-summary-title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.season-close-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  font-size: 0.9rem;
+  color: var(--text-normal);
+}
+
+.season-close-summary-list strong {
+  color: var(--text-bright);
+}
+
+/* Doc editor (Quill mount) */
+.project-doc-edit-main {
+  max-width: 920px;
+}
+
+.project-doc-edit-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.project-doc-edit-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.project-doc-edit-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1.3;
+}
+
+.project-doc-edit-of {
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.project-doc-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.doc-editor-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.doc-editor {
+  min-height: 320px;
+}
+
+/* Quill snow-theme overrides for the doc editor so it sits flush
+   inside the wrap and respects the SimpleGo dark / light tokens.
+   Quill ships with light-grey toolbars; these rules pull them into
+   the bg-card / border palette. */
+.doc-editor-wrap .ql-toolbar.ql-snow {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: rgba(var(--bg-card-rgb), 0.6);
+}
+
+.doc-editor-wrap .ql-container.ql-snow {
+  border: 0;
+  font-size: 1rem;
+  color: var(--text-normal);
+}
+
+.doc-editor-wrap .ql-editor {
+  min-height: 320px;
+}
+
+/* ============================================================
+   Sprint 16b visual polish layer
+   ============================================================
+   Project overview block on the Space landing, project landing
+   dashboard panels, and season detail dashboard. Reuses
+   --accent / --bg-card / --text-* tokens; per-project tint comes
+   in via --project-color set inline by the template. */
+
+/* Space landing: projects-overview block ------------------- */
+.space-projects-overview {
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-5) var(--content-padding, 1.25rem);
+  background:
+    linear-gradient(180deg,
+      rgba(var(--bg-card-rgb), 0.4) 0%,
+      rgba(var(--bg-card-rgb), 0.0) 100%);
+}
+
+.space-projects-overview-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.space-projects-overview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.space-projects-overview-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.space-projects-overview-sub {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.space-projects-overview-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.space-projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Compact project card (4-up grid on space overview) -------- */
+.project-card-compact {
+  --project-color: var(--accent);
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow: hidden;
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.project-card-compact:hover {
+  transform: translateY(-2px);
+  border-color: var(--project-color);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.16),
+              0 0 0 1px rgba(var(--bg-card-rgb), 0);
+}
+
+.project-card-compact-stripe {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--project-color);
+}
+
+.project-card-compact-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.project-card-compact-icon {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--project-color);
+  background: rgba(var(--bg-card-rgb), 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.project-card-compact-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 5-dot progress indicator ---------------------------------- */
+.project-card-compact-progress {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(var(--bg-card-rgb), 0.4);
+  border: 1px solid var(--border);
+  transition: background 200ms;
+}
+
+.progress-dot-on {
+  background: var(--project-color);
+  border-color: var(--project-color);
+}
+
+/* Status pill with subtle pulse on active ------------------- */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(var(--bg-card-rgb), 0.7);
+  color: var(--text-dim);
+  align-self: flex-start;
+}
+
+.status-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  display: inline-block;
+}
+
+.status-pill-draft {
+  background: rgba(149, 165, 166, 0.12);
+  border-color: rgba(149, 165, 166, 0.3);
+  color: #a8b2b3;
+}
+
+.status-pill-active {
+  background: rgba(46, 204, 113, 0.12);
+  border-color: rgba(46, 204, 113, 0.35);
+  color: #4ad08f;
+}
+
+.status-pill-active .status-pill-dot {
+  animation: status-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-pill-archived {
+  background: rgba(243, 156, 18, 0.10);
+  border-color: rgba(243, 156, 18, 0.3);
+  color: #f1b25c;
+}
+
+.status-pill-closed {
+  background: rgba(155, 89, 182, 0.10);
+  border-color: rgba(155, 89, 182, 0.3);
+  color: #c08fd6;
+}
+
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 208, 143, 0.45); }
+  50%      { box-shadow: 0 0 0 4px rgba(74, 208, 143, 0.0); }
+}
+
+.project-card-compact-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.project-card-compact-time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Activity chart + stats panel ------------------------------ */
+.space-projects-charts {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+.space-projects-chart-card,
+.space-projects-stats-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.chart-card-title {
+  margin: 0 0 var(--space-3);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.chart-container {
+  position: relative;
+  height: 240px;
+  width: 100%;
+}
+
+.chart-container.chart-container-sm { height: 180px; }
+.chart-container.chart-container-tall { height: 320px; }
+
+/* KPI cards grid (used by space stats and season dashboard) - */
+.kpi-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.kpi-grid-2x2 { grid-template-columns: 1fr 1fr; }
+.kpi-grid-1x4 { grid-template-columns: repeat(4, 1fr); }
+
+.kpi-card {
+  background: rgba(var(--bg-card-rgb), 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  transition: border-color 200ms;
+}
+
+.kpi-card:hover {
+  border-color: var(--accent);
+}
+
+.kpi-num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Season detail dashboard ----------------------------------- */
+.season-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: var(--space-4) 0 var(--space-5);
+}
+
+.season-dashboard-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .season-dashboard-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Project landing dashboard --------------------------------- */
+.project-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-top: var(--space-5);
+}
+
+.project-dashboard-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+.project-dashboard-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.project-dashboard-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.project-dashboard-card-cta {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.project-dashboard-card-cta:hover {
+  text-decoration: underline;
+}
+
+.project-dashboard-card-aside {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.project-dashboard-empty {
+  text-align: center;
+  padding: var(--space-5) var(--space-3);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.project-dashboard-empty-tight {
+  padding: var(--space-3);
+  font-size: 0.85rem;
+}
+
+.project-overview-bottom {
+  margin-top: var(--space-3);
+}
+
+/* Doc status cards (4-up) ----------------------------------- */
+.doc-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+
+.doc-status-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 200ms, transform 200ms;
+}
+
+.doc-status-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+
+.doc-status-filled {
+  background: var(--bg-card);
+}
+
+.doc-status-empty {
+  background: rgba(243, 156, 18, 0.05);
+  border-color: rgba(243, 156, 18, 0.25);
+  border-style: dashed;
+}
+
+.doc-status-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+
+.doc-status-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.doc-status-icon-filled {
+  background: rgba(46, 204, 113, 0.15);
+  color: #4ad08f;
+}
+
+.doc-status-icon-empty {
+  background: rgba(243, 156, 18, 0.15);
+  color: #f1b25c;
+}
+
+.doc-status-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  align-self: flex-start;
+}
+
+.doc-status-count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-status-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.doc-status-cta {
+  align-self: flex-start;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-top: 2px;
+}
+
+/* Season-line timeline (horizontal) ------------------------- */
+.season-line-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  scroll-snap-type: x proximity;
+}
+
+.season-line-node {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  position: relative;
+}
+
+.season-line-node + .season-line-node::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  background: var(--border);
+  transform: translateY(-50%);
+}
+
+.season-line-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+  min-width: 168px;
+  background: rgba(var(--bg-card-rgb), 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 200ms, transform 200ms;
+}
+
+.season-line-card:hover {
+  transform: translateY(-1px);
+}
+
+.season-line-active .season-line-card {
+  border-color: rgba(46, 204, 113, 0.45);
+  box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.18);
+}
+
+.season-line-planned .season-line-card {
+  border-style: dashed;
+  background: transparent;
+}
+
+.season-line-num {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.season-line-active .season-line-num { color: #4ad08f; }
+.season-line-closed .season-line-num { color: #c08fd6; }
+
+.season-line-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.season-line-status { align-self: flex-start; }
+
+.season-line-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Activity heatmap (SVG) ------------------------------------ */
+.activity-heatmap {
+  width: 100%;
+  height: auto;
+  max-height: 130px;
+}
+
+.heatmap-cell,
+.heatmap-cell-static {
+  transition: opacity 200ms;
+}
+
+.heatmap-cell-static {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.heatmap-level-0 { fill: var(--bg-subtle, rgba(149, 165, 166, 0.12)); background: rgba(149, 165, 166, 0.12); }
+.heatmap-level-1 { fill: rgba(69, 189, 209, 0.20); background: rgba(69, 189, 209, 0.20); }
+.heatmap-level-2 { fill: rgba(69, 189, 209, 0.40); background: rgba(69, 189, 209, 0.40); }
+.heatmap-level-3 { fill: rgba(69, 189, 209, 0.65); background: rgba(69, 189, 209, 0.65); }
+.heatmap-level-4 { fill: var(--accent); background: var(--accent); }
+
+.heatmap-cell:hover {
+  opacity: 0.7;
+}
+
+.activity-heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  justify-content: center;
+  padding-top: var(--space-2);
+}
+
+.heatmap-legend-label {
+  margin: 0 4px;
+}
+
+/* Mobile (<= 768px) ----------------------------------------- */
+@media (max-width: 768px) {
+  .space-projects-grid {
+    grid-template-columns: 1fr;
+  }
+  .space-projects-charts {
+    grid-template-columns: 1fr;
+  }
+  .kpi-grid-1x4 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .chart-container { height: 200px; }
+
+  .project-dashboard-row {
+    grid-template-columns: 1fr;
+  }
+  .doc-status-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .project-overview-bottom .two-col {
+    grid-template-columns: 1fr;
+  }
+  .season-line-card {
+    min-width: 144px;
+  }
+}
+
+/* Sprint 16b Phase 4: post-card season badge.
+   Sits in the .post-meta-row alongside space + type badges. The
+   accent border lights up on hover so readers can tell at a glance
+   that the post is part of a structured project iteration. */
+.post-season-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(69, 189, 209, 0.08);
+  border: 1px solid rgba(69, 189, 209, 0.25);
+  color: #5ed0e0;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.post-season-badge:hover {
+  border-color: rgba(69, 189, 209, 0.6);
+  background: rgba(69, 189, 209, 0.14);
+}
+
+/* Compose-box cascading Project / Season selects. Visible only when
+   composeEditor() has populated the projects / seasons arrays from
+   the API. Cosmetically matches .compose-space-select. */
+.compose-project-select,
+.compose-season-select {
+  max-width: 220px;
+}
+
+@media (max-width: 768px) {
+  .compose-project-select,
+  .compose-season-select {
+    max-width: 100%;
+  }
+}
+
+/* Space header "Projects" stat link (Sprint 16b discoverability nudge) */
+.space-stat-link {
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  transition: border-color var(--transition), color var(--transition);
+}
+
+.space-stat-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.space-stat-link .space-stat-number {
+  font-size: 1.1rem;
+}
+
+/* Mobile (<= 768px) */
+@media (max-width: 768px) {
+  .project-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-header-title-row {
+    gap: var(--space-3);
+  }
+
+  .project-header-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 1.3rem;
+  }
+
+  .project-title {
+    font-size: 1.3rem;
+  }
+
+  .project-tabs-inner {
+    gap: var(--space-2);
+  }
+
+  .project-tab {
+    font-size: 0.85rem;
+    padding: var(--space-3) 4px;
+  }
+
+  .project-overview .two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .project-doc-view {
+    padding: var(--space-4);
+  }
+
+  .project-doc-view-title {
+    font-size: 1.3rem;
+  }
+
+  .season-timeline-item {
+    padding-left: 48px;
+  }
+
+  .season-current-card {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .member-row {
+    padding: var(--space-3);
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .project-form-card {
+    padding: var(--space-4);
+  }
+
+  .project-doc-edit-card {
+    padding: var(--space-4);
+  }
+}
+

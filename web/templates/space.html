@@ -24,9 +24,112 @@
         <span class="space-stat-number">{{ $sp.PostCount }}</span>
         <span class="space-stat-label">Posts</span>
       </div>
+      <a href="/spaces/{{ $sp.Slug }}/projects"
+         class="space-stat space-stat-link"
+         hx-boost="true"
+         aria-label="View projects in {{ $sp.Name }}">
+        <span class="space-stat-number" aria-hidden="true">&rarr;</span>
+        <span class="space-stat-label">Projects</span>
+      </a>
     </div>
   </div>
 </header>
+
+{{ if .Projects }}
+<!-- Sprint 16b polish: Projects-overview block. Compact cards plus
+     a 90-day stacked-bar activity chart and a tiny stats panel. The
+     section only renders when at least one visible project exists,
+     so spaces that never adopted projects keep their old shape. -->
+<section class="space-projects-overview" aria-labelledby="space-projects-title">
+  <div class="space-projects-overview-inner">
+    <header class="space-projects-overview-head">
+      <div>
+        <h2 class="space-projects-overview-title" id="space-projects-title">
+          Projects in {{ $sp.Name }}
+        </h2>
+        <p class="space-projects-overview-sub">
+          {{ len .Projects }} {{ pluralize (len .Projects) "project" "projects" }}
+          · {{ .TotalProjectSeasons }} {{ pluralize .TotalProjectSeasons "season" "seasons" }}
+          · {{ .TotalProjectPosts }} {{ pluralize .TotalProjectPosts "post" "posts" }}
+        </p>
+      </div>
+      <div class="space-projects-overview-actions">
+        <a href="/spaces/{{ $sp.Slug }}/projects" class="btn btn-ghost btn-sm" hx-boost="true">View all</a>
+        {{ if and $.User (ge $.User.PowerLevel 100) }}
+        <a href="/spaces/{{ $sp.Slug }}/projects/new" class="btn btn-primary btn-sm press-effect" hx-boost="true">+ New Project</a>
+        {{ end }}
+      </div>
+    </header>
+
+    <div class="space-projects-grid stagger-in">
+      {{ range .Projects }}
+      <a href="/spaces/{{ $sp.Slug }}/projects/{{ .Slug }}"
+         class="project-card-compact{{ if eq .Status "active" }} is-active{{ end }}"
+         style="{{ if .Color }}--project-color: {{ .Color }};{{ end }}"
+         hx-boost="true">
+        <span class="project-card-compact-stripe" aria-hidden="true"></span>
+        <div class="project-card-compact-head">
+          <span class="project-card-compact-icon" aria-hidden="true">
+            {{ if .Icon }}{{ .Icon }}{{ else }}+{{ end }}
+          </span>
+          <span class="project-card-compact-name">{{ .Name }}</span>
+        </div>
+        <div class="project-card-compact-progress" aria-label="Season progress">
+          {{ $progress := .SeasonProgress }}
+          {{ range $i := iter 5 }}
+            <span class="progress-dot{{ if lt $i $progress }} progress-dot-on{{ end }}"></span>
+          {{ end }}
+        </div>
+        <span class="status-pill status-pill-{{ .Status }}">
+          <span class="status-pill-dot" aria-hidden="true"></span>
+          {{ .Status }}
+        </span>
+        <div class="project-card-compact-meta">
+          <span>{{ .PostCount }} {{ pluralize .PostCount "post" "posts" }}</span>
+          {{ if .LastActivityAt }}
+          <span class="project-card-compact-time">{{ timeAgo .LastActivityAt.UTC }}</span>
+          {{ end }}
+        </div>
+      </a>
+      {{ end }}
+    </div>
+
+    {{ if .ProjectActivity.HasData }}
+    <div class="space-projects-charts">
+      <div class="space-projects-chart-card"
+           x-data="spaceActivityChart()"
+           data-chart='{{ jsonData .ProjectActivity }}'>
+        <h3 class="chart-card-title">Activity (last 90 days)</h3>
+        <div class="chart-container">
+          <canvas x-ref="canvas" aria-label="Posts per week, stacked by project"></canvas>
+        </div>
+      </div>
+      <aside class="space-projects-stats-card" aria-label="Space statistics">
+        <h3 class="chart-card-title">At a glance</h3>
+        <ul class="kpi-grid kpi-grid-2x2">
+          <li class="kpi-card">
+            <span class="kpi-num">{{ len .Projects }}</span>
+            <span class="kpi-label">Projects</span>
+          </li>
+          <li class="kpi-card">
+            <span class="kpi-num">{{ .TotalProjectSeasons }}</span>
+            <span class="kpi-label">Seasons</span>
+          </li>
+          <li class="kpi-card">
+            <span class="kpi-num">{{ .TotalProjectPosts }}</span>
+            <span class="kpi-label">Posts</span>
+          </li>
+          <li class="kpi-card">
+            <span class="kpi-num">{{ $sp.PostCount }}</span>
+            <span class="kpi-label">Free posts</span>
+          </li>
+        </ul>
+      </aside>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
 
 <!-- Type filter tabs, also spanning full width. -->
 <nav class="type-tabs" aria-label="Filter by post type">

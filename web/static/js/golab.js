@@ -1395,10 +1395,70 @@
         submitting: false,
         powerLevel: cfg.powerLevel || 0,
 
-        // onSpaceChange is retained as a hook for the future in case
-        // we ever gate spaces client-side again. For now it's a no-op
-        // so the template's @change still works without errors.
-        onSpaceChange: function () {},
+        // Sprint 16b Phase 4: cascading Project + Season selects.
+        // The lists live in reactive state so the <template x-for>
+        // rebuilds the option DOM when the user picks a Space.
+        projects: [],
+        seasons: [],
+        selectedProjectID: null,
+
+        // Sprint 16b Phase 4: when the user picks a Space, fetch the
+        // visible projects for that space. Reset the downstream
+        // selects so a stale Project / Season pick doesn't survive.
+        onSpaceChange: function (ev) {
+          var self = this;
+          self.projects = [];
+          self.seasons = [];
+          self.selectedProjectID = null;
+          if (self.$refs.projectSelect) self.$refs.projectSelect.value = '';
+          if (self.$refs.seasonSelect) self.$refs.seasonSelect.value = '';
+          var spaceID = parseInt(ev.target.value, 10) || 0;
+          if (!spaceID) return;
+          var opt = ev.target.options[ev.target.selectedIndex];
+          var slug = opt && opt.dataset && opt.dataset.slug ? opt.dataset.slug : '';
+          if (!slug) return;
+          fetch('/api/spaces/' + encodeURIComponent(slug) + '/projects', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+          }).then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+              self.projects = (d && d.projects) || [];
+            })
+            .catch(function () { self.projects = []; });
+        },
+
+        // Sprint 16b Phase 4: when the user picks a Project, fetch
+        // its seasons. We hide closed seasons because the server
+        // rejects assignments to them anyway; not showing them keeps
+        // the picker focused on the actionable choices.
+        onProjectChange: function (ev) {
+          var self = this;
+          self.seasons = [];
+          if (self.$refs.seasonSelect) self.$refs.seasonSelect.value = '';
+          var projectID = parseInt(ev.target.value, 10) || 0;
+          self.selectedProjectID = projectID || null;
+          if (!projectID) return;
+          fetch('/api/projects/' + projectID + '/seasons', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+          }).then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+              var all = (d && d.seasons) || [];
+              self.seasons = all.filter(function (s) {
+                return s.status !== 'closed';
+              });
+            })
+            .catch(function () { self.seasons = []; });
+        },
+
+        // Format the option label - includes Planned/Active state so
+        // the user sees which season is the live one.
+        seasonOptionLabel: function (s) {
+          var label = 'Season ' + s.season_number + ': ' + s.title;
+          if (s.status === 'planned') label += ' (Planned)';
+          else if (s.status === 'active') label += ' (Active)';
+          return label;
+        },
 
         canSubmit: function () {
           if (this.submitting) return false;
@@ -1698,6 +1758,14 @@
           var spaceEl = form.querySelector('[name=space_id]');
           if (spaceEl && spaceEl.value) body.space_id = parseInt(spaceEl.value, 10);
 
+          // Sprint 16b Phase 4: optional season_id from the cascading
+          // Project / Season selects. Only sent when the user picked a
+          // season; otherwise the post stays at the Space level.
+          var seasonEl = form.querySelector('[name=season_id]');
+          if (seasonEl && seasonEl.value) {
+            body.season_id = parseInt(seasonEl.value, 10);
+          }
+
           var typeEl = form.querySelector('[name=post_type]:checked') ||
                        form.querySelector('[name=post_type]');
           if (typeEl && typeEl.value) body.post_type = typeEl.value;
@@ -1762,6 +1830,384 @@
               setTimeout(function () { form.classList.remove('shake'); }, 500);
             }
           });
+        }
+      };
+    });
+
+    // ============================================================
+    // Sprint 16b visual polish: Chart.js panels.
+    // Each component reads its dataset from a `data-chart` JSON
+    // attribute on the host element, instantiates the matching
+    // Chart.js chart, and tears it down on Alpine destroy so HTMX
+    // page swaps don't leak canvases.
+    // ============================================================
+
+    function readChartData(el) {
+      try {
+        return JSON.parse(el.dataset.chart || '{}');
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function chartThemeColors() {
+      var s = getComputedStyle(document.documentElement);
+      return {
+        text:   (s.getPropertyValue('--text-dim')   || '#9aa5b1').trim(),
+        bright: (s.getPropertyValue('--text-bright')|| '#e6edf3').trim(),
+        muted:  (s.getPropertyValue('--text-muted') || '#7a8590').trim(),
+        grid:   (s.getPropertyValue('--border')     || 'rgba(149,165,166,0.15)').trim(),
+        accent: (s.getPropertyValue('--accent')     || '#45BDD1').trim()
+      };
+    }
+
+    // Stacked bar chart on the Space landing page. Posts per week per
+    // project, last 90 days. Server pre-aggregates the dataset; this
+    // component only handles theme + Chart.js wiring.
+    window.Alpine.data('spaceActivityChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.datasets || data.datasets.length === 0) return;
+          var t = chartThemeColors();
+          chart = new window.Chart(canvas, {
+            type: 'bar',
+            data: data,
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 350 },
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                  labels: { color: t.text, boxWidth: 10, padding: 12, font: { size: 11 } }
+                },
+                tooltip: { mode: 'index', intersect: false }
+              },
+              scales: {
+                x: {
+                  stacked: true,
+                  ticks: { color: t.text, font: { size: 10 }, maxRotation: 0, autoSkip: true },
+                  grid:  { color: t.grid, display: false }
+                },
+                y: {
+                  stacked: true,
+                  beginAtZero: true,
+                  ticks: { color: t.text, font: { size: 10 }, precision: 0 },
+                  grid:  { color: t.grid }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
+    // Bar chart "posts per season" on the project landing dashboard.
+    window.Alpine.data('projectSeasonsChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.data || data.data.length === 0) return;
+          var t = chartThemeColors();
+          chart = new window.Chart(canvas, {
+            type: 'bar',
+            data: {
+              labels: data.labels,
+              datasets: [{
+                label: 'Posts',
+                data: data.data,
+                backgroundColor: data.backgroundColor,
+                borderRadius: 6,
+                maxBarThickness: 36
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 350 },
+              plugins: {
+                legend: { display: false },
+                tooltip: { intersect: false }
+              },
+              scales: {
+                x: {
+                  ticks: { color: t.text, font: { size: 11 } },
+                  grid:  { color: t.grid, display: false }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: t.text, font: { size: 10 }, precision: 0 },
+                  grid:  { color: t.grid }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
+    // Line chart "posts over time" on the season detail dashboard.
+    window.Alpine.data('seasonDailyChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.labels) return;
+          var t = chartThemeColors();
+          chart = new window.Chart(canvas, {
+            type: 'line',
+            data: {
+              labels: data.labels,
+              datasets: [{
+                label: 'Posts',
+                data: data.data,
+                borderColor: t.accent,
+                backgroundColor: t.accent + '33',
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                pointRadius: 2,
+                pointHoverRadius: 4
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 350 },
+              plugins: {
+                legend: { display: false },
+                tooltip: { intersect: false, mode: 'index' }
+              },
+              scales: {
+                x: {
+                  ticks: { color: t.text, font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+                  grid:  { color: t.grid, display: false }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: t.text, font: { size: 10 }, precision: 0 },
+                  grid:  { color: t.grid }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
+    // Donut chart "posts by type" on the season detail dashboard.
+    window.Alpine.data('seasonTypeChart', function () {
+      var chart = null;
+      return {
+        init: function () {
+          var self = this;
+          requestAnimationFrame(function () { self._mount(); });
+        },
+        _mount: function () {
+          if (chart || !window.Chart) return;
+          var canvas = this.$refs.canvas;
+          if (!canvas) return;
+          var data = readChartData(this.$el);
+          if (!data || !data.data || data.data.length === 0) return;
+          var t = chartThemeColors();
+          chart = new window.Chart(canvas, {
+            type: 'doughnut',
+            data: {
+              labels: data.labels,
+              datasets: [{
+                data: data.data,
+                backgroundColor: data.backgroundColor,
+                borderWidth: 1,
+                borderColor: 'rgba(0,0,0,0.0)'
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: '62%',
+              animation: { duration: 350 },
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                  labels: { color: t.text, boxWidth: 10, padding: 10, font: { size: 11 } }
+                }
+              }
+            }
+          });
+        },
+        destroy: function () {
+          if (chart) { try { chart.destroy(); } catch (e) {} chart = null; }
+        }
+      };
+    });
+
+    // Sprint 16b Phase 2: Project form helper. Auto-derives the slug
+    // from the name on type, stops auto-deriving once the user types
+    // into the slug field directly. Slug rules mirror the server-side
+    // ValidateProjectSlug regex: lowercase, digits, hyphens, no
+    // leading/trailing/consecutive hyphens, 3-64 chars.
+    window.Alpine.data('projectForm', function () {
+      return {
+        autoSlug: true,
+
+        init: function () {
+          var nameEl = this.$refs.nameInput;
+          var slugEl = this.$refs.slugInput;
+          if (slugEl && slugEl.value &&
+              slugEl.value !== this._slugify(nameEl ? nameEl.value : '')) {
+            // Server round-tripped a slug that doesn't match the
+            // auto-derived one - the user wrote it themselves.
+            // Stop overwriting it from name input.
+            this.autoSlug = false;
+          }
+        },
+
+        _slugify: function (s) {
+          return (s || '').toString().toLowerCase().trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 64)
+            .replace(/-+$/, '');
+        },
+
+        onNameInput: function (ev) {
+          if (!this.autoSlug) return;
+          var slugEl = this.$refs.slugInput;
+          if (!slugEl) return;
+          slugEl.value = this._slugify(ev.target.value);
+        },
+
+        onSlugInput: function () {
+          // User typed in the slug field. Stop auto-deriving.
+          this.autoSlug = false;
+        }
+      };
+    });
+
+    // Sprint 16b Phase 2: Quill-based doc editor. Used by the
+    // /docs/{type}/edit pages. Mirrors composeEditor's closure pattern
+    // for the Quill instance (Sprint 15a.5 P1/P2 fix - Alpine's
+    // Proxy breaks Quill's blot identity comparisons; keeping Quill
+    // off `this` bypasses the Proxy entirely).
+    //
+    // The form posts traditionally (form-encoded). Before submit we
+    // copy quill.root.innerHTML into a hidden <input name="content_html">
+    // so the page handler receives the rendered HTML. The handler
+    // sanitizes via bluemonday before storage.
+    window.Alpine.data('docEditor', function () {
+      var quill = null;
+
+      return {
+        submitting: false,
+
+        init: function () {
+          var container = this.$refs.editor;
+          if (!container) return;
+          // Guard against double-mount across HTMX page swaps.
+          if (container.__quillMounted ||
+              container.classList.contains('ql-container')) {
+            return;
+          }
+          if (quill) return;
+
+          var initialHTML = container.dataset.initialHtml || '';
+
+          // Fallback for browsers / environments where Quill failed
+          // to load. The hidden input still picks up the contenteditable
+          // div's innerHTML on submit.
+          if (!window.Quill) {
+            container.setAttribute('contenteditable', 'true');
+            container.style.minHeight = '320px';
+            container.innerHTML = initialHTML;
+            container.__quillMounted = true;
+            return;
+          }
+
+          quill = new window.Quill(container, {
+            theme: 'snow',
+            placeholder: 'Write the document here...',
+            modules: {
+              toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                ['blockquote', 'code-block'],
+                ['link', 'image'],
+                ['clean']
+              ]
+            }
+          });
+          container.__quillMounted = true;
+
+          if (initialHTML) {
+            if (/^\s*</.test(initialHTML)) {
+              quill.clipboard.dangerouslyPasteHTML(initialHTML);
+            } else {
+              quill.setText(initialHTML);
+            }
+          }
+        },
+
+        onSubmit: function (ev) {
+          if (this.submitting) return;
+          this.submitting = true;
+          var form = ev.target;
+          var contentField = this.$refs.contentField;
+          if (contentField) {
+            if (quill) {
+              contentField.value = quill.root.innerHTML;
+            } else {
+              // Fallback path: pull from contenteditable div.
+              var c = this.$refs.editor;
+              contentField.value = c ? c.innerHTML : '';
+            }
+          }
+          // form.submit() bypasses the @submit.prevent handler, so we
+          // don't re-enter onSubmit. The page handler does the PRG
+          // redirect on success.
+          form.submit();
+        },
+
+        destroy: function () {
+          var container = this.$refs && this.$refs.editor;
+          if (container) {
+            delete container.__quillMounted;
+          }
+          quill = null;
         }
       };
     });

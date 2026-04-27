@@ -1,0 +1,91 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+
+{{ template "project-header.html" . }}
+
+<div class="page-container">
+  <main>
+    {{ if .CanEdit }}
+    <div class="project-list-actions">
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/concept/edit"
+         class="btn btn-ghost btn-sm press-effect"
+         hx-boost="true">Edit Concept</a>
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/architecture/edit"
+         class="btn btn-ghost btn-sm press-effect"
+         hx-boost="true">Edit Architecture</a>
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/workflow/edit"
+         class="btn btn-ghost btn-sm press-effect"
+         hx-boost="true">Edit Workflow</a>
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/roadmap/edit"
+         class="btn btn-ghost btn-sm press-effect"
+         hx-boost="true">Edit Roadmap</a>
+    </div>
+    {{ end }}
+
+    {{ if .Docs }}
+    <div class="project-doc-list stagger-in">
+      {{ range .Docs }}
+      <article class="project-doc-card">
+        <header class="project-doc-card-head">
+          <span class="project-doc-card-type project-doc-type-{{ .DocType }}">
+            {{ if eq .DocType "concept" }}Concept
+            {{ else if eq .DocType "architecture" }}Architecture
+            {{ else if eq .DocType "workflow" }}Workflow
+            {{ else if eq .DocType "roadmap" }}Roadmap
+            {{ else }}Custom{{ end }}
+          </span>
+          <h3 class="project-doc-card-title">
+            {{ if .Title }}{{ .Title }}{{ else }}{{ if eq .DocType "concept" }}Concept
+            {{ else if eq .DocType "architecture" }}Architecture
+            {{ else if eq .DocType "workflow" }}Workflow
+            {{ else if eq .DocType "roadmap" }}Roadmap
+            {{ else }}Untitled{{ end }}{{ end }}
+          </h3>
+          <span class="project-doc-card-meta">
+            Updated {{ timeAgo .UpdatedAt }}
+          </span>
+        </header>
+        <div class="project-doc-card-body">
+          {{ if .ContentMD }}
+          <p class="project-doc-card-excerpt">{{ truncate .ContentMD 220 }}</p>
+          {{ else }}
+          <p class="project-doc-card-excerpt muted">Empty document.</p>
+          {{ end }}
+        </div>
+        <footer class="project-doc-card-foot">
+          {{ if eq .DocType "custom" }}
+          <a class="btn btn-ghost btn-sm"
+             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/custom"
+             hx-boost="true">Open</a>
+          {{ else }}
+          <a class="btn btn-ghost btn-sm"
+             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ .DocType }}"
+             hx-boost="true">Open</a>
+          {{ end }}
+        </footer>
+      </article>
+      {{ end }}
+    </div>
+    {{ else }}
+    <div class="empty-state">
+      <h3>No documentation yet</h3>
+      <p>
+        {{ if .CanEdit }}
+          Start with the Concept doc - a short statement of what this project is and why it exists.
+        {{ else }}
+          The maintainers haven't published any documentation yet.
+        {{ end }}
+      </p>
+      {{ if .CanEdit }}
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/concept/edit"
+         class="btn btn-primary press-effect"
+         hx-boost="true">Write Concept</a>
+      {{ end }}
+    </div>
+    {{ end }}
+  </main>
+</div>
+{{ end }}
+{{ end }}

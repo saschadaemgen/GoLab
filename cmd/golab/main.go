@@ -184,10 +184,20 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Users:       users,       // Sprint 14: resolve @mentions -> profile links
 		Mentions:    mentions,    // Sprint 14: record mention rows on Create / Update
 		EditHistory: editHistory, // Sprint 15a B6: LastEditAt for the edited badge
+		Seasons:     seasons,     // Sprint 16b Phase 4: validate season_id assignment
+		Projects:    projectStore, // Sprint 16b Phase 4: visibility on season
 		Markdown:    md, Sanitizer: sanitizer, Hub: hub, Notifs: notifDispatch,
 	}
 	imageH := &handler.ImageHandler{DB: pool, RootDir: "web/static"}
-	spaceH := &handler.SpaceHandler{Render: tmpls, Spaces: spaces, Posts: posts, Tags: tags, Reactions: reactions, EditHistory: editHistory}
+	spaceH := &handler.SpaceHandler{
+		Render:      tmpls,
+		Spaces:      spaces,
+		Posts:       posts,
+		Tags:        tags,
+		Reactions:   reactions,
+		EditHistory: editHistory,
+		Projects:    projectStore, // Sprint 16b polish
+	}
 	tagH := &handler.TagHandler{Render: tmpls, Tags: tags, Posts: posts, Spaces: spaces, Reactions: reactions, EditHistory: editHistory}
 	feedH := &handler.FeedHandler{Posts: posts, Reactions: reactions, EditHistory: editHistory}
 	profileH := &handler.ProfileHandler{
@@ -225,6 +235,11 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Users:       users,
 		Markdown:    md,
 		Sanitizer:   sanitizer,
+		// Sprint 16b page-rendering deps.
+		Render:      tmpls,
+		Posts:       posts,
+		Reactions:   reactions,
+		EditHistory: editHistory,
 	}
 
 	// Page handlers
@@ -275,6 +290,31 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		// reuses the same handler. UpdateMe reads form-encoded bodies
 		// and redirects back to /settings on success.
 		r.Post("/settings", profileH.UpdateMe)
+
+		// Sprint 16b: Project system pages. Reads require auth +
+		// visibility check (handler-side). Hidden / members-only
+		// projects 404 to non-members rather than 403 so the URL
+		// doesn't leak existence.
+		r.Get("/spaces/{space_slug}/projects", projectH.ListPage)
+		r.Get("/spaces/{space_slug}/projects/new", projectH.NewProjectPage)
+		r.Post("/spaces/{space_slug}/projects", projectH.CreateProjectFromForm)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}", projectH.DetailPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/edit", projectH.EditProjectPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/edit", projectH.UpdateProjectFromForm)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/delete", projectH.DeleteProjectFromForm)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/docs", projectH.DocsPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_type}", projectH.DocPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_type}/edit", projectH.EditDocPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_type}", projectH.SaveDocFromForm)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/docs/{doc_id}/delete", projectH.DeleteDocFromForm)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons", projectH.SeasonsPage)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons/new", projectH.NewSeasonPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/seasons", projectH.CreateSeasonFromForm)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}", projectH.SeasonPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}/activate", projectH.ActivateSeasonFromForm)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}/close", projectH.CloseSeasonPage)
+		r.Post("/spaces/{space_slug}/projects/{project_slug}/seasons/{number}/close", projectH.CloseSeasonFromForm)
+		r.Get("/spaces/{space_slug}/projects/{project_slug}/members", projectH.MembersPage)
 	})
 
 	// Admin page (HTML)

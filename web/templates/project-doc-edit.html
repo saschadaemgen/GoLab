@@ -1,0 +1,100 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $doc := .Doc }}
+{{ $docType := .DocType }}
+{{ $err := .Error }}
+{{ $isCustom := eq $docType "custom" }}
+
+<div class="page-container">
+  <main class="project-form-main project-doc-edit-main">
+    <nav class="project-doc-view-back" aria-label="Doc editor navigation">
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs"
+         class="project-doc-view-back-link"
+         hx-boost="true">&larr; All docs</a>
+    </nav>
+
+    <div class="project-doc-edit-card">
+      <header class="project-doc-edit-head">
+        <span class="project-doc-view-label project-doc-type-{{ $docType }}">{{ .DocLabel }}</span>
+        <h1 class="project-doc-edit-title">
+          {{ if $doc }}Edit {{ .DocLabel }}{{ else }}New {{ .DocLabel }}{{ end }}
+          <span class="project-doc-edit-of">in {{ $project.Name }}</span>
+        </h1>
+      </header>
+
+      {{ if $err }}
+      <div class="flash flash-error" role="alert">{{ $err }}</div>
+      {{ end }}
+
+      <form method="POST"
+            action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $docType }}"
+            class="project-doc-form"
+            hx-boost="false"
+            x-data="docEditor()"
+            @submit.prevent="onSubmit($event)">
+
+        {{ if $isCustom }}
+        <div class="form-group">
+          <label class="form-label" for="dc-title">Title</label>
+          <input class="form-input input-glow" type="text" id="dc-title"
+                 name="title" required minlength="1" maxlength="120"
+                 value="{{ if $doc }}{{ $doc.Title }}{{ end }}"
+                 placeholder="ADR 001: Trust Level model">
+        </div>
+        {{ else }}
+        <input type="hidden" name="title" value="{{ .DocLabel }}">
+        {{ end }}
+
+        <div class="form-group">
+          <label class="form-label">Content</label>
+          <div class="doc-editor-wrap">
+            <div x-ref="editor" class="doc-editor"
+                 data-initial-html="{{ if $doc }}{{ $doc.ContentHTML }}{{ end }}"></div>
+          </div>
+          <input type="hidden" name="content_html" x-ref="contentField" value="">
+          <div class="form-hint">
+            Quill WYSIWYG editor. Headings, lists, code blocks, links, images all work.
+            Output is sanitized server-side before storage.
+          </div>
+        </div>
+
+        {{ if $isCustom }}
+        <div class="form-group">
+          <label class="form-label" for="dc-sort">Sort order</label>
+          <input class="form-input" type="number" id="dc-sort"
+                 name="sort_order" min="0" max="999"
+                 value="{{ if $doc }}{{ $doc.SortOrder }}{{ else }}0{{ end }}">
+          <div class="form-hint">Custom docs are listed by sort order, lowest first.</div>
+        </div>
+        {{ end }}
+
+        <div class="form-actions">
+          <a href="{{ if $doc }}/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $docType }}{{ else }}/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs{{ end }}"
+             class="btn btn-ghost btn-sm" hx-boost="true">Cancel</a>
+          <button type="submit" class="btn btn-primary press-effect"
+                  :disabled="submitting">
+            <span x-show="!submitting">Save</span>
+            <span x-show="submitting" x-cloak>Saving...</span>
+          </button>
+        </div>
+      </form>
+
+      {{ if and $doc (eq $doc.DocType "custom") }}
+      <hr class="project-form-divider">
+      <section class="project-form-danger">
+        <h2 class="project-form-danger-title">Delete this custom doc</h2>
+        <form method="POST"
+              action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $doc.ID }}/delete"
+              hx-boost="false"
+              onsubmit="return confirm('Delete this custom doc? This cannot be undone.');">
+          <button type="submit" class="btn btn-danger btn-sm press-effect">Delete</button>
+        </form>
+      </section>
+      {{ end }}
+    </div>
+  </main>
+</div>
+{{ end }}
+{{ end }}

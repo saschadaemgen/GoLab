@@ -17,6 +17,7 @@ type Post struct {
 	ParentID      *int64    `json:"parent_id,omitempty"`
 	RepostOfID    *int64    `json:"repost_of_id,omitempty"`
 	SpaceID       *int64    `json:"space_id,omitempty"`
+	SeasonID      *int64    `json:"season_id,omitempty"` // Sprint 16b: post lives in a project season
 	PostType      string    `json:"post_type"`
 	Content       string    `json:"content"`
 	ContentHTML   string    `json:"content_html"`
@@ -33,6 +34,13 @@ type Post struct {
 	SpaceName         string `json:"space_name,omitempty"`
 	SpaceSlug         string `json:"space_slug,omitempty"`
 	SpaceColor        string `json:"space_color,omitempty"`
+	// Sprint 16b: joined season + project for the season-badge
+	// rendered on post-card. Zero values when the post is a free-
+	// space post (season_id is NULL).
+	SeasonNumber int    `json:"season_number,omitempty"`
+	SeasonTitle  string `json:"season_title,omitempty"`
+	ProjectSlug  string `json:"project_slug,omitempty"`
+	ProjectName  string `json:"project_name,omitempty"`
 
 	// Populated on demand (not by SELECT) - use TagStore.ListByPost.
 	Tags []Tag `json:"tags,omitempty"`
@@ -61,18 +69,26 @@ type PostStore struct {
 // Joining spaces with LEFT JOIN keeps pre-migration-016 posts visible
 // (space columns come back NULL). We COALESCE in SQL so the Go scan
 // targets never see NULL for the string space fields.
+//
+// Sprint 16b: the trailing four columns add joined season + project
+// metadata for posts assigned to a project season. NULL season_id
+// (the common case) leaves them all zero / empty.
 const postSelectCols = `
 	p.id, p.as_type, p.author_id, p.channel_id, p.parent_id, p.repost_of_id,
-	p.space_id, p.post_type, p.content, p.content_html,
+	p.space_id, p.season_id, p.post_type, p.content, p.content_html,
 	p.reaction_count, p.reply_count, p.repost_count,
 	p.created_at, p.updated_at,
 	u.username, u.display_name, u.avatar_url,
-	COALESCE(s.name, ''), COALESCE(s.slug, ''), COALESCE(s.color, '')`
+	COALESCE(s.name, ''), COALESCE(s.slug, ''), COALESCE(s.color, ''),
+	COALESCE(se.season_number, 0), COALESCE(se.title, ''),
+	COALESCE(pr.slug, ''), COALESCE(pr.name, '')`
 
 const postJoins = `
 	FROM posts p
 	JOIN users u ON p.author_id = u.id
-	LEFT JOIN spaces s ON p.space_id = s.id`
+	LEFT JOIN spaces s ON p.space_id = s.id
+	LEFT JOIN seasons se ON p.season_id = se.id
+	LEFT JOIN projects pr ON se.project_id = pr.id`
 
 // CreateParams bundles the optional post fields so adding a new one later
 // doesn't break every call site.
@@ -82,6 +98,7 @@ type CreateParams struct {
 	ChannelID   *int64
 	ParentID    *int64
 	SpaceID     *int64
+	SeasonID    *int64 // Sprint 16b: optional - posts can belong to a project season
 	PostType    string // "discussion", "question", "tutorial", "code", "showcase", "link"
 	Content     string
 	ContentHTML string
@@ -96,10 +113,10 @@ func (s *PostStore) Create(ctx context.Context, p CreateParams) (*Post, error) {
 
 	var id int64
 	err := s.DB.QueryRow(ctx,
-		`INSERT INTO posts (as_type, author_id, channel_id, parent_id, space_id, post_type, content, content_html)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO posts (as_type, author_id, channel_id, parent_id, space_id, season_id, post_type, content, content_html)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING id`,
-		p.ASType, p.AuthorID, p.ChannelID, p.ParentID, p.SpaceID, p.PostType, p.Content, p.ContentHTML,
+		p.ASType, p.AuthorID, p.ChannelID, p.ParentID, p.SpaceID, p.SeasonID, p.PostType, p.Content, p.ContentHTML,
 	).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("creating post: %w", err)
@@ -243,6 +260,23 @@ func (s *PostStore) ListBySpace(ctx context.Context, spaceID int64, postType str
 	rows, err := s.DB.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing posts by space: %w", err)
+	}
+	defer rows.Close()
+	return scanPosts(rows)
+}
+
+// ListBySeason returns top-level posts assigned to the given season.
+// Sprint 16b: powers the season detail page. Order matches the rest of
+// the post-list endpoints: newest first.
+func (s *PostStore) ListBySeason(ctx context.Context, seasonID int64, limit, offset int) ([]Post, error) {
+	rows, err := s.DB.Query(ctx,
+		`SELECT `+postSelectCols+postJoins+`
+		 WHERE p.season_id = $1 AND p.parent_id IS NULL
+		 ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`,
+		seasonID, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing posts by season: %w", err)
 	}
 	defer rows.Close()
 	return scanPosts(rows)
@@ -395,11 +429,12 @@ func (s *PostStore) UpdateContent(ctx context.Context, p UpdateContentParams) (*
 func scanPostRow(row pgx.Row, p *Post) error {
 	return row.Scan(
 		&p.ID, &p.ASType, &p.AuthorID, &p.ChannelID, &p.ParentID, &p.RepostOfID,
-		&p.SpaceID, &p.PostType, &p.Content, &p.ContentHTML,
+		&p.SpaceID, &p.SeasonID, &p.PostType, &p.Content, &p.ContentHTML,
 		&p.ReactionCount, &p.ReplyCount, &p.RepostCount,
 		&p.CreatedAt, &p.UpdatedAt,
 		&p.AuthorUsername, &p.AuthorDisplayName, &p.AuthorAvatarURL,
 		&p.SpaceName, &p.SpaceSlug, &p.SpaceColor,
+		&p.SeasonNumber, &p.SeasonTitle, &p.ProjectSlug, &p.ProjectName,
 	)
 }
 
@@ -411,11 +446,12 @@ func scanPosts(rows pgx.Rows) ([]Post, error) {
 		var p Post
 		if err := rows.Scan(
 			&p.ID, &p.ASType, &p.AuthorID, &p.ChannelID, &p.ParentID, &p.RepostOfID,
-			&p.SpaceID, &p.PostType, &p.Content, &p.ContentHTML,
+			&p.SpaceID, &p.SeasonID, &p.PostType, &p.Content, &p.ContentHTML,
 			&p.ReactionCount, &p.ReplyCount, &p.RepostCount,
 			&p.CreatedAt, &p.UpdatedAt,
 			&p.AuthorUsername, &p.AuthorDisplayName, &p.AuthorAvatarURL,
 			&p.SpaceName, &p.SpaceSlug, &p.SpaceColor,
+			&p.SeasonNumber, &p.SeasonTitle, &p.ProjectSlug, &p.ProjectName,
 		); err != nil {
 			return nil, fmt.Errorf("scanning post: %w", err)
 		}

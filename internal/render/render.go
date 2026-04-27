@@ -39,6 +39,21 @@ var pageNames = []string{
 	"space",
 	"tag",
 	"pending",
+	// Sprint 16b: Project system pages.
+	"project-list",
+	"project-show",
+	"project-docs",
+	"project-doc",
+	"project-seasons",
+	"project-season",
+	"project-members",
+	// Sprint 16b Phase 2: Project authoring forms.
+	"project-new",
+	"project-edit",
+	"project-doc-edit",
+	// Sprint 16b Phase 3: Season management forms.
+	"project-season-new",
+	"project-season-close",
 }
 
 func New(templatesDir string) (*Engine, error) {
@@ -156,6 +171,16 @@ func funcMap() template.FuncMap {
 		"contains":      contains,
 		// Sprint X application helpers.
 		"renderApplicationLinks": renderApplicationLinks,
+		// Sprint 16b visual polish: emit a Go value as a JSON literal
+		// for safe embedding in <script type="application/json"> blocks
+		// or chart-init `data-*` attributes.
+		"jsonData": jsonData,
+		// Sprint 16b polish: small range-helper so templates can
+		// iterate exactly N times (e.g. progress dots, heatmap rows).
+		"iter": iter,
+		// Word counter for the doc-status cards on the project
+		// dashboard. Strips HTML tags before counting.
+		"wordCount": wordCount,
 		// Sprint Y rating widget helpers.
 		"ratingDim":     ratingDim,
 		"ratingAverage": ratingAverage,
@@ -267,6 +292,61 @@ func renderApplicationLinks(blob string) template.HTML {
 	}
 	out := strings.TrimSpace(b.String())
 	return template.HTML(out)
+}
+
+// wordCount strips HTML tags from `s` and returns the word count of
+// the remaining text. Used by the project-dashboard doc-status cards
+// to surface "1024 wd" style hints. Whitespace runs are collapsed by
+// strings.Fields, so the result matches what a reader would see.
+func wordCount(s string) int {
+	if s == "" {
+		return 0
+	}
+	var b strings.Builder
+	inTag := false
+	for _, r := range s {
+		switch {
+		case r == '<':
+			inTag = true
+		case r == '>':
+			inTag = false
+		case !inTag:
+			b.WriteRune(r)
+		}
+	}
+	return len(strings.Fields(b.String()))
+}
+
+// iter returns 0..n-1 as a slice so templates can range over a fixed
+// count without a counter pattern. Ten lines, used by the progress-dot
+// renderer on the compact project card.
+func iter(n int) []int {
+	if n <= 0 {
+		return nil
+	}
+	out := make([]int, n)
+	for i := range out {
+		out[i] = i
+	}
+	return out
+}
+
+// jsonData marshals any value to JSON and returns it as template.JS so
+// templates can embed it inside <script type="application/json"> blocks
+// without going through html/template's HTML-escaping pass. The result
+// is safe by construction: json.Marshal escapes the only attack vectors
+// (closing `</script>`, line separators) into \u escapes per the JSON
+// spec. Used by the Sprint 16b chart panels to ship pre-aggregated
+// chart data to the client without a separate fetch.
+func jsonData(v any) template.JS {
+	if v == nil {
+		return template.JS("null")
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return template.JS("null")
+	}
+	return template.JS(b)
 }
 
 // emojiFor looks up the glyph for a reaction type. Returns the

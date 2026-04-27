@@ -15,21 +15,27 @@ import (
 	"github.com/saschadaemgen/GoLab/internal/render"
 )
 
-// ProjectHandler serves the /api/projects and
-// /api/spaces/{space_slug}/projects endpoints. It needs the four
-// project stores plus the existing Spaces, Tags, Markdown, and
-// Sanitizer collaborators - the same wiring approach PostHandler uses
-// so cmd/golab/main.go stays consistent.
+// ProjectHandler serves both the API endpoints under /api/projects and
+// the server-rendered pages under /spaces/{space_slug}/projects. The
+// stores below cover both surfaces; the Render / Posts / Reactions /
+// EditHistory fields are only used by the page methods (added in
+// Sprint 16b) and stay nil when the handler is wired API-only.
 type ProjectHandler struct {
-	Projects     *model.ProjectStore
-	ProjectDocs  *model.ProjectDocStore
-	Seasons      *model.SeasonStore
-	Members      *model.ProjectMemberStore
-	Spaces       *model.SpaceStore
-	Tags         *model.TagStore
-	Users        *model.UserStore
-	Markdown     *render.Markdown
-	Sanitizer    *render.Sanitizer
+	Projects    *model.ProjectStore
+	ProjectDocs *model.ProjectDocStore
+	Seasons     *model.SeasonStore
+	Members     *model.ProjectMemberStore
+	Spaces      *model.SpaceStore
+	Tags        *model.TagStore
+	Users       *model.UserStore
+	Markdown    *render.Markdown
+	Sanitizer   *render.Sanitizer
+
+	// Sprint 16b page-rendering dependencies.
+	Render      *render.Engine
+	Posts       *model.PostStore
+	Reactions   *model.ReactionStore
+	EditHistory *model.PostEditHistoryStore
 }
 
 // Length / count limits enforced server-side. The compose UI (16b)

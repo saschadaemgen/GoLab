@@ -20,7 +20,7 @@
       <span class="post-edited" title="Edited {{ timeAgo $post.EditedAt }}">edited</span>
       {{ end }}
 
-      {{ if or $post.SpaceName (and $post.PostType (ne $post.PostType "discussion")) }}
+      {{ if or $post.SpaceName (and $post.PostType (ne $post.PostType "discussion")) (gt $post.SeasonNumber 0) }}
       <div class="post-meta-row">
         {{ if $post.SpaceName }}
         <a href="/s/{{ $post.SpaceSlug }}" class="post-space-badge"
@@ -31,6 +31,18 @@
         {{ end }}
         {{ if and $post.PostType (ne $post.PostType "discussion") }}
         <span class="post-type-badge post-type-{{ $post.PostType }}">{{ $post.PostType }}</span>
+        {{ end }}
+        {{/* Sprint 16b Phase 4: season badge. Only renders when the
+             post is assigned to a season (joined SeasonNumber > 0).
+             Links straight to the season detail page so readers can
+             see the post in the context of its iteration. */}}
+        {{ if gt $post.SeasonNumber 0 }}
+        <a href="/spaces/{{ $post.SpaceSlug }}/projects/{{ $post.ProjectSlug }}/seasons/{{ $post.SeasonNumber }}"
+           class="post-season-badge"
+           hx-boost="true"
+           title="Posted in Season {{ $post.SeasonNumber }} of {{ $post.ProjectName }}">
+          Season {{ $post.SeasonNumber }} of {{ $post.ProjectName }}
+        </a>
         {{ end }}
       </div>
       {{ end }}

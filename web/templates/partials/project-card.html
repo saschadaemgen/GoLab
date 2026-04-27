@@ -1,0 +1,80 @@
+{{ define "project-card.html" }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $owner := .Owner }}
+{{ $tags := .Tags }}
+{{ $memberCount := .MemberCount }}
+
+<a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}"
+   class="project-card{{ if $project.Color }} project-card-tinted{{ end }}"
+   style="{{ if $project.Color }}--project-color: {{ $project.Color }};{{ end }}"
+   hx-boost="true">
+  <span class="project-card-stripe" aria-hidden="true"></span>
+  <div class="project-card-inner">
+    <div class="project-card-head">
+      <span class="project-card-icon" aria-hidden="true">
+        {{ if $project.Icon }}{{ $project.Icon }}{{ else }}+{{ end }}
+      </span>
+      <div class="project-card-title-block">
+        <h3 class="project-card-title">{{ $project.Name }}</h3>
+        <div class="project-card-badges">
+          <span class="project-status-badge project-status-{{ $project.Status }}">{{ $project.Status }}</span>
+          {{ if eq $project.Visibility "members_only" }}
+          <span class="project-visibility-pill" title="Members only">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+          {{ else if eq $project.Visibility "hidden" }}
+          <span class="project-visibility-pill" title="Hidden">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </span>
+          {{ end }}
+        </div>
+      </div>
+    </div>
+
+    {{ if $project.Description }}
+    <p class="project-card-description">{{ truncate $project.Description 180 }}</p>
+    {{ end }}
+
+    {{ if $tags }}
+    <div class="project-card-tags">
+      {{ range $i, $tag := $tags }}
+      {{ if lt $i 3 }}
+      <span class="tag-pill tag-pill-static">#{{ $tag.Name }}</span>
+      {{ end }}
+      {{ end }}
+      {{ if gt (len $tags) 3 }}
+      <span class="project-card-tag-more">+{{ len (slice $tags 3) }} more</span>
+      {{ end }}
+    </div>
+    {{ end }}
+
+    <div class="project-card-foot">
+      {{ if $owner }}
+      <span class="project-card-owner">
+        {{ template "avatar" (dict "URL" $owner.AvatarURL "Username" $owner.Username "Size" "sm") }}
+        <span>{{ if $owner.DisplayName }}{{ $owner.DisplayName }}{{ else }}@{{ $owner.Username }}{{ end }}</span>
+      </span>
+      {{ end }}
+      <span class="project-card-stats">
+        <span title="Members">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          {{ $memberCount }}
+        </span>
+        <span class="project-card-time">{{ timeAgo $project.UpdatedAt }}</span>
+      </span>
+    </div>
+  </div>
+</a>
+{{ end }}

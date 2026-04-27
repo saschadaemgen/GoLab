@@ -1,0 +1,107 @@
+{{ define "project-header.html" }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $owner := .Owner }}
+{{ $tags := .Tags }}
+{{ $activeTab := .ActiveTab }}
+{{ $canManage := .CanManage }}
+
+<header class="project-header fade-in"
+        style="{{ if $project.Color }}--project-color: {{ $project.Color }};{{ end }}">
+  <div class="project-header-inner">
+    <div class="project-header-meta">
+      <nav class="project-breadcrumb" aria-label="Breadcrumb">
+        <a href="/s/{{ $space.Slug }}" class="project-breadcrumb-link" hx-boost="true">
+          {{ if $space.Icon }}{{ $space.Icon }} {{ end }}{{ $space.Name }}
+        </a>
+        <span class="project-breadcrumb-sep" aria-hidden="true">/</span>
+        <a href="/spaces/{{ $space.Slug }}/projects" class="project-breadcrumb-link" hx-boost="true">Projects</a>
+      </nav>
+
+      <div class="project-header-title-row">
+        <div class="project-header-icon" aria-hidden="true">
+          {{ if $project.Icon }}{{ $project.Icon }}{{ else }}+{{ end }}
+        </div>
+        <div class="project-header-title-block">
+          <h1 class="project-title">{{ $project.Name }}</h1>
+          <div class="project-header-badges">
+            <span class="project-status-badge project-status-{{ $project.Status }}">
+              {{ $project.Status }}
+            </span>
+            <span class="project-visibility"
+                  title="{{ if eq $project.Visibility "public" }}Public - any member can see{{ else if eq $project.Visibility "members_only" }}Members only - join to see{{ else }}Hidden - invite only{{ end }}">
+              {{ if eq $project.Visibility "public" }}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="2" y1="12" x2="22" y2="12"/>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                Public
+              {{ else if eq $project.Visibility "members_only" }}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                Members
+              {{ else }}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+                Hidden
+              {{ end }}
+            </span>
+          </div>
+        </div>
+        {{ if $canManage }}
+        <div class="project-header-actions">
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/edit"
+             class="btn btn-ghost btn-sm"
+             hx-boost="true">Edit</a>
+        </div>
+        {{ end }}
+      </div>
+
+      {{ if $project.Description }}
+      <p class="project-description">{{ $project.Description }}</p>
+      {{ end }}
+
+      <div class="project-header-footer">
+        {{ if $owner }}
+        <a href="/u/{{ $owner.Username }}" class="project-owner-chip" hx-boost="true">
+          {{ template "avatar" (dict "URL" $owner.AvatarURL "Username" $owner.Username "Size" "sm") }}
+          <span class="project-owner-name">
+            {{ if $owner.DisplayName }}{{ $owner.DisplayName }}{{ else }}@{{ $owner.Username }}{{ end }}
+          </span>
+          <span class="project-owner-role">Owner</span>
+        </a>
+        {{ end }}
+        {{ if $tags }}
+        <div class="project-header-tags">
+          {{ range $tags }}
+          <a href="/t/{{ .Slug }}" class="tag-pill" hx-boost="true">#{{ .Name }}</a>
+          {{ end }}
+        </div>
+        {{ end }}
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="project-tabs" aria-label="Project sections">
+  <div class="project-tabs-inner">
+    <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}"
+       class="project-tab{{ if eq $activeTab "overview" }} active{{ end }}"
+       hx-boost="true">Overview</a>
+    <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs"
+       class="project-tab{{ if eq $activeTab "docs" }} active{{ end }}"
+       hx-boost="true">Docs</a>
+    <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
+       class="project-tab{{ if eq $activeTab "seasons" }} active{{ end }}"
+       hx-boost="true">Seasons</a>
+    <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/members"
+       class="project-tab{{ if eq $activeTab "members" }} active{{ end }}"
+       hx-boost="true">Members</a>
+  </div>
+</nav>
+{{ end }}
