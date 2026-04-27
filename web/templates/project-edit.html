@@ -91,13 +91,12 @@
           </select>
         </div>
 
-        <div class="wiz-input-block">
-          <label class="wiz-input-label" for="pf-icon">ICON</label>
-          <input class="wiz-input" type="text" id="pf-icon" name="icon"
-                 value="{{ .Form.Icon }}" maxlength="16">
-        </div>
+        {{/* Icon field removed in 16g.8. Hidden input preserves
+             whatever icon value already lives on the project so
+             editing doesn't accidentally null it out server-side. */}}
+        <input type="hidden" name="icon" value="{{ .Form.Icon }}">
 
-        <div class="wiz-input-block">
+        <div class="wiz-input-block full-width">
           <label class="wiz-input-label" for="pf-color">ACCENT COLOR</label>
           <input class="wiz-input" type="text" id="pf-color" name="color"
                  value="{{ .Form.Color }}" maxlength="16">

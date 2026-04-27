@@ -8298,3 +8298,85 @@ select.wiz-input:focus,
 [data-theme="light"] .compose-select:focus {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231A7D5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
 }
+
+/* =============================================================
+   Sprint 16g.8 - Polish (subtle on-interaction effects only)
+   =============================================================
+   No cascade animations on page load. The effects below all
+   fire on hover / focus / state transitions; they give pages
+   a sense of life without the cinematics that broke 16f. */
+
+/* ---- Hero accent gradient: a hairline cyan glow at the top
+   of every page main column. Same effect as the footer's top
+   gradient line, scaled to fit the page header. ---- */
+
+.page-shell-main {
+  position: relative;
+}
+.page-shell-main::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--accent), transparent);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.wiz-form-shell {
+  position: relative;
+}
+.wiz-form-shell::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--accent), transparent);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ---- .page-card hover: subtle accent border + soft drop
+   shadow, no transform. translateY in 16f felt nervous; the
+   border glow on its own reads as "hoverable" without movement. ---- */
+
+.page-card {
+  transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+.page-card:hover {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 1px var(--accent-subtle), 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ---- .status-pill.status-active: very subtle 2.5s pulse,
+   range 1.0 -> 0.88 opacity. Below the threshold of attention
+   but gives "active" projects a tiny heartbeat. Disabled when
+   the user prefers reduced motion. ---- */
+
+@keyframes statusPillPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.88; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .status-pill.status-active {
+    animation: statusPillPulse 2.5s ease-in-out infinite;
+  }
+}
+
+/* ---- Sidebar nav hover: muted background fill + text shift on
+   non-active rows. Active rows already have the accent left
+   border + accent text from Phase 16g.2. ---- */
+
+.sidebar-nav-row {
+  transition: color 200ms, border-color 200ms, background 200ms;
+}
+.sidebar-nav-row:hover:not(.is-active) {
+  background: var(--bg-deep);
+  color: var(--text);
+  border-left-color: var(--border);
+}

@@ -95,15 +95,12 @@
           </select>
         </div>
 
-        <div class="wiz-input-block">
-          <label class="wiz-input-label" for="pf-icon">ICON</label>
-          <input class="wiz-input" type="text" id="pf-icon" name="icon"
-                 value="{{ .Form.Icon }}" maxlength="16"
-                 placeholder="+ * # > ~">
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.4rem 0 0;">A single character or short emoji. Optional.</p>
-        </div>
+        {{/* Icon field removed in 16g.8 (made the form feel cheap).
+             Hidden empty input keeps the server-side validation
+             happy without exposing the option in the UI. */}}
+        <input type="hidden" name="icon" value="">
 
-        <div class="wiz-input-block">
+        <div class="wiz-input-block full-width">
           <label class="wiz-input-label" for="pf-color">ACCENT COLOR</label>
           <input class="wiz-input" type="text" id="pf-color" name="color"
                  value="{{ .Form.Color }}" maxlength="16"
