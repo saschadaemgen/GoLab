@@ -6,62 +6,71 @@
 {{ $err := .Error }}
 {{ $nextNum := .NextNumber }}
 
-<div class="page-container">
-  <main class="project-form-main">
-    <nav class="project-doc-view-back" aria-label="Form navigation">
-      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
-         class="project-doc-view-back-link"
+<div class="brut-page">
+  <header class="brut-hero brut-hero-compact"
+          style="{{ if $project.Color }}--brut-accent: {{ $project.Color }};{{ end }}">
+    <div class="brut-hero-inner brut-stagger">
+      <div class="brut-hero-id">
+        PROJECT · #{{ $project.ID }} · {{ upper $project.Name }}
+        <span class="brut-hero-meta-sep">·</span>
+        ACTION · PLAN SEASON {{ $nextNum }}
+      </div>
+      <h1 class="brut-hero-title">Plan Season {{ $nextNum }}</h1>
+      <p class="brut-hero-subtitle">
+        Seasons are sequential iterations within {{ $project.Name }}. Number is auto-assigned. The new season starts in
+        <span class="brut-pill brut-pill-draft" style="vertical-align: 1px;">
+          <span class="brut-pill-dot" aria-hidden="true"></span>planned</span>
+        state - activate it later to start posting.
+      </p>
+    </div>
+    <div class="brut-hero-actions">
+      <a class="brut-btn brut-btn-ghost brut-btn-sm"
+         href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
          hx-boost="true">&larr; All seasons</a>
-    </nav>
+    </div>
+  </header>
 
-    <div class="project-form-card">
-      <header class="project-form-head">
-        <h1 class="project-form-title">Plan Season {{ $nextNum }}</h1>
-        <p class="project-form-sub">
-          Seasons are sequential iterations within {{ $project.Name }}. Number is auto-assigned.
-          The new season starts in <span class="season-status-badge season-status-planned">Planned</span>
-          state - activate it later to start posting.
-        </p>
-      </header>
-
+  <section class="brut-section">
+    <div class="brut-section-inner">
       {{ if $err }}
-      <div class="flash flash-error" role="alert">{{ $err }}</div>
+      <div class="brut-flash brut-flash-error" role="alert">{{ $err }}</div>
       {{ end }}
 
-      <form method="POST"
+      <form class="brut-form brut-stagger"
+            method="POST"
             action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
-            class="project-form"
             hx-boost="false"
             autocomplete="off">
-        <div class="form-group">
-          <label class="form-label" for="sf-title">Title</label>
-          <input class="form-input input-glow" type="text" id="sf-title"
+
+        <div class="brut-field">
+          <label class="brut-label" for="sf-title">Title</label>
+          <input class="brut-input" type="text" id="sf-title"
                  name="title" required minlength="1" maxlength="120"
                  value="{{ $form.Title }}"
                  placeholder="Foundation, Polish, Migration to v2 ...">
-          <div class="form-hint">A short label that captures what this season is about. 1-120 characters.</div>
+          <div class="brut-help">A short label that captures what this season is about. 1-120 characters.</div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="sf-desc">Description</label>
-          <textarea class="form-input form-textarea input-glow" id="sf-desc"
+        <div class="brut-field">
+          <label class="brut-label" for="sf-desc">Description</label>
+          <textarea class="brut-textarea" id="sf-desc"
                     name="description" maxlength="2000" rows="5"
                     x-data="{ len: {{ len $form.Description }} }"
                     @input="len = $el.value.length"
                     placeholder="One or two paragraphs about goals, deliverables, deadline.">{{ $form.Description }}</textarea>
-          <div class="form-hint">
+          <div class="brut-help">
             Optional. <span x-text="len">0</span> / 2000
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="brut-form-actions">
           <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
-             class="btn btn-ghost btn-sm" hx-boost="true">Cancel</a>
-          <button type="submit" class="btn btn-primary press-effect">Create Season {{ $nextNum }}</button>
+             class="brut-btn brut-btn-secondary" hx-boost="true">Cancel</a>
+          <button type="submit" class="brut-btn brut-btn-primary">Create Season {{ $nextNum }}</button>
         </div>
       </form>
     </div>
-  </main>
+  </section>
 </div>
 {{ end }}
 {{ end }}

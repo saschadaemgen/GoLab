@@ -3,84 +3,66 @@
 {{ $space := .Space }}
 {{ $project := .Project }}
 
-{{ template "project-header.html" . }}
+<div class="brut-page">
+  {{ template "project-header.html" . }}
 
-<div class="page-container">
-  <main>
-    {{ if .CanManage }}
-    <div class="flash flash-info" role="status">
-      Member management UI lands in Sprint 16c. Until then, project owners and admins can change roles via the API.
+  {{ if .CanManage }}
+  <section class="brut-section" style="padding-top: 22px; padding-bottom: 0;">
+    <div class="brut-section-inner">
+      <div class="brut-flash brut-flash-info" role="status">
+        Member management UI lands in Sprint 16c. Until then, project owners and admins can change roles via the API.
+      </div>
     </div>
-    {{ end }}
+  </section>
+  {{ end }}
 
-    <section class="member-section">
-      <header class="member-section-head">
-        <h2 class="member-section-title">Owner</h2>
-        <span class="member-section-count">{{ len .Owners }}</span>
-      </header>
-      {{ if .Owners }}
-      <ul class="member-list">
-        {{ range .Owners }}
-        {{ template "project-member-row.html" (dict "Member" . "Role" "owner") }}
-        {{ end }}
-      </ul>
-      {{ else }}
-      <p class="muted">No owner row found - this is unusual; please contact an admin.</p>
-      {{ end }}
-    </section>
-
-    <section class="member-section">
-      <header class="member-section-head">
-        <h2 class="member-section-title">Contributors</h2>
-        <span class="member-section-count">{{ len .Contributors }}</span>
-      </header>
-      {{ if .Contributors }}
-      <ul class="member-list">
-        {{ range .Contributors }}
-        {{ template "project-member-row.html" (dict "Member" . "Role" "contributor") }}
-        {{ end }}
-      </ul>
-      {{ else }}
-      <p class="muted">No contributors yet.</p>
-      {{ end }}
-    </section>
-
-    <section class="member-section">
-      <header class="member-section-head">
-        <h2 class="member-section-title">Viewers</h2>
-        <span class="member-section-count">{{ len .Viewers }}</span>
-      </header>
-      {{ if .Viewers }}
-      <ul class="member-list">
-        {{ range .Viewers }}
-        {{ template "project-member-row.html" (dict "Member" . "Role" "viewer") }}
-        {{ end }}
-      </ul>
-      {{ else }}
-      <p class="muted">No viewers yet.</p>
-      {{ end }}
-    </section>
-  </main>
+  <section class="brut-section">
+    <div class="brut-section-inner brut-stagger">
+      {{ template "brut-member-section.html" (dict "Title" "Owner" "Role" "owner" "Members" .Owners "EmptyMsg" "No owner row found - this is unusual; please contact an admin.") }}
+      {{ template "brut-member-section.html" (dict "Title" "Contributors" "Role" "contributor" "Members" .Contributors "EmptyMsg" "No contributors yet.") }}
+      {{ template "brut-member-section.html" (dict "Title" "Viewers" "Role" "viewer" "Members" .Viewers "EmptyMsg" "No viewers yet.") }}
+    </div>
+  </section>
 </div>
 {{ end }}
 {{ end }}
 
-{{ define "project-member-row.html" }}
-{{ $m := .Member }}
+{{ define "brut-member-section.html" }}
+{{ $title := .Title }}
 {{ $role := .Role }}
-<li class="member-row">
-  <a href="/u/{{ $m.Username }}" class="member-row-link" hx-boost="true">
-    {{ template "avatar" (dict "URL" $m.AvatarURL "Username" $m.Username "Size" "md") }}
-    <span class="member-row-info">
-      <span class="member-row-name">
-        {{ if $m.DisplayName }}{{ $m.DisplayName }}{{ else }}@{{ $m.Username }}{{ end }}
+{{ $members := .Members }}
+{{ $emptyMsg := .EmptyMsg }}
+<div class="brut-member-section">
+  <header class="brut-section-head" style="margin-bottom: 14px;">
+    <div class="brut-section-title-block">
+      <div class="brut-section-label">{{ upper $title }} · {{ len $members }}</div>
+      <h2 class="brut-section-title">{{ $title }}</h2>
+    </div>
+  </header>
+  {{ if $members }}
+  <ul class="brut-member-list">
+    {{ range $members }}
+    <li class="brut-member-row">
+      <a href="/u/{{ .Username }}" class="brut-member-link" hx-boost="true">
+        {{ template "avatar" (dict "URL" .AvatarURL "Username" .Username "Size" "md") }}
+        <span class="brut-member-info">
+          <span class="brut-member-name">
+            {{ if .DisplayName }}{{ .DisplayName }}{{ else }}@{{ .Username }}{{ end }}
+          </span>
+          <span class="brut-member-handle">@{{ .Username }}</span>
+        </span>
+      </a>
+      <span class="brut-member-meta">
+        <span class="brut-pill brut-pill-{{ $role }}">
+          <span class="brut-pill-dot" aria-hidden="true"></span>{{ $role }}
+        </span>
+        <span class="brut-member-since">Joined {{ timeAgo .JoinedAt }}</span>
       </span>
-      <span class="member-row-handle">@{{ $m.Username }}</span>
-    </span>
-  </a>
-  <span class="member-row-meta">
-    <span class="member-role-badge member-role-{{ $role }}">{{ $role }}</span>
-    <span class="member-row-since">Joined {{ timeAgo $m.JoinedAt }}</span>
-  </span>
-</li>
+    </li>
+    {{ end }}
+  </ul>
+  {{ else }}
+  <p class="brut-aside-text muted">{{ $emptyMsg }}</p>
+  {{ end }}
+</div>
 {{ end }}
