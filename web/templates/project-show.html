@@ -17,89 +17,15 @@
 <div class="page-shell">
   <div class="page-shell-layout">
 
-    {{/* ============================================================
-         Sidebar (desktop only, hidden < 1024px via .page-shell-sidebar)
-         ============================================================ */}}
-    <aside class="page-shell-sidebar">
-
-      {{/* ----- Block 1: Project ID + Status ----- */}}
-      <div class="page-shell-sidebar-block">
-        <div class="page-shell-sidebar-block-label">PROJECT &middot; #{{ .Project.ID }} &middot; {{ upper .Space.Name }}</div>
-        <h2 style="font-size: 1.5rem; font-weight: 700; letter-spacing: -0.015em; color: var(--text-bright); margin: 0 0 0.5rem;">{{ .Project.Name }}</h2>
-        <span class="status-pill status-{{ .Project.Status }}">{{ upper .Project.Status }}</span>
-      </div>
-
-      {{/* ----- Block 2: Parent project link (only on sub-projects) ----- */}}
-      {{ if .Project.ParentSlug }}
-      <div class="page-shell-sidebar-block">
-        <div class="page-shell-sidebar-block-label">PART OF</div>
-        <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.ParentSlug }}" class="parent-link" hx-boost="true">&larr; {{ .Project.ParentName }}</a>
-      </div>
-      {{ end }}
-
-      {{/* ----- Block 3: Tab navigation ----- */}}
-      <div class="page-shell-sidebar-block">
-        <div class="page-shell-sidebar-block-label">PROJECT NAV</div>
-        <div class="sidebar-nav">
-          <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}"
-             class="sidebar-nav-row{{ if eq .ActiveTab "overview" }} is-active{{ end }}"
-             hx-boost="true">
-            <span class="sidebar-nav-num">01</span>
-            <span class="sidebar-nav-label">OVERVIEW</span>
-            <span class="sidebar-nav-count"></span>
-          </a>
-          <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/docs"
-             class="sidebar-nav-row{{ if eq .ActiveTab "docs" }} is-active{{ end }}"
-             hx-boost="true">
-            <span class="sidebar-nav-num">02</span>
-            <span class="sidebar-nav-label">DOCS</span>
-            <span class="sidebar-nav-count">{{ .DocsCompleted }}/4</span>
-          </a>
-          <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons"
-             class="sidebar-nav-row{{ if eq .ActiveTab "seasons" }} is-active{{ end }}"
-             hx-boost="true">
-            <span class="sidebar-nav-num">03</span>
-            <span class="sidebar-nav-label">SEASONS</span>
-            <span class="sidebar-nav-count">{{ len .Seasons }}</span>
-          </a>
-          <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/members"
-             class="sidebar-nav-row{{ if eq .ActiveTab "members" }} is-active{{ end }}"
-             hx-boost="true">
-            <span class="sidebar-nav-num">04</span>
-            <span class="sidebar-nav-label">MEMBERS</span>
-            <span class="sidebar-nav-count">{{ len .Members }}</span>
-          </a>
-        </div>
-      </div>
-
-      {{/* ----- Block 4: Manage (owners only) ----- */}}
-      {{ if .CanManage }}
-      <div class="page-shell-sidebar-block">
-        <div class="page-shell-sidebar-block-label">MANAGE</div>
-        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-          <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/edit"
-             class="wiz-action-secondary"
-             style="text-align: center;"
-             hx-boost="true">EDIT PROJECT</a>
-          <a href="/spaces/{{ .Space.Slug }}/projects/{{ .Project.Slug }}/seasons/new"
-             class="wiz-action-secondary"
-             style="text-align: center;"
-             hx-boost="true">+ NEW SEASON</a>
-        </div>
-      </div>
-      {{ end }}
-
-      {{/* ----- Block 5: Description quote (pinned to bottom) ----- */}}
-      {{ if .Project.Description }}
-      <div class="page-shell-sidebar-quote"
-           style="margin-top: auto; padding: 1rem; background: var(--accent-subtle); border-left: 2px solid var(--accent); font-size: 0.82rem; line-height: 1.5; color: var(--text-dim);">
-        <p style="margin: 0 0 0.75rem; font-style: italic;">{{ .Project.Description }}</p>
-        <div class="wiz-sidebar-divider"></div>
-        <div class="wiz-sidebar-quote-label">DESCRIPTION</div>
-      </div>
-      {{ end }}
-
-    </aside>
+    {{ template "project-shell-sidebar" (dict
+      "Space"        .Space
+      "Project"      .Project
+      "ActiveTab"    .ActiveTab
+      "CanManage"    .CanManage
+      "DocsCount"    .DocsCompleted
+      "SeasonsCount" (len .Seasons)
+      "MembersCount" (len .Members)
+    ) }}
 
     {{/* ============================================================
          Main column

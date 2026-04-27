@@ -1,68 +1,144 @@
 {{ define "content" }}
 {{ with .Content }}
+
+{{/* ============================================================
+     Members tab (Sprint 16g.5 visual reset).
+     Three sections: Owners, Contributors, Viewers. Each member
+     row is a page-card with avatar (via shared partial), name +
+     handle, role pill, and join date. Empty roles show a single
+     muted line so the page never has a giant placeholder. =============== */}}
+
 {{ $space := .Space }}
 {{ $project := .Project }}
 
-<div class="brut-page">
-  {{ template "project-header.html" . }}
+<div class="page-shell">
+  <div class="page-shell-layout">
 
-  {{ if .CanManage }}
-  <section class="brut-section" style="padding-top: 22px; padding-bottom: 0;">
-    <div class="brut-section-inner">
-      <div class="brut-flash brut-flash-info" role="status">
-        Member management UI lands in Sprint 16c. Until then, project owners and admins can change roles via the API.
+    {{ template "project-shell-sidebar" (dict
+      "Space"        .Space
+      "Project"      .Project
+      "ActiveTab"    .ActiveTab
+      "CanManage"    .CanManage
+      "DocsCount"    0
+      "SeasonsCount" 0
+      "MembersCount" 0
+    ) }}
+
+    <main class="page-shell-main">
+
+      <header class="wiz-header">
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}" class="wiz-back-btn" hx-boost="true">&larr; BACK TO OVERVIEW</a>
+      </header>
+
+      <div class="wiz-content" style="margin-bottom: 3rem;">
+        <div class="wiz-prompt-eyebrow">PROJECT &middot; {{ upper $project.Name }} &middot; MEMBERS</div>
+        <h1 class="wiz-prompt-headline">Members</h1>
+        <p class="wiz-prompt-helper">Owners can manage. Contributors can post. Viewers can see private content.</p>
       </div>
-    </div>
-  </section>
-  {{ end }}
 
-  <section class="brut-section">
-    <div class="brut-section-inner brut-stagger">
-      {{ template "brut-member-section.html" (dict "Title" "Owner" "Role" "owner" "Members" .Owners "EmptyMsg" "No owner row found - this is unusual; please contact an admin.") }}
-      {{ template "brut-member-section.html" (dict "Title" "Contributors" "Role" "contributor" "Members" .Contributors "EmptyMsg" "No contributors yet.") }}
-      {{ template "brut-member-section.html" (dict "Title" "Viewers" "Role" "viewer" "Members" .Viewers "EmptyMsg" "No viewers yet.") }}
-    </div>
-  </section>
-</div>
-{{ end }}
-{{ end }}
+      {{/* ----- Section 01: Owners ----- */}}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 01 &middot; {{ len .Owners }}</div>
+            <h2 class="page-section-title">Owners</h2>
+          </div>
+        </div>
+        {{ if .Owners }}
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          {{ range .Owners }}
+          <div class="page-card" style="display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center;">
+            <a href="/u/{{ .Username }}" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit; min-width: 0;" hx-boost="true">
+              {{ template "avatar" (dict "URL" .AvatarURL "Username" .Username "Size" "md") }}
+              <div style="min-width: 0;">
+                <div style="font-weight: 500; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  {{ if .DisplayName }}{{ .DisplayName }}{{ else }}@{{ .Username }}{{ end }}
+                </div>
+                <div style="font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.05em;">@{{ .Username }}</div>
+              </div>
+            </a>
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-end;">
+              <span class="status-pill status-active">OWNER</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">JOINED {{ timeAgo .JoinedAt }}</span>
+            </div>
+          </div>
+          {{ end }}
+        </div>
+        {{ else }}
+        <p style="color: var(--text-muted); margin: 0;">No owner row found - this is unusual; please contact an admin.</p>
+        {{ end }}
+      </section>
 
-{{ define "brut-member-section.html" }}
-{{ $title := .Title }}
-{{ $role := .Role }}
-{{ $members := .Members }}
-{{ $emptyMsg := .EmptyMsg }}
-<div class="brut-member-section">
-  <header class="brut-section-head" style="margin-bottom: 14px;">
-    <div class="brut-section-title-block">
-      <div class="brut-section-label">{{ upper $title }} · {{ len $members }}</div>
-      <h2 class="brut-section-title">{{ $title }}</h2>
-    </div>
-  </header>
-  {{ if $members }}
-  <ul class="brut-member-list">
-    {{ range $members }}
-    <li class="brut-member-row">
-      <a href="/u/{{ .Username }}" class="brut-member-link" hx-boost="true">
-        {{ template "avatar" (dict "URL" .AvatarURL "Username" .Username "Size" "md") }}
-        <span class="brut-member-info">
-          <span class="brut-member-name">
-            {{ if .DisplayName }}{{ .DisplayName }}{{ else }}@{{ .Username }}{{ end }}
-          </span>
-          <span class="brut-member-handle">@{{ .Username }}</span>
-        </span>
-      </a>
-      <span class="brut-member-meta">
-        <span class="brut-pill brut-pill-{{ $role }}">
-          <span class="brut-pill-dot" aria-hidden="true"></span>{{ $role }}
-        </span>
-        <span class="brut-member-since">Joined {{ timeAgo .JoinedAt }}</span>
-      </span>
-    </li>
-    {{ end }}
-  </ul>
-  {{ else }}
-  <p class="brut-aside-text muted">{{ $emptyMsg }}</p>
-  {{ end }}
+      {{/* ----- Section 02: Contributors ----- */}}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 02 &middot; {{ len .Contributors }}</div>
+            <h2 class="page-section-title">Contributors</h2>
+          </div>
+        </div>
+        {{ if .Contributors }}
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          {{ range .Contributors }}
+          <div class="page-card" style="display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center;">
+            <a href="/u/{{ .Username }}" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit; min-width: 0;" hx-boost="true">
+              {{ template "avatar" (dict "URL" .AvatarURL "Username" .Username "Size" "md") }}
+              <div style="min-width: 0;">
+                <div style="font-weight: 500; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  {{ if .DisplayName }}{{ .DisplayName }}{{ else }}@{{ .Username }}{{ end }}
+                </div>
+                <div style="font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.05em;">@{{ .Username }}</div>
+              </div>
+            </a>
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-end;">
+              <span class="status-pill">CONTRIBUTOR</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">JOINED {{ timeAgo .JoinedAt }}</span>
+            </div>
+          </div>
+          {{ end }}
+        </div>
+        {{ else }}
+        <p style="color: var(--text-muted); margin: 0;">No contributors yet.</p>
+        {{ end }}
+      </section>
+
+      {{/* ----- Section 03: Viewers ----- */}}
+      <section class="page-section">
+        <div class="page-section-head">
+          <div>
+            <div class="page-section-eyebrow">SECTION 03 &middot; {{ len .Viewers }}</div>
+            <h2 class="page-section-title">Viewers</h2>
+          </div>
+        </div>
+        {{ if .Viewers }}
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          {{ range .Viewers }}
+          <div class="page-card" style="display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center;">
+            <a href="/u/{{ .Username }}" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit; min-width: 0;" hx-boost="true">
+              {{ template "avatar" (dict "URL" .AvatarURL "Username" .Username "Size" "md") }}
+              <div style="min-width: 0;">
+                <div style="font-weight: 500; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  {{ if .DisplayName }}{{ .DisplayName }}{{ else }}@{{ .Username }}{{ end }}
+                </div>
+                <div style="font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.05em;">@{{ .Username }}</div>
+              </div>
+            </a>
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-end;">
+              <span class="status-pill">VIEWER</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">JOINED {{ timeAgo .JoinedAt }}</span>
+            </div>
+          </div>
+          {{ end }}
+        </div>
+        {{ else }}
+        <p style="color: var(--text-muted); margin: 0;">No viewers yet.</p>
+        {{ end }}
+      </section>
+
+    </main>
+
+  </div>
 </div>
+
+{{ end }}
 {{ end }}

@@ -1,94 +1,88 @@
 {{ define "content" }}
 {{ with .Content }}
+
+{{/* ============================================================
+     Seasons tab (Sprint 16g.5 visual reset).
+     Each season renders as a wide horizontal page-card row with
+     S-number, title + description, and a status pill + post count
+     stack on the right. Reverse-chronological order is set by the
+     handler (`reverseSeasons`). ============= */}}
+
 {{ $space := .Space }}
 {{ $project := .Project }}
 {{ $postCounts := .PostCounts }}
 
-<div class="brut-page">
-  {{ template "project-header.html" . }}
+<div class="page-shell">
+  <div class="page-shell-layout">
 
-  <section class="brut-section">
-    <div class="brut-section-inner">
-      <header class="brut-section-head">
-        <div class="brut-section-title-block">
-          <div class="brut-section-label">Section · Seasons</div>
-          <h2 class="brut-section-title">
-            {{ if .Seasons }}{{ len .Seasons }} {{ pluralize (len .Seasons) "Season" "Seasons" }}{{ else }}Seasons{{ end }}
-          </h2>
-          <p class="brut-section-sub">Numbered iterations of work. Each season closes with a closing document.</p>
-        </div>
+    {{ template "project-shell-sidebar" (dict
+      "Space"        .Space
+      "Project"      .Project
+      "ActiveTab"    .ActiveTab
+      "CanManage"    .CanManage
+      "DocsCount"    0
+      "SeasonsCount" (len .Seasons)
+      "MembersCount" 0
+    ) }}
+
+    <main class="page-shell-main">
+
+      <header class="wiz-header">
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}" class="wiz-back-btn" hx-boost="true">&larr; BACK TO OVERVIEW</a>
         {{ if .CanManage }}
-        <div class="brut-section-actions">
-          <a class="brut-btn brut-btn-primary brut-btn-sm"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
-             hx-boost="true">+ New Season</a>
-        </div>
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
+           class="wiz-action-secondary"
+           hx-boost="true">+ NEW SEASON</a>
         {{ end }}
       </header>
 
-      {{ if .Seasons }}
-      <ol class="brut-timeline-list brut-stagger">
-        {{ range .Seasons }}
-        <li class="brut-timeline-item brut-timeline-{{ .Status }}">
-          <a class="brut-timeline-link"
-             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ .SeasonNumber }}"
+      <div class="wiz-content" style="margin-bottom: 3rem;">
+        <div class="wiz-prompt-eyebrow">PROJECT &middot; {{ upper $project.Name }} &middot; SEASONS</div>
+        <h1 class="wiz-prompt-headline">Seasons</h1>
+        <p class="wiz-prompt-helper">Sequential time-boxed work cycles. Each season has its own posts, status, and closing document.</p>
+      </div>
+
+      <section class="page-section">
+        {{ if .Seasons }}
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          {{ range .Seasons }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ .SeasonNumber }}"
+             class="page-card"
+             style="text-decoration: none; color: inherit; display: grid; grid-template-columns: auto 1fr auto; gap: 1.5rem; align-items: center;"
              hx-boost="true">
-            <span class="brut-timeline-num">S{{ .SeasonNumber }}</span>
-            <span class="brut-timeline-body">
-              <span class="brut-timeline-title">{{ .Title }}</span>
-              <span class="brut-timeline-meta">
-                <span class="brut-pill brut-pill-{{ if eq .Status "active" }}active{{ else if eq .Status "closed" }}closed{{ else }}draft{{ end }}">
-                  <span class="brut-pill-dot" aria-hidden="true"></span>
-                  {{ if eq .Status "planned" }}planned{{ else if eq .Status "active" }}active{{ else }}closed{{ end }}
-                </span>
-                {{ if .StartedAt }}
-                <span class="brut-timeline-date">Started {{ timeAgo .StartedAt.UTC }}</span>
-                {{ end }}
-                {{ if .ClosedAt }}
-                <span class="brut-timeline-date">Closed {{ timeAgo .ClosedAt.UTC }}</span>
-                {{ end }}
-                <span class="brut-timeline-date">{{ index $postCounts .ID }} {{ pluralize (index $postCounts .ID) "post" "posts" }}</span>
-              </span>
+            <div style="font-family: ui-monospace, monospace; font-size: 1.5rem; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; min-width: 3rem;">S{{ .SeasonNumber }}</div>
+            <div style="min-width: 0;">
+              <h3 style="font-size: 1.15rem; font-weight: 600; margin: 0 0 0.25rem; color: var(--text-bright);">{{ .Title }}</h3>
               {{ if .Description }}
-              <span style="font: 400 13px/1.5 var(--brut-sans); color: var(--brut-text-muted); margin-top: 4px;">{{ truncate .Description 200 }}</span>
+              <p style="font-size: 0.9rem; color: var(--text-dim); margin: 0; line-height: 1.5;">{{ truncate .Description 200 }}</p>
               {{ end }}
-            </span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-end;">
+              <span class="status-pill status-{{ .Status }}">{{ upper .Status }}</span>
+              {{ $count := index $postCounts .ID }}
+              {{ if $count }}
+              <span style="font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">{{ $count }} {{ pluralize $count "POST" "POSTS" }}</span>
+              {{ end }}
+            </div>
           </a>
-        </li>
-        {{ end }}
-      </ol>
-      {{ else }}
-      <div class="brut-empty">
-        <span class="brut-empty-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="5" cy="12" r="2.5"/>
-            <circle cx="12" cy="12" r="2.5"/>
-            <circle cx="19" cy="12" r="2.5"/>
-            <line x1="7.5" y1="12" x2="9.5" y2="12" stroke-dasharray="2 1"/>
-            <line x1="14.5" y1="12" x2="16.5" y2="12" stroke-dasharray="2 1"/>
-          </svg>
-        </span>
-        <div class="brut-empty-body">
-          <h3 class="brut-empty-title">No seasons yet</h3>
-          <p class="brut-empty-desc">
-            {{ if .CanManage }}
-              A season is a numbered iteration of work. Create the first one when you are ready to start posting under this project.
-            {{ else }}
-              The maintainers haven't started any seasons yet.
-            {{ end }}
-          </p>
-          {{ if .CanManage }}
-          <div class="brut-empty-actions">
-            <a class="brut-btn brut-btn-primary brut-btn-sm"
-               href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
-               hx-boost="true">Create first season</a>
-          </div>
           {{ end }}
         </div>
-      </div>
-      {{ end }}
-    </div>
-  </section>
+        {{ else }}
+        <p style="color: var(--text-muted); margin: 0;">
+          No seasons yet.
+          {{ if .CanManage }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
+             style="color: var(--accent); text-decoration: none;"
+             hx-boost="true">+ Start the first season</a>.
+          {{ end }}
+        </p>
+        {{ end }}
+      </section>
+
+    </main>
+
+  </div>
 </div>
+
 {{ end }}
 {{ end }}
