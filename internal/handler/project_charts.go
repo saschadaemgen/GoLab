@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/saschadaemgen/GoLab/internal/model"
@@ -103,6 +105,52 @@ func chartProjectColor(c string) string {
 		return "#45BDD1"
 	}
 	return c
+}
+
+// sparkline is the pre-computed shape one sub-project card embeds
+// inline as <svg><polyline points="..."></polyline></svg>. Server-
+// side computation keeps the template trivial and avoids per-card
+// JS for what's effectively a single SVG shape.
+type sparkline struct {
+	Points string // "x0,y0 x1,y1 ..." for SVG polyline
+	Color  string // stroke color, falls back to accent when empty
+	Max    int    // max post-count in the window; 0 means "no data"
+}
+
+// buildSparkline turns 14 daily counts into a 60x20 polyline.
+// All-zero series flatlines at the bottom; otherwise the line scales
+// to fill the box vertically. 1.5px stroke + round caps render
+// cleanly even at the small size.
+func buildSparkline(counts [14]int, color string) sparkline {
+	max := 0
+	for _, c := range counts {
+		if c > max {
+			max = c
+		}
+	}
+	const w = 60.0
+	const h = 18.0 // 20 viewbox - 2 of vertical padding
+	const pad = 1.0
+	gap := w / 13.0
+	var b strings.Builder
+	for i, c := range counts {
+		x := float64(i) * gap
+		var y float64
+		if max == 0 {
+			y = h + pad
+		} else {
+			y = h - (float64(c)/float64(max))*h + pad
+		}
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		fmt.Fprintf(&b, "%.1f,%.1f", x, y)
+	}
+	return sparkline{
+		Points: b.String(),
+		Color:  chartProjectColor(color),
+		Max:    max,
+	}
 }
 
 // buildCockpitActivityChart pivots WeeklyProjectCount rows into the

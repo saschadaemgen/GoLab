@@ -7366,6 +7366,61 @@ img.avatar {
   font-variant-numeric: tabular-nums;
 }
 
+/* Sprint 16e showcase polish: rich card variant with progress dots
+   above the description and a 14-day sparkline below. */
+.sub-project-card-rich {
+  background:
+    linear-gradient(180deg,
+      rgba(var(--bg-card-rgb), 1) 0%,
+      rgba(var(--bg-card-rgb), 0.92) 100%);
+  transition: transform 240ms ease-out, border-color 240ms ease-out, box-shadow 240ms ease-out;
+}
+
+.sub-project-card-rich:hover {
+  transform: translateY(-4px);
+  border-color: var(--project-color);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.20),
+              0 0 0 1px rgba(var(--bg-card-rgb), 0),
+              0 0 24px var(--accent-faint);
+}
+
+.sub-project-card-rich .sub-project-card-icon {
+  transition: transform 240ms ease-out;
+}
+
+.sub-project-card-rich:hover .sub-project-card-icon {
+  transform: scale(1.06);
+}
+
+.sub-project-card-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sub-project-card-progress {
+  display: flex;
+  gap: 4px;
+}
+
+.sub-project-card-spark {
+  height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.sub-project-card-spark .sparkline {
+  width: 100%;
+}
+
+.sparkline-empty {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
   .sub-projects-grid {
     grid-template-columns: 1fr;

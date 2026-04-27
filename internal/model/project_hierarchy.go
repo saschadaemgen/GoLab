@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -319,6 +320,84 @@ func (s *ProjectStore) GetParentProjectStats(ctx context.Context, parentID, view
 	}
 
 	return stats, nil
+}
+
+// PostCountsByChildLast14Days returns the daily post-count series
+// for each child of `parentID` over the last 14 days. Powers the
+// per-card sparkline on the sub-project showcase.
+//
+// The map is keyed by child project id; each value is exactly 14
+// integers, oldest first (index 0 = 13 days ago, index 13 = today).
+// Children with zero posts in the window simply don't appear in the
+// map; the caller falls back to an empty sparkline.
+func (s *ProjectStore) PostCountsByChildLast14Days(ctx context.Context, parentID, viewerID int64) (map[int64][14]int, error) {
+	rows, err := s.DB.Query(ctx, `
+		SELECT pr.id,
+		       date_trunc('day', po.created_at)::date AS day,
+		       COUNT(*)::int
+		  FROM posts po
+		  JOIN seasons  se ON se.id = po.season_id
+		  JOIN projects pr ON pr.id = se.project_id
+		 WHERE pr.parent_project_id = $1
+		   AND pr.deleted_at IS NULL
+		   AND po.created_at >= CURRENT_DATE - INTERVAL '14 days'
+		   AND (
+		       pr.visibility = 'public'
+		       OR EXISTS (
+		           SELECT 1 FROM project_members pm
+		            WHERE pm.project_id = pr.id AND pm.user_id = $2
+		       )
+		   )
+		 GROUP BY pr.id, day
+		 ORDER BY pr.id, day`,
+		parentID, viewerID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("post counts by child last 14: %w", err)
+	}
+	defer rows.Close()
+
+	out := map[int64][14]int{}
+	// today midnight in UTC matches the SQL date_trunc('day') buckets.
+	// daysAgo = (today - day).hours / 24; slot = 13 - daysAgo so index
+	// 0 is the oldest and 13 is today.
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	for rows.Next() {
+		var pid int64
+		var day time.Time
+		var count int
+		if err := rows.Scan(&pid, &day, &count); err != nil {
+			return nil, fmt.Errorf("scan child daily count: %w", err)
+		}
+		daysAgo := int(today.Sub(day).Hours() / 24)
+		if daysAgo < 0 || daysAgo > 13 {
+			continue
+		}
+		slot := 13 - daysAgo
+		arr := out[pid]
+		arr[slot] = count
+		out[pid] = arr
+	}
+	return out, rows.Err()
+}
+
+// SimpleProgress returns a 0-5 dot count derived from the project's
+// status alone. Used by the sub-project showcase cards where we
+// don't want a per-child season lookup. ProjectWithStats has a
+// richer SeasonProgress() that factors in the active season's age;
+// SimpleProgress is the cheap fallback.
+func (p *Project) SimpleProgress() int {
+	switch p.Status {
+	case ProjectStatusDraft:
+		return 0
+	case ProjectStatusActive:
+		return 3
+	case ProjectStatusArchived:
+		return 4
+	case ProjectStatusClosed:
+		return 5
+	}
+	return 0
 }
 
 // PostCountsByParentLast90Days returns weekly post-count buckets per

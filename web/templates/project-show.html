@@ -120,9 +120,12 @@
     </header>
     {{ if .Children }}
     <div class="sub-projects-grid stagger-in">
+      {{ $sparklines := $.Content.Sparklines }}
       {{ range .Children }}
+      {{ $progress := .SimpleProgress }}
+      {{ $sl := index $sparklines .ID }}
       <a href="/spaces/{{ $space.Slug }}/projects/{{ .Slug }}"
-         class="sub-project-card{{ if eq .Status "active" }} is-active{{ end }}"
+         class="sub-project-card sub-project-card-rich{{ if eq .Status "active" }} is-active{{ end }}"
          style="{{ if .Color }}--project-color: {{ .Color }};{{ end }}"
          hx-boost="true">
         <span class="sub-project-card-stripe" aria-hidden="true"></span>
@@ -130,11 +133,33 @@
           <span class="sub-project-card-icon" aria-hidden="true">
             {{ if .Icon }}{{ .Icon }}{{ else }}+{{ end }}
           </span>
-          <span class="sub-project-card-name">{{ .Name }}</span>
+          <div class="sub-project-card-title-block">
+            <span class="sub-project-card-name">{{ .Name }}</span>
+            <div class="sub-project-card-progress" aria-label="Season progress">
+              {{ range $i := iter 5 }}
+              <span class="progress-dot{{ if lt $i $progress }} progress-dot-on{{ end }}"></span>
+              {{ end }}
+            </div>
+          </div>
         </div>
         {{ if .Description }}
-        <p class="sub-project-card-desc">{{ truncate .Description 140 }}</p>
+        <p class="sub-project-card-desc">{{ truncate .Description 130 }}</p>
         {{ end }}
+        <div class="sub-project-card-spark">
+          {{ if $sl.Max }}
+          <svg class="sparkline" viewBox="0 0 60 20" width="100%" height="22"
+               preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="{{ $sl.Points }}"
+                      fill="none"
+                      stroke="{{ $sl.Color }}"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"/>
+          </svg>
+          {{ else }}
+          <span class="sparkline-empty">No activity yet</span>
+          {{ end }}
+        </div>
         <div class="sub-project-card-foot">
           <span class="status-pill status-pill-{{ .Status }}">
             <span class="status-pill-dot" aria-hidden="true"></span>
