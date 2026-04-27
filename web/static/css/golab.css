@@ -6288,6 +6288,634 @@ img.avatar {
   min-height: 320px;
 }
 
+/* ============================================================
+   Sprint 16b visual polish layer
+   ============================================================
+   Project overview block on the Space landing, project landing
+   dashboard panels, and season detail dashboard. Reuses
+   --accent / --bg-card / --text-* tokens; per-project tint comes
+   in via --project-color set inline by the template. */
+
+/* Space landing: projects-overview block ------------------- */
+.space-projects-overview {
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-5) var(--content-padding, 1.25rem);
+  background:
+    linear-gradient(180deg,
+      rgba(var(--bg-card-rgb), 0.4) 0%,
+      rgba(var(--bg-card-rgb), 0.0) 100%);
+}
+
+.space-projects-overview-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.space-projects-overview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.space-projects-overview-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.space-projects-overview-sub {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.space-projects-overview-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.space-projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Compact project card (4-up grid on space overview) -------- */
+.project-card-compact {
+  --project-color: var(--accent);
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow: hidden;
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.project-card-compact:hover {
+  transform: translateY(-2px);
+  border-color: var(--project-color);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.16),
+              0 0 0 1px rgba(var(--bg-card-rgb), 0);
+}
+
+.project-card-compact-stripe {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--project-color);
+}
+
+.project-card-compact-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.project-card-compact-icon {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--project-color);
+  background: rgba(var(--bg-card-rgb), 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.project-card-compact-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 5-dot progress indicator ---------------------------------- */
+.project-card-compact-progress {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(var(--bg-card-rgb), 0.4);
+  border: 1px solid var(--border);
+  transition: background 200ms;
+}
+
+.progress-dot-on {
+  background: var(--project-color);
+  border-color: var(--project-color);
+}
+
+/* Status pill with subtle pulse on active ------------------- */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(var(--bg-card-rgb), 0.7);
+  color: var(--text-dim);
+  align-self: flex-start;
+}
+
+.status-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  display: inline-block;
+}
+
+.status-pill-draft {
+  background: rgba(149, 165, 166, 0.12);
+  border-color: rgba(149, 165, 166, 0.3);
+  color: #a8b2b3;
+}
+
+.status-pill-active {
+  background: rgba(46, 204, 113, 0.12);
+  border-color: rgba(46, 204, 113, 0.35);
+  color: #4ad08f;
+}
+
+.status-pill-active .status-pill-dot {
+  animation: status-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-pill-archived {
+  background: rgba(243, 156, 18, 0.10);
+  border-color: rgba(243, 156, 18, 0.3);
+  color: #f1b25c;
+}
+
+.status-pill-closed {
+  background: rgba(155, 89, 182, 0.10);
+  border-color: rgba(155, 89, 182, 0.3);
+  color: #c08fd6;
+}
+
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 208, 143, 0.45); }
+  50%      { box-shadow: 0 0 0 4px rgba(74, 208, 143, 0.0); }
+}
+
+.project-card-compact-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.project-card-compact-time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Activity chart + stats panel ------------------------------ */
+.space-projects-charts {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+.space-projects-chart-card,
+.space-projects-stats-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.chart-card-title {
+  margin: 0 0 var(--space-3);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.chart-container {
+  position: relative;
+  height: 240px;
+  width: 100%;
+}
+
+.chart-container.chart-container-sm { height: 180px; }
+.chart-container.chart-container-tall { height: 320px; }
+
+/* KPI cards grid (used by space stats and season dashboard) - */
+.kpi-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.kpi-grid-2x2 { grid-template-columns: 1fr 1fr; }
+.kpi-grid-1x4 { grid-template-columns: repeat(4, 1fr); }
+
+.kpi-card {
+  background: rgba(var(--bg-card-rgb), 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  transition: border-color 200ms;
+}
+
+.kpi-card:hover {
+  border-color: var(--accent);
+}
+
+.kpi-num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Season detail dashboard ----------------------------------- */
+.season-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: var(--space-4) 0 var(--space-5);
+}
+
+.season-dashboard-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .season-dashboard-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Project landing dashboard --------------------------------- */
+.project-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-top: var(--space-5);
+}
+
+.project-dashboard-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+.project-dashboard-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.project-dashboard-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.project-dashboard-card-cta {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.project-dashboard-card-cta:hover {
+  text-decoration: underline;
+}
+
+.project-dashboard-card-aside {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.project-dashboard-empty {
+  text-align: center;
+  padding: var(--space-5) var(--space-3);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.project-dashboard-empty-tight {
+  padding: var(--space-3);
+  font-size: 0.85rem;
+}
+
+.project-overview-bottom {
+  margin-top: var(--space-3);
+}
+
+/* Doc status cards (4-up) ----------------------------------- */
+.doc-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+
+.doc-status-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 200ms, transform 200ms;
+}
+
+.doc-status-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+
+.doc-status-filled {
+  background: var(--bg-card);
+}
+
+.doc-status-empty {
+  background: rgba(243, 156, 18, 0.05);
+  border-color: rgba(243, 156, 18, 0.25);
+  border-style: dashed;
+}
+
+.doc-status-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+
+.doc-status-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.doc-status-icon-filled {
+  background: rgba(46, 204, 113, 0.15);
+  color: #4ad08f;
+}
+
+.doc-status-icon-empty {
+  background: rgba(243, 156, 18, 0.15);
+  color: #f1b25c;
+}
+
+.doc-status-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  align-self: flex-start;
+}
+
+.doc-status-count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-status-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.doc-status-cta {
+  align-self: flex-start;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-top: 2px;
+}
+
+/* Season-line timeline (horizontal) ------------------------- */
+.season-line-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  scroll-snap-type: x proximity;
+}
+
+.season-line-node {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  position: relative;
+}
+
+.season-line-node + .season-line-node::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  background: var(--border);
+  transform: translateY(-50%);
+}
+
+.season-line-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+  min-width: 168px;
+  background: rgba(var(--bg-card-rgb), 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 200ms, transform 200ms;
+}
+
+.season-line-card:hover {
+  transform: translateY(-1px);
+}
+
+.season-line-active .season-line-card {
+  border-color: rgba(46, 204, 113, 0.45);
+  box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.18);
+}
+
+.season-line-planned .season-line-card {
+  border-style: dashed;
+  background: transparent;
+}
+
+.season-line-num {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.season-line-active .season-line-num { color: #4ad08f; }
+.season-line-closed .season-line-num { color: #c08fd6; }
+
+.season-line-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.season-line-status { align-self: flex-start; }
+
+.season-line-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Activity heatmap (SVG) ------------------------------------ */
+.activity-heatmap {
+  width: 100%;
+  height: auto;
+  max-height: 130px;
+}
+
+.heatmap-cell,
+.heatmap-cell-static {
+  transition: opacity 200ms;
+}
+
+.heatmap-cell-static {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.heatmap-level-0 { fill: var(--bg-subtle, rgba(149, 165, 166, 0.12)); background: rgba(149, 165, 166, 0.12); }
+.heatmap-level-1 { fill: rgba(69, 189, 209, 0.20); background: rgba(69, 189, 209, 0.20); }
+.heatmap-level-2 { fill: rgba(69, 189, 209, 0.40); background: rgba(69, 189, 209, 0.40); }
+.heatmap-level-3 { fill: rgba(69, 189, 209, 0.65); background: rgba(69, 189, 209, 0.65); }
+.heatmap-level-4 { fill: var(--accent); background: var(--accent); }
+
+.heatmap-cell:hover {
+  opacity: 0.7;
+}
+
+.activity-heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  justify-content: center;
+  padding-top: var(--space-2);
+}
+
+.heatmap-legend-label {
+  margin: 0 4px;
+}
+
+/* Mobile (<= 768px) ----------------------------------------- */
+@media (max-width: 768px) {
+  .space-projects-grid {
+    grid-template-columns: 1fr;
+  }
+  .space-projects-charts {
+    grid-template-columns: 1fr;
+  }
+  .kpi-grid-1x4 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .chart-container { height: 200px; }
+
+  .project-dashboard-row {
+    grid-template-columns: 1fr;
+  }
+  .doc-status-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .project-overview-bottom .two-col {
+    grid-template-columns: 1fr;
+  }
+  .season-line-card {
+    min-width: 144px;
+  }
+}
+
 /* Sprint 16b Phase 4: post-card season badge.
    Sits in the .post-meta-row alongside space + type badges. The
    accent border lights up on hover so readers can tell at a glance
