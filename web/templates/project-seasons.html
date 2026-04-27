@@ -1,0 +1,79 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $postCounts := .PostCounts }}
+
+{{ template "project-header.html" . }}
+
+<div class="page-container">
+  <main>
+    {{ if .CanManage }}
+    <div class="project-list-actions">
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
+         class="btn btn-primary btn-sm press-effect"
+         hx-boost="true">+ New Season</a>
+    </div>
+    {{ end }}
+
+    {{ if .Seasons }}
+    <ol class="season-timeline stagger-in">
+      {{ range .Seasons }}
+      <li class="season-timeline-item season-status-{{ .Status }}">
+        <div class="season-timeline-marker" aria-hidden="true">
+          <span class="season-timeline-num">S{{ .SeasonNumber }}</span>
+        </div>
+        <article class="season-timeline-card">
+          <header class="season-timeline-head">
+            <h3 class="season-timeline-title">
+              <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ .SeasonNumber }}"
+                 hx-boost="true">Season {{ .SeasonNumber }}: {{ .Title }}</a>
+            </h3>
+            <span class="season-status-badge season-status-{{ .Status }}">
+              {{ if eq .Status "planned" }}Planned
+              {{ else if eq .Status "active" }}Active
+              {{ else }}Closed{{ end }}
+            </span>
+          </header>
+          {{ if .Description }}
+          <p class="season-timeline-desc">{{ truncate .Description 240 }}</p>
+          {{ end }}
+          <div class="season-timeline-meta">
+            {{ if .StartedAt }}
+            <span>Started {{ timeAgo .StartedAt.UTC }}</span>
+            {{ end }}
+            {{ if .ClosedAt }}
+            <span>Closed {{ timeAgo .ClosedAt.UTC }}</span>
+            {{ end }}
+            <span>{{ index $postCounts .ID }} {{ pluralize (index $postCounts .ID) "post" "posts" }}</span>
+          </div>
+          {{ if and (eq .Status "closed") .ClosingDocHTML }}
+          <a class="season-timeline-doc-link"
+             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ .SeasonNumber }}"
+             hx-boost="true">Read closing document &rarr;</a>
+          {{ end }}
+        </article>
+      </li>
+      {{ end }}
+    </ol>
+    {{ else }}
+    <div class="empty-state">
+      <h3>No seasons yet</h3>
+      <p>
+        {{ if .CanManage }}
+          A season is a numbered iteration of work. Create the first one when you are ready to start posting under this project.
+        {{ else }}
+          The maintainers haven't started any seasons yet.
+        {{ end }}
+      </p>
+      {{ if .CanManage }}
+      <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/new"
+         class="btn btn-primary press-effect"
+         hx-boost="true">Create first season</a>
+      {{ end }}
+    </div>
+    {{ end }}
+  </main>
+</div>
+{{ end }}
+{{ end }}

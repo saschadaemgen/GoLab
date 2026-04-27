@@ -1,0 +1,143 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $docs := .DocPresence }}
+{{ $current := .CurrentSeason }}
+
+{{ template "project-header.html" . }}
+
+<div class="page-container">
+  <div class="two-col project-overview">
+    <main>
+      {{ if $project.Description }}
+      <section class="project-section">
+        <h2 class="project-section-title">About this project</h2>
+        <p class="project-section-text">{{ $project.Description }}</p>
+      </section>
+      {{ else }}
+      <section class="project-section">
+        <h2 class="project-section-title">About this project</h2>
+        <p class="project-section-text muted">No description set yet.{{ if .CanManage }} Edit the project to add one.{{ end }}</p>
+      </section>
+      {{ end }}
+
+      <section class="project-section">
+        <div class="project-section-head">
+          <h2 class="project-section-title">Documentation</h2>
+          <a class="project-section-link"
+             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs"
+             hx-boost="true">View all</a>
+        </div>
+        <div class="project-doc-preview-grid">
+          {{ template "project-doc-preview-card.html" (dict
+            "Space" $space "Project" $project
+            "Type" "concept" "Label" "Concept" "Doc" (index $docs "concept")
+            "CanEdit" .CanEdit) }}
+          {{ template "project-doc-preview-card.html" (dict
+            "Space" $space "Project" $project
+            "Type" "architecture" "Label" "Architecture" "Doc" (index $docs "architecture")
+            "CanEdit" .CanEdit) }}
+          {{ template "project-doc-preview-card.html" (dict
+            "Space" $space "Project" $project
+            "Type" "workflow" "Label" "Workflow" "Doc" (index $docs "workflow")
+            "CanEdit" .CanEdit) }}
+          {{ template "project-doc-preview-card.html" (dict
+            "Space" $space "Project" $project
+            "Type" "roadmap" "Label" "Roadmap" "Doc" (index $docs "roadmap")
+            "CanEdit" .CanEdit) }}
+        </div>
+      </section>
+
+      {{ if $current }}
+      <section class="project-section">
+        <div class="project-section-head">
+          <h2 class="project-section-title">Current season</h2>
+          <a class="project-section-link"
+             href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
+             hx-boost="true">All seasons</a>
+        </div>
+        <a class="season-current-card"
+           href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $current.SeasonNumber }}"
+           hx-boost="true">
+          <span class="season-current-num">Season {{ $current.SeasonNumber }}</span>
+          <div class="season-current-body">
+            <h3 class="season-current-title">{{ $current.Title }}</h3>
+            {{ if $current.Description }}
+            <p class="season-current-desc">{{ truncate $current.Description 200 }}</p>
+            {{ end }}
+            <span class="season-status-badge season-status-active">Active</span>
+            {{ if $current.StartedAt }}
+            <span class="season-current-date">Started {{ timeAgo $current.StartedAt.UTC }}</span>
+            {{ end }}
+          </div>
+        </a>
+      </section>
+      {{ end }}
+    </main>
+
+    <aside>
+      <section class="sidebar-card">
+        <h4 class="sidebar-title">Quick stats</h4>
+        <ul class="project-stats-list">
+          <li>
+            <span class="project-stat-label">Created</span>
+            <span class="project-stat-value">{{ timeAgo $project.CreatedAt }}</span>
+          </li>
+          <li>
+            <span class="project-stat-label">Members</span>
+            <span class="project-stat-value">{{ len .Members }}</span>
+          </li>
+          <li>
+            <span class="project-stat-label">Seasons</span>
+            <span class="project-stat-value">{{ len .Seasons }}</span>
+          </li>
+          <li>
+            <span class="project-stat-label">Status</span>
+            <span class="project-stat-value">
+              <span class="project-status-badge project-status-{{ $project.Status }}">{{ $project.Status }}</span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      {{ if .CanManage }}
+      <section class="sidebar-card">
+        <h4 class="sidebar-title">Manage</h4>
+        <p class="sidebar-text">You can edit project metadata, manage docs, and run seasons.</p>
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/edit"
+           class="btn btn-ghost btn-sm" hx-boost="true">Edit project</a>
+      </section>
+      {{ end }}
+    </aside>
+  </div>
+</div>
+{{ end }}
+{{ end }}
+
+{{ define "project-doc-preview-card.html" }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $type := .Type }}
+{{ $label := .Label }}
+{{ $doc := .Doc }}
+{{ $canEdit := .CanEdit }}
+{{ if $doc }}
+<a class="project-doc-preview-card"
+   href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $type }}"
+   hx-boost="true">
+  <span class="project-doc-preview-label">{{ $label }}</span>
+  <span class="project-doc-preview-meta">Updated {{ timeAgo $doc.UpdatedAt }}</span>
+</a>
+{{ else }}
+<div class="project-doc-preview-card project-doc-preview-empty">
+  <span class="project-doc-preview-label">{{ $label }}</span>
+  <span class="project-doc-preview-meta muted">Not written yet</span>
+  {{ if $canEdit }}
+  <a class="project-doc-preview-cta"
+     href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/docs/{{ $type }}/edit"
+     hx-boost="true">Add</a>
+  {{ end }}
+</div>
+{{ end }}
+{{ end }}

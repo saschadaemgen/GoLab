@@ -1,0 +1,90 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $space := .Space }}
+{{ $project := .Project }}
+{{ $season := .Season }}
+
+{{ template "project-header.html" . }}
+
+<div class="page-container">
+  <main>
+    <article class="season-detail">
+      <header class="season-detail-head">
+        <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons"
+           class="project-doc-view-back-link"
+           hx-boost="true">&larr; All seasons</a>
+        <h1 class="season-detail-title">
+          Season {{ $season.SeasonNumber }}: {{ $season.Title }}
+        </h1>
+        <div class="season-detail-meta">
+          <span class="season-status-badge season-status-{{ $season.Status }}">
+            {{ if eq $season.Status "planned" }}Planned
+            {{ else if eq $season.Status "active" }}Active
+            {{ else }}Closed{{ end }}
+          </span>
+          {{ if $season.StartedAt }}
+          <span>Started {{ timeAgo $season.StartedAt.UTC }}</span>
+          {{ end }}
+          {{ if $season.ClosedAt }}
+          <span>Closed {{ timeAgo $season.ClosedAt.UTC }}</span>
+          {{ end }}
+          <span>{{ len .Posts }} {{ pluralize (len .Posts) "post" "posts" }}</span>
+        </div>
+        {{ if $season.Description }}
+        <p class="season-detail-desc">{{ $season.Description }}</p>
+        {{ end }}
+
+        {{ if .CanManage }}
+        <div class="season-detail-actions">
+          {{ if eq $season.Status "planned" }}
+          <form method="post"
+                action="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}/activate"
+                onsubmit="return confirm('Activate this season? Posts can be assigned to it once active.')">
+            <button type="submit" class="btn btn-primary btn-sm press-effect">Activate season</button>
+          </form>
+          {{ else if eq $season.Status "active" }}
+          <a href="/spaces/{{ $space.Slug }}/projects/{{ $project.Slug }}/seasons/{{ $season.SeasonNumber }}/close"
+             class="btn btn-danger btn-sm press-effect"
+             hx-boost="true">Close season</a>
+          {{ end }}
+        </div>
+        {{ end }}
+      </header>
+
+      {{ if and (eq $season.Status "closed") $season.ClosingDocHTML }}
+      <details class="season-closing-doc" open>
+        <summary class="season-closing-doc-summary">Closing document</summary>
+        <div class="post-content season-closing-doc-body">
+          {{ safeHTML $season.ClosingDocHTML }}
+        </div>
+      </details>
+      {{ end }}
+
+      <section class="season-posts">
+        <h2 class="project-section-title">Posts in this season</h2>
+        {{ if .Posts }}
+        <div class="stagger-in">
+          {{ range .Posts }}
+          {{ template "post-card.html" (dict "Post" . "User" $.User) }}
+          {{ end }}
+        </div>
+        {{ else }}
+        <div class="empty-state">
+          <h3>No posts assigned to this season yet</h3>
+          <p>
+            {{ if eq $season.Status "active" }}
+              Posts assigned via the compose box will appear here.
+            {{ else if eq $season.Status "planned" }}
+              Activate the season first, then start posting.
+            {{ else }}
+              This season closed without any assigned posts.
+            {{ end }}
+          </p>
+        </div>
+        {{ end }}
+      </section>
+    </article>
+  </main>
+</div>
+{{ end }}
+{{ end }}

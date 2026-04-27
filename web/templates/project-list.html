@@ -1,0 +1,91 @@
+{{ define "content" }}
+{{ with .Content }}
+{{ $space := .Space }}
+{{ $statusFilter := .StatusFilter }}
+
+<header class="space-header fade-in"
+        style="--space-color: {{ $space.Color }};">
+  <div class="space-header-inner">
+    <div class="space-header-info">
+      <div class="space-header-icon">
+        {{ if $space.Icon }}{{ $space.Icon }}{{ else }}#{{ end }}
+      </div>
+      <div>
+        <h1 class="space-title">Projects in {{ $space.Name }}</h1>
+        <p class="space-description">Structured workstreams collaborating inside this space.</p>
+      </div>
+    </div>
+    <div class="space-stats">
+      <div class="space-stat">
+        <span class="space-stat-number">{{ len .Projects }}</span>
+        <span class="space-stat-label">{{ pluralize (len .Projects) "Project" "Projects" }}</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="type-tabs" aria-label="Filter by status">
+  <div class="type-tabs-inner">
+    <a href="/spaces/{{ $space.Slug }}/projects"
+       class="type-tab{{ if eq $statusFilter "" }} active{{ end }}"
+       hx-boost="true">All</a>
+    <a href="/spaces/{{ $space.Slug }}/projects?status=draft"
+       class="type-tab{{ if eq $statusFilter "draft" }} active{{ end }}"
+       hx-boost="true">Drafts</a>
+    <a href="/spaces/{{ $space.Slug }}/projects?status=active"
+       class="type-tab{{ if eq $statusFilter "active" }} active{{ end }}"
+       hx-boost="true">Active</a>
+    <a href="/spaces/{{ $space.Slug }}/projects?status=archived"
+       class="type-tab{{ if eq $statusFilter "archived" }} active{{ end }}"
+       hx-boost="true">Archived</a>
+    <a href="/spaces/{{ $space.Slug }}/projects?status=closed"
+       class="type-tab{{ if eq $statusFilter "closed" }} active{{ end }}"
+       hx-boost="true">Closed</a>
+  </div>
+</nav>
+
+<div class="page-container">
+  <main>
+    {{ if .CanCreate }}
+    <div class="project-list-actions">
+      <a href="/spaces/{{ $space.Slug }}/projects/new"
+         class="btn btn-primary btn-sm press-effect"
+         hx-boost="true">+ New Project</a>
+    </div>
+    {{ end }}
+
+    {{ if .Projects }}
+    <div class="project-grid stagger-in">
+      {{ $owners := .Owners }}
+      {{ $tagsByProject := .TagsByProject }}
+      {{ $memberCount := .MemberCount }}
+      {{ range .Projects }}
+      {{ template "project-card.html" (dict
+        "Space" $space
+        "Project" .
+        "Owner" (index $owners .OwnerID)
+        "Tags" (index $tagsByProject .ID)
+        "MemberCount" (index $memberCount .ID)) }}
+      {{ end }}
+    </div>
+    {{ else }}
+    <div class="empty-state">
+      <h3>No {{ if $statusFilter }}{{ $statusFilter }}{{ end }} projects yet</h3>
+      <p>
+        {{ if .CanCreate }}
+          Start the first project for {{ $space.Name }} - it can be a single workstream or a long-running collaboration.
+        {{ else }}
+          {{ $space.Name }} hasn't started any projects yet. Check back soon.
+        {{ end }}
+      </p>
+      {{ if .CanCreate }}
+      <a href="/spaces/{{ $space.Slug }}/projects/new"
+         class="btn btn-primary press-effect"
+         hx-boost="true">Create the first project</a>
+      {{ end }}
+    </div>
+    {{ end }}
+  </main>
+</div>
+{{ end }}
+{{ end }}
