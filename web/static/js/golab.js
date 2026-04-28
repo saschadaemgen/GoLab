@@ -2490,6 +2490,219 @@
         }
       };
     });
+
+    // ============================================================
+    // Sprint 17 reading tracker.
+    // ============================================================
+    // Observes which post-card articles are visible (>= 50% in
+    // viewport, intersection observer threshold), accumulates per-
+    // post seconds while the user is active, and posts a heartbeat
+    // to /api/reading/heartbeat every 15s. Active = tab visible AND
+    // mouse/key/scroll/touch event in the last 30s. Anything else
+    // pauses the accumulators so background tabs and idle tabs do
+    // not accrue fake reading time.
+    //
+    // Server caps everything anyway (active_seconds <= 60/min,
+    // visible_posts <= 20/heartbeat, per-post seconds <= heartbeat
+    // interval) so a misbehaving client can never inflate stats.
+    //
+    // Mount via x-data="readingTracker" on a top-level element
+    // (base.html puts it on <main>). Only authenticated users get
+    // the x-data attribute, so anonymous visitors never load this
+    // component.
+    window.Alpine.data('readingTracker', function () {
+      var heartbeatTimer = null;
+      var tickTimer = null;
+      var observer = null;
+
+      return {
+        // post_id -> { secondsVisible: number, isVisible: bool }
+        // Entries stay in the map between heartbeats until they
+        // both leave the viewport AND have already had their
+        // seconds reported. This way we never double-count a post
+        // that scrolls in and out within a single heartbeat window.
+        visiblePosts: new Map(),
+        // Topic ids opened since the last heartbeat. The server
+        // de-dupes via ON CONFLICT DO NOTHING but we keep the
+        // local Set so we don't waste round-trips.
+        topicsEnteredThisHeartbeat: new Set(),
+        // Wall-clock timestamp of the last user-input event.
+        lastActivityAt: Date.now(),
+        // Active-second accumulator since the last heartbeat.
+        activeSecondsAccumulated: 0,
+        // document.visibilityState mirror (cheaper than reading
+        // it every tick).
+        isTabVisible: !document.hidden,
+        // Hardcoded for v1; the server has the real numbers from
+        // the settings table and applies them as caps anyway.
+        cfg: {
+          intervalMs: 15000,
+          idleTimeoutMs: 30000
+        },
+
+        init: function () {
+          var self = this;
+
+          ['mousemove', 'keydown', 'scroll', 'touchstart'].forEach(function (evt) {
+            document.addEventListener(evt, function () {
+              self.lastActivityAt = Date.now();
+            }, { passive: true });
+          });
+
+          document.addEventListener('visibilitychange', function () {
+            self.isTabVisible = !document.hidden;
+            // Resetting lastActivityAt when the tab returns means
+            // we do not credit the time spent in a background tab.
+            if (self.isTabVisible) {
+              self.lastActivityAt = Date.now();
+            }
+          });
+
+          self.setupPostObserver();
+
+          var topicId = self.detectCurrentTopicId();
+          if (topicId) self.topicsEnteredThisHeartbeat.add(topicId);
+
+          // hx-boost swaps body content without a full reload, so
+          // re-observe new post cards and re-detect the URL topic
+          // after every swap.
+          document.addEventListener('htmx:afterSwap', function () {
+            self.observeAllPostCards();
+            var t = self.detectCurrentTopicId();
+            if (t) self.topicsEnteredThisHeartbeat.add(t);
+          });
+
+          tickTimer = setInterval(function () { self.tick(); }, 1000);
+          heartbeatTimer = setInterval(function () { self.sendHeartbeat(false); }, self.cfg.intervalMs);
+
+          // beforeunload uses sendBeacon (if available) so the
+          // last heartbeat reaches the server even though the page
+          // is unloading and an async fetch would be aborted.
+          window.addEventListener('beforeunload', function () {
+            self.sendHeartbeat(true);
+          });
+        },
+
+        destroy: function () {
+          // x-data on a hx-boost-swapped element: Alpine calls
+          // destroy on unmount. Flush any accumulators and tear
+          // down timers so we don't leak intervals.
+          this.sendHeartbeat(true);
+          if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+          if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+          if (observer) { observer.disconnect(); observer = null; }
+        },
+
+        setupPostObserver: function () {
+          var self = this;
+          observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+              var idStr = e.target.dataset.postId;
+              if (!idStr) return;
+              var postId = parseInt(idStr, 10);
+              if (!postId) return;
+
+              var entry = self.visiblePosts.get(postId);
+              if (e.isIntersecting && e.intersectionRatio >= 0.5) {
+                if (!entry) {
+                  self.visiblePosts.set(postId, { secondsVisible: 0, isVisible: true });
+                } else {
+                  entry.isVisible = true;
+                }
+              } else if (entry) {
+                entry.isVisible = false;
+              }
+            });
+          }, { threshold: [0, 0.5, 1.0] });
+
+          self.observeAllPostCards();
+        },
+
+        observeAllPostCards: function () {
+          if (!observer) return;
+          document.querySelectorAll('[data-post-id]').forEach(function (el) {
+            // article elements with data-post-id are the only
+            // observation target. The reaction-bar inside post-
+            // card.html also carries data-post-id but we filter
+            // to the wrapping <article> so the threshold reflects
+            // "is the post visible" not "is the reaction strip
+            // visible".
+            if (el.tagName === 'ARTICLE') observer.observe(el);
+          });
+        },
+
+        isUserActive: function () {
+          var idleMs = Date.now() - this.lastActivityAt;
+          return this.isTabVisible && idleMs < this.cfg.idleTimeoutMs;
+        },
+
+        tick: function () {
+          if (!this.isUserActive()) return;
+          this.activeSecondsAccumulated += 1;
+          this.visiblePosts.forEach(function (data) {
+            if (data.isVisible) data.secondsVisible += 1;
+          });
+        },
+
+        sendHeartbeat: function (useBeacon) {
+          // Skip empty heartbeats so we never wake the server up
+          // for nothing (keeps the rate-limit budget intact when
+          // the user is idle).
+          var hasPosts = false;
+          this.visiblePosts.forEach(function (d) { if (d.secondsVisible > 0) hasPosts = true; });
+          if (this.activeSecondsAccumulated === 0
+              && !hasPosts
+              && this.topicsEnteredThisHeartbeat.size === 0) {
+            return;
+          }
+
+          var posts = [];
+          this.visiblePosts.forEach(function (d, id) {
+            if (d.secondsVisible > 0) {
+              posts.push({ post_id: id, seconds_visible: d.secondsVisible });
+            }
+          });
+
+          var payload = {
+            active_seconds: this.activeSecondsAccumulated,
+            visible_posts: posts,
+            topics_entered: Array.from(this.topicsEnteredThisHeartbeat)
+          };
+
+          this.activeSecondsAccumulated = 0;
+          // Reset per-post accumulators; entries that left the
+          // viewport are dropped here so we do not keep sending
+          // empty rows for them.
+          var toDelete = [];
+          this.visiblePosts.forEach(function (d, id) {
+            d.secondsVisible = 0;
+            if (!d.isVisible) toDelete.push(id);
+          });
+          var self = this;
+          toDelete.forEach(function (id) { self.visiblePosts.delete(id); });
+          this.topicsEnteredThisHeartbeat.clear();
+
+          try {
+            if (useBeacon && navigator.sendBeacon) {
+              var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+              navigator.sendBeacon('/api/reading/heartbeat', blob);
+            } else {
+              fetch('/api/reading/heartbeat', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              }).catch(function () { /* non-fatal */ });
+            }
+          } catch (e) { /* non-fatal */ }
+        },
+
+        detectCurrentTopicId: function () {
+          var m = window.location.pathname.match(/^\/p\/(\d+)/);
+          return m ? parseInt(m[1], 10) : null;
+        }
+      };
+    });
   });
 
   // ---------- header height sync ----------

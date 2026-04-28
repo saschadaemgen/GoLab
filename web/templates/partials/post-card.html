@@ -2,6 +2,7 @@
 {{ $post := .Post }}
 {{ $currentUser := .User }}
 <article class="post-card" id="post-{{ $post.ID }}"
+         data-post-id="{{ $post.ID }}"
          x-data="{ liked: false, count: {{ $post.ReactionCount }} }">
   <header class="post-header">
     <a href="/u/{{ $post.AuthorUsername }}" hx-boost="true" class="post-avatar-link">

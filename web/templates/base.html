@@ -44,7 +44,7 @@
   {{ template "navbar.html" . }}
   {{ template "space-bar.html" . }}
 
-  <main id="main" class="page-transition">
+  <main id="main" class="page-transition"{{ if .User }} x-data="readingTracker"{{ end }}>
     {{ block "content" . }}{{ end }}
   </main>
 
