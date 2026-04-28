@@ -158,6 +158,10 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 	projectDocs := &model.ProjectDocStore{DB: pool}
 	seasons := &model.SeasonStore{DB: pool}
 	projectMembers := &model.ProjectMemberStore{DB: pool}
+	// Sprint 17: reading activity tracker. ReadingStore powers the
+	// /api/reading/heartbeat endpoint plus the GetStats call on the
+	// profile page.
+	reading := &model.ReadingStore{DB: pool}
 
 	// Notification dispatcher (used by post + profile handlers to fan events).
 	notifDispatch := &handler.NotifDispatch{Store: notifs, Hub: hub}
@@ -242,6 +246,11 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		EditHistory: editHistory,
 	}
 
+	// Sprint 17 reading tracker handler. One endpoint
+	// (POST /api/reading/heartbeat) with the rate-limited route
+	// wired below.
+	readingH := &handler.ReadingHandler{Reading: reading}
+
 	// Page handlers
 	pageH := &handler.PageHandler{
 		Render:      tmpls,
@@ -253,6 +262,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Spaces:      spaces,
 		Settings:    settings,
 		EditHistory: editHistory, // Sprint 15a B6: edited_at on feed/thread/profile
+		Reading:     reading,     // Sprint 17: topic-view backstop on /p/{id}
 		SiteName:    cfg.SiteName,
 	}
 
@@ -478,6 +488,19 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 			r.Get("/notifications/count", notifH.Count)
 			r.Post("/notifications/read-all", notifH.MarkAllRead)
 			r.Post("/notifications/{id}/read", notifH.MarkRead)
+		})
+
+		// Sprint 17 reading tracker. The client posts every 15s
+		// when active; 240/hour/user gives a 60s margin of slack
+		// per heartbeat (4/min average) without leaving the door
+		// open for runaway scripts. Per-user bucket so a single
+		// user with many tabs cannot DoS the endpoint.
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth)
+			r.With(httprate.Limit(240, time.Hour,
+				httprate.WithKeyFuncs(perUserRate),
+				httprate.WithLimitHandler(handler.RateLimited),
+			)).Post("/reading/heartbeat", readingH.Heartbeat)
 		})
 
 		// Search (protected - only logged-in users can search)

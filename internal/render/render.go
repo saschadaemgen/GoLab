@@ -186,6 +186,10 @@ func funcMap() template.FuncMap {
 		"ratingAverage": ratingAverage,
 		"ratingCount":   ratingCount,
 		"ratingNotesJS": ratingNotesJS,
+		// Sprint 17 reading tracker: render an int64 second count
+		// as a human-readable duration like "12h 34m" / "5m" /
+		// "less than a minute".
+		"humanDuration": humanDuration,
 	}
 }
 
@@ -411,6 +415,25 @@ func timeAgo(t time.Time) string {
 	default:
 		return t.Format("Jan 2, 2006")
 	}
+}
+
+// humanDuration renders a non-negative second count as a compact
+// "Xh Ym" / "Ym" string for the profile reading stats. < 60s falls
+// back to "less than a minute" so the row never reads "0m" when the
+// user has done some scrolling but hasn't crossed the minute mark.
+func humanDuration(seconds int64) string {
+	if seconds <= 0 {
+		return "0m"
+	}
+	if seconds < 60 {
+		return "less than a minute"
+	}
+	hours := seconds / 3600
+	minutes := (seconds % 3600) / 60
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 func initial(s string) string {

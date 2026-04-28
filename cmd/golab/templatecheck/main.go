@@ -104,6 +104,14 @@ func main() {
 				"FollowingCount": 12,
 				"IsFollowing":    false,
 				"IsSelf":         true,
+				"ReadingStats": &model.ReadingStats{
+					UserID:              dummyUser.ID,
+					TotalSecondsActive:  45240,
+					PostsReadCount:      842,
+					TopicsEnteredCount:  127,
+					DistinctDaysVisited: 23,
+					UpdatedAt:           time.Now(),
+				},
 			},
 		},
 		"channel": map[string]any{

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -37,6 +38,7 @@ type PageHandler struct {
 	Spaces      *model.SpaceStore
 	Settings    *model.SettingsStore
 	EditHistory *model.PostEditHistoryStore // Sprint 15a B6
+	Reading     *model.ReadingStore         // Sprint 17: topic-view backstop
 	SiteName    string
 }
 
@@ -277,6 +279,17 @@ func (h *PageHandler) ThreadPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sprint 17: server-side topic-view backstop. Fire-and-forget
+	// on a fresh background context so the page render never waits
+	// on a tracker insert. The Alpine readingTracker also reports
+	// this view client-side; the backstop covers tab-restore /
+	// JS-disabled / pre-first-heartbeat cases.
+	if h.Reading != nil {
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			go h.Reading.RecordTopicViewBackstop(context.Background(), u.ID, post.ID)
+		}
+	}
+
 	replies, err := h.Posts.ListReplies(r.Context(), id, 200)
 	if err != nil {
 		slog.Error("thread: list replies", "error", err)
@@ -386,6 +399,7 @@ type profileContent struct {
 	FollowingCount int
 	IsFollowing    bool
 	IsSelf         bool
+	ReadingStats   *model.ReadingStats // Sprint 17: activity counters
 }
 
 func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
@@ -454,6 +468,19 @@ func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	profile.PracticalExperience = ""
 	profile.CriticalThinking = ""
 
+	// Sprint 17: load reading activity stats. GetStats returns a
+	// zero-valued ReadingStats (not an error) for users with no
+	// recorded activity, so the template can rely on a non-nil
+	// pointer.
+	var readingStats *model.ReadingStats
+	if h.Reading != nil {
+		if s, err := h.Reading.GetStats(r.Context(), profile.ID); err == nil {
+			readingStats = s
+		} else {
+			slog.Warn("profile page: reading stats", "user_id", profile.ID, "error", err)
+		}
+	}
+
 	data := h.newPageData(r, profile.Username+" - GoLab")
 	data.Content = profileContent{
 		Profile:        profile,
@@ -462,6 +489,7 @@ func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 		FollowingCount: followingCount,
 		IsFollowing:    isFollowing,
 		IsSelf:         isSelf,
+		ReadingStats:   readingStats,
 	}
 	if err := h.Render.Render(w, "profile", data); err != nil {
 		slog.Error("render profile", "error", err)
