@@ -399,6 +399,7 @@ type profileContent struct {
 	FollowingCount int
 	IsFollowing    bool
 	IsSelf         bool
+	ReadingStats   *model.ReadingStats // Sprint 17: activity counters
 }
 
 func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
@@ -467,6 +468,19 @@ func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	profile.PracticalExperience = ""
 	profile.CriticalThinking = ""
 
+	// Sprint 17: load reading activity stats. GetStats returns a
+	// zero-valued ReadingStats (not an error) for users with no
+	// recorded activity, so the template can rely on a non-nil
+	// pointer.
+	var readingStats *model.ReadingStats
+	if h.Reading != nil {
+		if s, err := h.Reading.GetStats(r.Context(), profile.ID); err == nil {
+			readingStats = s
+		} else {
+			slog.Warn("profile page: reading stats", "user_id", profile.ID, "error", err)
+		}
+	}
+
 	data := h.newPageData(r, profile.Username+" - GoLab")
 	data.Content = profileContent{
 		Profile:        profile,
@@ -475,6 +489,7 @@ func (h *PageHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 		FollowingCount: followingCount,
 		IsFollowing:    isFollowing,
 		IsSelf:         isSelf,
+		ReadingStats:   readingStats,
 	}
 	if err := h.Render.Render(w, "profile", data); err != nil {
 		slog.Error("render profile", "error", err)

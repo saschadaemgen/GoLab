@@ -40,6 +40,37 @@
     </div>
   </header>
 
+  {{/* Sprint 17 reading activity stats. Simple text block; the
+       Profile V2 dashboard with charts (Sprint 23) will replace
+       this with proper visualizations. */}}
+  {{ if .ReadingStats }}
+  <div class="page-container" style="margin-top: 1.5rem;">
+    <div class="single-col">
+      <section style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem;">
+        <h2 class="home-section-title" style="margin: 0 0 1rem; font-size: 1.1rem;">Activity</h2>
+        <dl style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 0;">
+          <div>
+            <dt style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin: 0 0 0.25rem;">Time read</dt>
+            <dd style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums;">{{ humanDuration .ReadingStats.TotalSecondsActive }}</dd>
+          </div>
+          <div>
+            <dt style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin: 0 0 0.25rem;">Posts read</dt>
+            <dd style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums;">{{ .ReadingStats.PostsReadCount }}</dd>
+          </div>
+          <div>
+            <dt style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin: 0 0 0.25rem;">Topics entered</dt>
+            <dd style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums;">{{ .ReadingStats.TopicsEnteredCount }}</dd>
+          </div>
+          <div>
+            <dt style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin: 0 0 0.25rem;">Days visited</dt>
+            <dd style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums;">{{ .ReadingStats.DistinctDaysVisited }}</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+  </div>
+  {{ end }}
+
   <div class="page-container">
     <div class="single-col">
       <h2 class="home-section-title">Recent posts</h2>
