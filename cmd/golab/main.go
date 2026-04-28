@@ -262,6 +262,7 @@ func newRouter(cfg *config.Config, pool *pgxpool.Pool, tmpls *render.Engine, md 
 		Spaces:      spaces,
 		Settings:    settings,
 		EditHistory: editHistory, // Sprint 15a B6: edited_at on feed/thread/profile
+		Reading:     reading,     // Sprint 17: topic-view backstop on /p/{id}
 		SiteName:    cfg.SiteName,
 	}
 

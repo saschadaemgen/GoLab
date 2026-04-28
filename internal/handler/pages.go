@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -37,6 +38,7 @@ type PageHandler struct {
 	Spaces      *model.SpaceStore
 	Settings    *model.SettingsStore
 	EditHistory *model.PostEditHistoryStore // Sprint 15a B6
+	Reading     *model.ReadingStore         // Sprint 17: topic-view backstop
 	SiteName    string
 }
 
@@ -275,6 +277,17 @@ func (h *PageHandler) ThreadPage(w http.ResponseWriter, r *http.Request) {
 	if post == nil {
 		http.NotFound(w, r)
 		return
+	}
+
+	// Sprint 17: server-side topic-view backstop. Fire-and-forget
+	// on a fresh background context so the page render never waits
+	// on a tracker insert. The Alpine readingTracker also reports
+	// this view client-side; the backstop covers tab-restore /
+	// JS-disabled / pre-first-heartbeat cases.
+	if h.Reading != nil {
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			go h.Reading.RecordTopicViewBackstop(context.Background(), u.ID, post.ID)
+		}
 	}
 
 	replies, err := h.Posts.ListReplies(r.Context(), id, 200)
