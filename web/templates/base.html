@@ -30,7 +30,7 @@
     })();
   </script>
 </head>
-<body hx-boost="true" hx-ext=""{{ if eq .CurrentPath "/" }} class="hero-page"{{ end }}>
+<body hx-boost="true" hx-ext=""{{ if eq .CurrentPath "/" }} class="hero-page"{{ end }}{{ if .User }} x-data="readingTracker"{{ end }}>
   {{/* hx-preserve keeps the same canvas DOM node across hx-boost
        page swaps so particles.js's IIFE-scoped reference and the
        canvas's intrinsic dpr-aware bitmap dimensions stay valid.
@@ -44,7 +44,7 @@
   {{ template "navbar.html" . }}
   {{ template "space-bar.html" . }}
 
-  <main id="main" class="page-transition"{{ if .User }} x-data="readingTracker"{{ end }}>
+  <main id="main" class="page-transition">
     {{ block "content" . }}{{ end }}
   </main>
 

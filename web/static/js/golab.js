@@ -2511,10 +2511,6 @@
     // the x-data attribute, so anonymous visitors never load this
     // component.
     window.Alpine.data('readingTracker', function () {
-      var heartbeatTimer = null;
-      var tickTimer = null;
-      var observer = null;
-
       return {
         // post_id -> { secondsVisible: number, isVisible: bool }
         // Entries stay in the map between heartbeats until they
@@ -2533,6 +2529,19 @@
         // document.visibilityState mirror (cheaper than reading
         // it every tick).
         isTabVisible: !document.hidden,
+        // Per-instance timer / observer references. The 16g.8
+        // version stored these in the outer factory closure so
+        // every Alpine.data instance shared the same vars - which
+        // meant when hx-boost remounted the host element, the new
+        // init() overwrote the old timer pointer and the old
+        // destroy() cleared the wrong (new) interval. The old
+        // 15s setInterval kept firing forever, doubling the
+        // heartbeat rate per navigation. Storing them on `this`
+        // makes each instance own its own timers so destroy()
+        // always clears the correct ones.
+        _tickTimer: null,
+        _heartbeatTimer: null,
+        _observer: null,
         // Hardcoded for v1; the server has the real numbers from
         // the settings table and applies them as caps anyway.
         cfg: {
@@ -2565,15 +2574,18 @@
 
           // hx-boost swaps body content without a full reload, so
           // re-observe new post cards and re-detect the URL topic
-          // after every swap.
+          // after every swap. (The component itself now lives on
+          // <body> which hx-boost preserves, so its own timers
+          // stay; only the post cards inside <main> get re-rendered
+          // and need re-observation.)
           document.addEventListener('htmx:afterSwap', function () {
             self.observeAllPostCards();
             var t = self.detectCurrentTopicId();
             if (t) self.topicsEnteredThisHeartbeat.add(t);
           });
 
-          tickTimer = setInterval(function () { self.tick(); }, 1000);
-          heartbeatTimer = setInterval(function () { self.sendHeartbeat(false); }, self.cfg.intervalMs);
+          self._tickTimer = setInterval(function () { self.tick(); }, 1000);
+          self._heartbeatTimer = setInterval(function () { self.sendHeartbeat(false); }, self.cfg.intervalMs);
 
           // beforeunload uses sendBeacon (if available) so the
           // last heartbeat reaches the server even though the page
@@ -2584,22 +2596,30 @@
         },
 
         destroy: function () {
-          // x-data on a hx-boost-swapped element: Alpine calls
-          // destroy on unmount. Flush any accumulators and tear
-          // down timers so we don't leak intervals.
+          // Alpine calls destroy on unmount. Flush any accumulators
+          // and tear down timers so we don't leak intervals. With
+          // the component now on <body> this rarely fires (only on
+          // full page unload, where beforeunload also fires) but
+          // we keep the cleanup defensive.
           this.sendHeartbeat(true);
-          if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
-          if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
-          if (observer) { observer.disconnect(); observer = null; }
+          if (this._tickTimer) { clearInterval(this._tickTimer); this._tickTimer = null; }
+          if (this._heartbeatTimer) { clearInterval(this._heartbeatTimer); this._heartbeatTimer = null; }
+          if (this._observer) { this._observer.disconnect(); this._observer = null; }
         },
 
         setupPostObserver: function () {
           var self = this;
-          observer = new IntersectionObserver(function (entries) {
+          self._observer = new IntersectionObserver(function (entries) {
             entries.forEach(function (e) {
-              var idStr = e.target.dataset.postId;
-              if (!idStr) return;
-              var postId = parseInt(idStr, 10);
+              // Pull the id from the element's existing
+              // id="post-N" attribute (set by post-card.html
+              // since long before Sprint 17). We avoid an extra
+              // data-post-id on the article so nothing about its
+              // attribute surface changes - the IntersectionObserver
+              // is purely passive.
+              var m = e.target.id ? e.target.id.match(/^post-(\d+)$/) : null;
+              if (!m) return;
+              var postId = parseInt(m[1], 10);
               if (!postId) return;
 
               var entry = self.visiblePosts.get(postId);
@@ -2619,15 +2639,13 @@
         },
 
         observeAllPostCards: function () {
-          if (!observer) return;
-          document.querySelectorAll('[data-post-id]').forEach(function (el) {
-            // article elements with data-post-id are the only
-            // observation target. The reaction-bar inside post-
-            // card.html also carries data-post-id but we filter
-            // to the wrapping <article> so the threshold reflects
-            // "is the post visible" not "is the reaction strip
-            // visible".
-            if (el.tagName === 'ARTICLE') observer.observe(el);
+          if (!this._observer) return;
+          var obs = this._observer;
+          // Match every <article class="post-card" id="post-N">
+          // rendered by partials/post-card.html. The class+id
+          // shape has been stable since Sprint 11.
+          document.querySelectorAll('article.post-card[id^="post-"]').forEach(function (el) {
+            obs.observe(el);
           });
         },
 
